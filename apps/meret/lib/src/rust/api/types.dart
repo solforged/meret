@@ -136,6 +136,47 @@ class HistogramDto {
           matched == other.matched;
 }
 
+class HitDto {
+  final HitKind kind;
+  final PlatformInt64 id;
+  final String title;
+  final String detail;
+  final String query;
+  final BigInt? index;
+
+  const HitDto({
+    required this.kind,
+    required this.id,
+    required this.title,
+    required this.detail,
+    required this.query,
+    this.index,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      id.hashCode ^
+      title.hashCode ^
+      detail.hashCode ^
+      query.hashCode ^
+      index.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HitDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          id == other.id &&
+          title == other.title &&
+          detail == other.detail &&
+          query == other.query &&
+          index == other.index;
+}
+
+enum HitKind { person, release, track }
+
 class IdiomLineDto {
   final String label;
   final BigInt releases;
@@ -330,6 +371,53 @@ class RowsDto {
           total == other.total &&
           offset == other.offset &&
           rows == other.rows;
+}
+
+class SearchDto {
+  final String query;
+  final BigInt tracks;
+  final List<HitDto> people;
+  final BigInt peopleTotal;
+  final List<HitDto> releases;
+  final BigInt releasesTotal;
+  final List<HitDto> trackHits;
+  final BigInt trackHitsTotal;
+
+  const SearchDto({
+    required this.query,
+    required this.tracks,
+    required this.people,
+    required this.peopleTotal,
+    required this.releases,
+    required this.releasesTotal,
+    required this.trackHits,
+    required this.trackHitsTotal,
+  });
+
+  @override
+  int get hashCode =>
+      query.hashCode ^
+      tracks.hashCode ^
+      people.hashCode ^
+      peopleTotal.hashCode ^
+      releases.hashCode ^
+      releasesTotal.hashCode ^
+      trackHits.hashCode ^
+      trackHitsTotal.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchDto &&
+          runtimeType == other.runtimeType &&
+          query == other.query &&
+          tracks == other.tracks &&
+          people == other.people &&
+          peopleTotal == other.peopleTotal &&
+          releases == other.releases &&
+          releasesTotal == other.releasesTotal &&
+          trackHits == other.trackHits &&
+          trackHitsTotal == other.trackHitsTotal;
 }
 
 class SourceDto {

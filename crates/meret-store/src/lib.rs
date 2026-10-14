@@ -5,11 +5,13 @@
 //! * A small pool of read connections serves queries.
 //! * The hot column store keeps the columns the table sorts, filters and
 //!   brushes in memory, so 120 Hz interaction never touches SQLite.
+//! * Full-text search finds people, releases and recordings by name.
 
 mod columns;
 mod library;
 mod migrate;
 mod plan;
+pub mod search;
 mod writer;
 
 use std::path::Path;
@@ -20,6 +22,7 @@ use rusqlite::{Connection, OpenFlags};
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
 pub use library::{LibraryFacts, RecentRelease, TrackRow};
 pub use plan::{Plan, format_code, plan};
+pub use search::{PersonHit, ReleaseHit};
 pub use writer::Writer;
 
 #[derive(Debug, thiserror::Error)]
@@ -76,7 +79,7 @@ fn configure(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "mmap_size", 1i64 << 30)?;
     // The CLI and the app can share a library; wait out the other's commit.
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
-    Ok(())
+    search::register(conn)
 }
 
 /// Takes the next value of the global revision counter. Call inside a write.

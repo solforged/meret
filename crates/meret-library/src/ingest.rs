@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use meret_model::{EntityKind, Idiom, RootId};
-use meret_store::{Store, StoreError, next_rev};
+use meret_store::{Store, StoreError, next_rev, search};
 use rayon::prelude::*;
 use rusqlite::{OptionalExtension, Transaction, params};
 
@@ -328,14 +328,16 @@ fn ingest(
     if let Some(a) = artist {
         credit(tx, EntityKind::Recording, recording, a, "artist", rev, provenance)?;
     }
-    Ok(())
+    search::index_recording(tx, recording)
 }
 
 fn agent(tx: &Transaction<'_>, name: &str, rev: i64) -> rusqlite::Result<i64> {
     if let Some(id) = tx.query_row("SELECT id FROM agent WHERE name = ?1 LIMIT 1", [name], |r| r.get(0)).optional()? {
         return Ok(id);
     }
-    tx.query_row("INSERT INTO agent (kind, name, rev) VALUES (0, ?1, ?2) RETURNING id", params![name, rev], |r| r.get(0))
+    let id = tx.query_row("INSERT INTO agent (kind, name, rev) VALUES (0, ?1, ?2) RETURNING id", params![name, rev], |r| r.get(0))?;
+    search::index_agent(tx, id)?;
+    Ok(id)
 }
 
 /// A release is its title and album artist, as tagged.
@@ -372,6 +374,7 @@ fn release(
     if let Some(a) = album_artist {
         credit(tx, EntityKind::Release, id, a, "album_artist", rev, provenance)?;
     }
+    search::index_release(tx, id)?;
     Ok(id)
 }
 
@@ -482,8 +485,11 @@ mod tests {
     }
 
     fn library() -> (PathBuf, Store) {
-        let n = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("meret-ingest-{n}"));
+        // Tests run in parallel and can start in the same nanosecond.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("meret-ingest-{}-{t}-{n}", std::process::id()));
         std::fs::create_dir_all(dir.join("music")).unwrap();
         let store = Store::open(&dir.join("library.db")).unwrap();
         (dir, store)
@@ -563,6 +569,65 @@ mod tests {
         assert_eq!(rows(r#"release:"xenogears""#), Some(2), "release names ignore case");
         assert_eq!(rows(r#"-release:Xenogears"#), Some(2));
         assert_eq!(rows("idiom:score"), Some(2));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn text_people_and_names_filter_through_full_text_search() {
+        let (dir, store) = library();
+        let music = dir.join("music");
+        put(&music, "a/1.flac", Some(("Open Sky", "Iona", "Open Sky", 1)));
+        put(&music, "a/2.flac", Some(("Woman Of Wisdom", "Iona", "Open Sky", 2)));
+        put(&music, "b/1.flac", Some(("Isle of Iona", "Joanne Hogg", "Celtic", 1)));
+        put(&music, "c/1.flac", Some(("Lark", "Iona Brown", "Ascending", 1)));
+        put(&music, "d/1.flac", Some(("Prelude", "Víkingur Ólafsson", "Bach", 1)));
+        put(&music, "e/1.flac", Some(("Saga", "Mikkel Bødtker", "Legend", 1)));
+        let root = add_root(&store, &music).unwrap();
+        scan(&store, root, &|_| {}).unwrap();
+
+        let cols = store.load_columns().unwrap();
+        let rows = |q: &str| {
+            let meret_query::Input::Search(q) = meret_query::parse(q).unwrap() else { unreachable!() };
+            store.answer_residual(meret_store::plan(&q, &cols, 0), &cols).unwrap().map(|r| r.len())
+        };
+        assert_eq!(rows("iona"), Some(4), "by Iona, by Iona Brown, and a title");
+        assert_eq!(rows("OLAFSSON"), Some(1), "case and accents fold");
+        assert_eq!(rows("bod"), Some(1), "ø folds to o through the index too");
+        assert_eq!(rows("bø"), Some(1));
+        assert_eq!(rows("of"), Some(2), "a short word scans");
+        assert_eq!(rows("iona of"), Some(2));
+        assert_eq!(rows("iona -wisdom"), Some(3));
+        assert_eq!(rows("by:iona"), Some(3), "a name matches names containing it");
+        assert_eq!(rows("performer:hogg"), Some(1));
+        assert_eq!(rows("composer:hogg"), Some(0), "no composers are read yet");
+        assert_eq!(rows("release:sky"), Some(2));
+        assert_eq!(rows("game:chrono"), Some(0), "nothing says what game a track is from yet");
+        assert_eq!(rows("-game:chrono"), Some(6));
+
+        let (total, people) = store.people_hits(&["iona".into()], 5).unwrap();
+        assert_eq!(total, 2);
+        assert_eq!(people.iter().map(|p| (p.name.as_str(), p.tracks)).collect::<Vec<_>>(), [("Iona", 2), ("Iona Brown", 1)]);
+        let (total, releases) = store.release_hits(&["sky".into()], 5).unwrap();
+        assert_eq!(total, 1);
+        assert_eq!((releases[0].title.as_str(), releases[0].artist.as_deref(), releases[0].tracks), ("Open Sky", Some("Iona"), 2));
+        let titled = store.tracks_titled(&["iona".into()]).unwrap();
+        let titles: Vec<_> = store.track_rows(&titled.into_iter().collect::<Vec<_>>()).unwrap().into_iter().map(|r| r.title).collect();
+        assert_eq!(titles, ["Isle of Iona"]);
+
+        // A rescan that re-reads a file replaces its row rather than adding
+        // one, and someone whose files have gone drops out of the hits.
+        put(&music, "a/1.flac", Some(("Open Sky (live)", "Iona", "Open Sky", 1)));
+        std::fs::remove_file(music.join("c/1.flac")).unwrap();
+        scan(&store, root, &|_| {}).unwrap();
+        let (total, people) = store.people_hits(&["iona".into()], 5).unwrap();
+        assert_eq!((total, people.len()), (1, 1));
+        let cols = store.load_columns().unwrap();
+        let rows = |q: &str| {
+            let meret_query::Input::Search(q) = meret_query::parse(q).unwrap() else { unreachable!() };
+            store.answer_residual(meret_store::plan(&q, &cols, 0), &cols).unwrap().map(|r| r.len())
+        };
+        assert_eq!(rows("live"), Some(1));
+        assert_eq!(rows("iona"), Some(3));
         std::fs::remove_dir_all(dir).ok();
     }
 
