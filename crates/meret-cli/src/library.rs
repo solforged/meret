@@ -102,6 +102,37 @@ pub fn ls(api: &Api, rt: &tokio::runtime::Runtime, query: &str, offset: u64, lim
     Ok(())
 }
 
+pub fn front(api: &Api, rt: &tokio::runtime::Runtime) -> Result<()> {
+    settle(api, rt);
+    let t = Instant::now();
+    let f = api.front().map_err(|e| anyhow!(e))?;
+    let took = t.elapsed();
+    let query = |q: &Option<String>| q.as_deref().map(|q| format!("  → {q}")).unwrap_or_default();
+    println!("Collection · {} tracks · {} releases", f.tracks, f.releases);
+    for l in &f.idioms {
+        println!("  {:<16} {:>6} releases {:>7} tracks{}", l.label, l.releases, l.tracks, query(&l.query));
+    }
+    println!("By format");
+    for l in &f.formats {
+        println!("  {:<24} {:>7}  {:<24}{}", l.label, l.count, l.note, query(&l.query));
+    }
+    println!("Added lately");
+    for r in &f.added_lately {
+        let year = r.year.map(|y| y.to_string()).unwrap_or_default();
+        println!("  {:<40.40} {:<24.24} {:>4} {:>3} tracks  → {}", r.title, r.artist.as_deref().unwrap_or(""), year, r.tracks, r.query);
+    }
+    println!("Needs you");
+    for l in &f.needs_you {
+        println!("  {:<32} {:>6}  {}", l.label, l.count, l.note);
+    }
+    println!("Folders");
+    for r in &f.roots {
+        println!("  {} {}", if r.online { "●" } else { "○" }, r.path);
+    }
+    println!("in {took:.2?}");
+    Ok(())
+}
+
 pub struct PlayOptions {
     pub from: u64,
     /// Stop once this many items have ended.
