@@ -19,6 +19,43 @@ class NoTrailStrip extends StatelessWidget {
     ]),
   );
 }
+class TrailStrip extends StatelessWidget {
+  const TrailStrip({super.key, required this.trail, required this.onGo});
+  final TrailDto trail;
+  final ValueChanged<int> onGo;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+    final painter = ConstellationPainter(trail);
+    final positions = painter.layoutPositions(box.biggest);
+    return Stack(children: [
+      Positioned.fill(child: CustomPaint(painter: painter)),
+      for (final stop in trail.stops)
+        if (positions[stop.index] case final position?)
+          Positioned(
+            left: position.dx - 12,
+            top: position.dy - 12,
+            width: 24,
+            height: 24,
+            child: Semantics(
+              key: ValueKey('trail-stop-${stop.index}'),
+              button: true,
+              selected: stop.index == trail.current,
+              label: stop.title,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onGo(stop.index),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+    ]);
+  });
+}
+
 
 /// The trail strip: a star per stop, a line per thread. The current branch
 /// runs along the main line in gold; other branches sit above and below in
@@ -33,27 +70,38 @@ class ConstellationPainter extends CustomPainter {
         '$s/${style.color}',
         () => TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr)..layout(),
       );
+  Map<int, Offset> layoutPositions(Size size) {
+    final stops = {for (final stop in trail.stops.where((s) => !s.isPeek || s.onPath)) stop.index: stop};
+    final depths = <int, int>{};
+    int depth(StopDto stop) => depths.putIfAbsent(stop.index, () {
+      final parent = stops[stop.parent];
+      return parent == null ? 0 : depth(parent) + 1;
+    });
+    var maxDepth = 0;
+    for (final stop in stops.values) {
+      final d = depth(stop);
+      if (d > maxDepth) maxDepth = d;
+    }
+    final step = size.width / (maxDepth + 1.5);
+    final middle = size.height * 0.55;
+    final positions = <int, Offset>{};
+    // The first branch goes below: titles on the main line sit above it.
+    var flip = 1.0;
+    for (final stop in stops.values.toList()..sort((a, b) => depth(a).compareTo(depth(b)))) {
+      final parent = positions[stop.parent];
+      final y = stop.onPath ? middle : parent != null && !stops[stop.parent]!.onPath
+          ? parent.dy : middle + flip * size.height * 0.28;
+      positions[stop.index] = Offset(step * (depth(stop) + 0.5), y);
+      if (!stop.onPath && (parent == null || stops[stop.parent]!.onPath)) flip = -flip;
+    }
+    return positions;
+  }
+
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stops = trail.stops.where((s) => !s.isPeek).toList();
-    final path = stops.where((s) => s.onPath).toList();
-    if (path.isEmpty) return;
-
-    final step = size.width / (path.length + 0.5);
-    final mid = size.height * 0.55;
-    final pos = <int, Offset>{};
-    for (var i = 0; i < path.length; i++) {
-      pos[path[i].index] = Offset(step * (i + 0.5), mid);
-    }
-    // Off-branch stops hang above or below their parent, alternating.
-    var flip = -1.0;
-    for (final s in stops.where((s) => !s.onPath)) {
-      final parent = pos[s.parent];
-      if (parent == null) continue;
-      pos[s.index] = parent + Offset(step * 0.6, flip * size.height * 0.32);
-      flip = -flip;
-    }
+    final stops = trail.stops.where((s) => !s.isPeek || s.onPath).toList();
+    final pos = layoutPositions(size);
 
     final gold = Paint()
       ..color = Tok.gold
@@ -65,9 +113,10 @@ class ConstellationPainter extends CustomPainter {
       final p = pos[s.index], q = pos[s.parent];
       if (p == null || q == null) continue;
       canvas.drawLine(q, p, s.onPath ? gold : grey);
-      if (s.onPath && s.via != null) {
+      // Only the main line names its threads; a grey branch's label would sit on the gold one's.
+      if (s.via != null && s.onPath) {
         final t = _text(s.via!, Tok.label.copyWith(fontSize: 9.5, fontStyle: FontStyle.italic));
-        t.paint(canvas, Offset((p.dx + q.dx) / 2 - t.width / 2, mid + 8));
+        t.paint(canvas, Offset((p.dx + q.dx) / 2 - t.width / 2, (p.dy + q.dy) / 2 + 8));
       }
     }
     for (final s in stops) {
@@ -81,26 +130,26 @@ class ConstellationPainter extends CustomPainter {
           ..style = PaintingStyle.stroke);
       }
       if (s.onPath) {
-        final name = _name(s.entity);
-        final t = _text(name, Tok.body.copyWith(fontSize: 11.5, color: current ? Tok.ink : Tok.muted));
+        final t = _text(s.title, Tok.body.copyWith(fontSize: 11.5, color: current ? Tok.ink : Tok.muted));
         t.paint(canvas, p + Offset(-t.width / 2, -22));
+      } else {
+        final t = _text(s.title, Tok.label.copyWith(fontSize: 9));
+        t.paint(canvas, p + Offset(8, -t.height / 2));
       }
     }
   }
 
-  static String _name(String entity) {
-    final separator = entity.indexOf(':');
-    return separator < 0 ? entity : entity.substring(separator + 1);
-  }
 
   @override
   SemanticsBuilderCallback get semanticsBuilder => (size) {
-    final path = trail.stops.where((s) => s.onPath && !s.isPeek).toList();
-    final step = size.width / (path.length + 0.5);
-    return [for (var i = 0; i < path.length; i++) CustomPainterSemantics(
-      rect: Rect.fromLTWH(step * i, 0, step, size.height),
-      properties: SemanticsProperties(label: _name(path[i].entity), textDirection: TextDirection.ltr),
-    )];
+    final positions = layoutPositions(size);
+    return [for (final stop in trail.stops)
+      if (positions[stop.index] case final position?)
+        CustomPainterSemantics(
+          rect: Rect.fromCenter(center: position, width: 24, height: 24),
+          properties: SemanticsProperties(label: stop.title, textDirection: TextDirection.ltr),
+        ),
+    ];
   };
 
   @override

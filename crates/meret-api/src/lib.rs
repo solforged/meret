@@ -12,7 +12,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use meret_core::Core;
-use meret_model::{EntityRef, ThreadKind};
+use meret_model::{AgentId, EntityRef, ReleaseId};
 use meret_query::{Input, parse};
 use meret_store::{ColumnId, plan};
 
@@ -141,18 +141,115 @@ impl Api {
 
     /// The trail strip: every stop and the thread into it.
     pub fn trail(&self) -> Option<TrailDto> {
-        self.core.trail.lock().as_ref().map(|t| TrailDto::from_trail(t, now_ms()))
+        let t = self.core.trail.lock().clone()?;
+        Some(self.trail_dto(&t))
     }
 
-    /// Follows a thread from a visible pane. Starts a trail if there isn't one.
-    pub fn follow(&self, from_stop: Option<u32>, to: EntityRef, via: ThreadKind, source: &str) -> TrailDto {
-        let mut guard = self.core.trail.lock();
-        let now = now_ms();
-        let trail = guard.get_or_insert_with(|| meret_graph::Trail::start(to, None, now));
-        if let Some(from) = from_stop {
-            trail.follow(from as usize, to, meret_graph::Via { kind: via, source: source.into() }, now);
+    /// Ends the current trail and roots a new one at `to`: a search from the
+    /// query line or a door on the Front.
+    pub fn start_trail(&self, to: TargetDto) -> TrailDto {
+        let (entity, root_query) = to.entity();
+        let t = meret_graph::Trail::start(entity, root_query, now_ms());
+        // TODO(core): persist the old trail before replacing it.
+        *self.core.trail.lock() = Some(t.clone());
+        self.trail_dto(&t)
+    }
+
+    /// Follows a thread from stop `from_stop`, the pane it was picked in.
+    /// From a pane before the last, this starts a branch.
+    pub fn follow(&self, from_stop: u32, to: TargetDto, via: ThreadKind) -> Result<TrailDto, String> {
+        let source = match via {
+            ThreadKind::By | ThreadKind::AlbumArtist | ThreadKind::AppearsOn | ThreadKind::WorkedWith => LOCAL_TAGS,
+            ThreadKind::Matched => "library",
+            other => return Err(format!("\"{}\" threads come with providers, which aren't built yet", other.label())),
+        };
+        if matches!(to, TargetDto::Search { .. }) {
+            return Err("a search starts a trail; it isn't followed to".into());
         }
-        TrailDto::from_trail(trail, now)
+        let t = {
+            let mut guard = self.core.trail.lock();
+            let trail = guard.as_mut().ok_or("there's no trail to follow from")?;
+            if from_stop as usize >= trail.len() {
+                return Err(format!("the trail has no stop {from_stop}"));
+            }
+            let via = meret_graph::Via { kind: via, source: source.into() };
+            trail.follow(from_stop as usize, to.entity().0, via, now_ms());
+            trail.clone()
+        };
+        Ok(self.trail_dto(&t))
+    }
+
+    /// `[`: one stop back. None at the root, or with no trail.
+    pub fn trail_back(&self) -> Option<TrailDto> {
+        self.move_along(|t, now| t.back(now))
+    }
+
+    /// `]`: forward to the newest stop opened from this one. None when
+    /// there's none.
+    pub fn trail_forward(&self) -> Option<TrailDto> {
+        self.move_along(|t, now| t.forward(now))
+    }
+
+    /// A star on the strip, clicked: that stop becomes current.
+    pub fn trail_go(&self, stop: u32) -> Result<TrailDto, String> {
+        self.move_along(|t, now| t.go(stop as usize, now)).ok_or_else(|| format!("the trail has no stop {stop}"))
+    }
+
+    fn move_along(&self, step: impl FnOnce(&mut meret_graph::Trail, i64) -> bool) -> Option<TrailDto> {
+        let t = {
+            let mut guard = self.core.trail.lock();
+            let trail = guard.as_mut()?;
+            if !step(trail, now_ms()) {
+                return None;
+            }
+            trail.clone()
+        };
+        Some(self.trail_dto(&t))
+    }
+
+    /// Built outside the trail's lock: naming stops reads the store.
+    fn trail_dto(&self, t: &meret_graph::Trail) -> TrailDto {
+        TrailDto::from_trail(t, now_ms(), |target| {
+            let name = match target {
+                TargetDto::Search { query } if query.is_empty() => Ok(Some("Everything".into())),
+                TargetDto::Search { query } => Ok(Some(query.clone())),
+                TargetDto::Release { id } => self.core.store.release_title(ReleaseId(*id)),
+                TargetDto::Person { id } => self.core.store.agent_name(AgentId(*id)),
+            };
+            name.ok().flatten().unwrap_or_else(|| "gone".into())
+        })
+    }
+
+    /// A release pane.
+    pub fn release(&self, id: i64) -> Result<ReleaseDto, String> {
+        match self.core.release(ReleaseId(id)) {
+            Ok(Some(page)) => Ok(page.into()),
+            Ok(None) => Err("that release is gone".into()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// A person pane.
+    pub fn person(&self, id: i64) -> Result<PersonDto, String> {
+        match self.core.person(AgentId(id)) {
+            Ok(Some(page)) => Ok(page.into()),
+            Ok(None) => Err("that person is gone".into()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// Plays a release's tracklist from row `index`, replacing the queue.
+    /// Playing it from its pane, stop `from_stop`, marks that stop played,
+    /// so its branch is kept.
+    pub fn play_release(&self, id: i64, index: u32, from_stop: Option<u32>) -> Result<(), String> {
+        self.core.play_release(ReleaseId(id), index as usize).map_err(|e| e.to_string())?;
+        if let (Some(stop), Some(trail)) = (from_stop, self.core.trail.lock().as_mut())
+            && (stop as usize) < trail.len()
+            && trail.stop(stop as usize).entity == EntityRef::Release(ReleaseId(id))
+        {
+            trail.act(stop as usize, meret_graph::Action::Played);
+        }
+        Ok(())
     }
 
     /// What the query line shows as you type a search: people, releases
@@ -160,17 +257,6 @@ impl Api {
     /// old text is the caller's to drop.
     pub fn search(&self, input: &str) -> Result<SearchDto, String> {
         self.core.search(input, NAME_HITS, TRACK_HITS).map(SearchDto::from).map_err(|e| e.to_string())
-    }
-
-    /// A search from the query line ends the trail and roots a new one at
-    /// the search (decided 2026-10-13).
-    pub fn start_search_trail(&self, query: &str) -> TrailDto {
-        let now = now_ms();
-        let t = meret_graph::Trail::start(EntityRef::Search, Some(query.into()), now);
-        // TODO(core): persist the old trail before replacing it.
-        let dto = TrailDto::from_trail(&t, now);
-        *self.core.trail.lock() = Some(t);
-        dto
     }
 }
 

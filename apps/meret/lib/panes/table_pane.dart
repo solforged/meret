@@ -13,11 +13,12 @@ import 'add_folder.dart';
 /// histograms you brush; rows are virtual with a fixed extent, fetched from
 /// the core in pages as they scroll into view.
 class TablePane extends StatefulWidget {
-  const TablePane({super.key, required this.core, required this.query, required this.onQuery, this.libraryVersion, this.tracks, this.scanning = false});
+  const TablePane({super.key, required this.core, required this.query, required this.onQuery, this.onFollow, this.libraryVersion, this.tracks, this.scanning = false});
 
   final CoreBridge core;
   final String query;
   final ValueChanged<String> onQuery;
+  final Future<void> Function(TargetDto, ThreadKind)? onFollow;
   final BigInt? libraryVersion;
   final BigInt? tracks;
   final bool scanning;
@@ -158,10 +159,28 @@ class _TablePaneState extends State<TablePane> {
     }
   }
 
+  Future<void> _follow(TrackRowDto row, {bool artist = false}) async {
+    final onFollow = widget.onFollow;
+    if (onFollow == null || (artist && row.artistId == null)) return;
+    try {
+      await onFollow(
+        artist ? TargetDto.person(id: row.artistId!) : TargetDto.release(id: row.releaseId),
+        artist ? ThreadKind.by : ThreadKind.appearsOn,
+      );
+    } catch (error) {
+      if (mounted) setState(() => _actionError = error.toString());
+    }
+  }
+
   KeyEventResult _key(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.enter && _selected != null) {
-      _play(_selected!);
+      final row = _lookup(_selected!);
+      if (HardwareKeyboard.instance.isMetaPressed && row != null) {
+        _follow(row);
+      } else if (!HardwareKeyboard.instance.isMetaPressed) {
+        _play(_selected!);
+      }
       return KeyEventResult.handled;
     }
     final delta = event.logicalKey == LogicalKeyboardKey.arrowDown ? 1 : event.logicalKey == LogicalKeyboardKey.arrowUp ? -1 : 0;
@@ -259,22 +278,37 @@ class _TablePaneState extends State<TablePane> {
   Widget _columns(TrackRowDto? row, {bool header = false}) {
     final seconds = row?.lengthMs?.toInt();
     final length = seconds == null ? '' : '${seconds ~/ 60000}:${(seconds ~/ 1000 % 60).toString().padLeft(2, '0')}';
-    Widget cell(String text, TextStyle style) => Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Text(text, style: header ? Tok.label : style, maxLines: 1, overflow: TextOverflow.ellipsis),
-    );
+    Widget cell(String text, TextStyle style, {Key? key, VoidCallback? onTap}) {
+      final label = Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Text(text, style: header ? Tok.label : style, maxLines: 1, overflow: TextOverflow.ellipsis),
+      );
+      if (onTap == null) return label;
+      return Semantics(
+        key: key,
+        button: true,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: label),
+        ),
+      );
+    }
     return Row(children: [
       SizedBox(width: 36, child: cell(header ? '#' : (row!.number == 0 ? '' : '${row.number}'), Tok.monoSmall)),
       Expanded(flex: 4, child: cell(header ? 'Title' : row!.title, Tok.body)),
-      Expanded(flex: 3, child: cell(header ? 'Artist' : row!.artist ?? '', Tok.body)),
-      Expanded(flex: 4, child: cell(header ? 'Album' : row!.album, Tok.body)),
+      Expanded(flex: 3, child: cell(header ? 'Artist' : row!.artist ?? '', Tok.body,
+        key: row == null ? null : ValueKey('table-artist-${row.trackId}'),
+        onTap: header || widget.onFollow == null || row?.artistId == null ? null : () => _follow(row!, artist: true))),
+      Expanded(flex: 4, child: cell(header ? 'Album' : row!.album, Tok.body,
+        key: row == null ? null : ValueKey('table-album-${row.trackId}'),
+        onTap: header || widget.onFollow == null ? null : () => _follow(row!))),
       SizedBox(width: 48, child: cell(header ? 'Year' : '${row!.year ?? ''}', Tok.monoSmall)),
       SizedBox(width: 56, child: cell(header ? 'Length' : length, Tok.monoSmall)),
       SizedBox(width: 100, child: cell(header ? 'Format' : row!.format, Tok.monoSmall)),
     ]);
   }
 
-  /// Writes the brushed range back as a clause, so the query line shows it.
+  /// Keeps a brushed range in this pane's local query.
   void _brush(String key, (double, double)? r, double lo, double hi) {
     if (r == null) return widget.onQuery('');
     final a = (lo + r.$1 * (hi - lo)).round(), b = (lo + r.$2 * (hi - lo)).round();

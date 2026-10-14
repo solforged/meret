@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use meret_model::{Idiom, RecordingId, ReleaseId, TrackId};
+use meret_model::{AgentId, Idiom, RecordingId, ReleaseId, TrackId};
 use meret_query::{NameField, Term};
 use roaring::RoaringBitmap;
 use rusqlite::Connection;
@@ -21,8 +21,10 @@ pub struct TrackRow {
     pub idiom: Option<Idiom>,
     pub title: String,
     pub artist: Option<String>,
+    pub artist_id: Option<AgentId>,
     pub album: String,
     pub album_artist: Option<String>,
+    pub album_artist_id: Option<AgentId>,
     pub disc: u32,
     pub number: u32,
     pub year: Option<u16>,
@@ -41,7 +43,7 @@ const ALBUM_ARTIST: &str = "(SELECT COALESCE(a.sort_name, a.name) FROM credit c 
 
 /// The source a track plays from and is counted by: a present file,
 /// lossless first. Both reads use it, so a row matches what it shows.
-const PREFERRED_SOURCE: &str = "(SELECT s2.id FROM source s2 JOIN file f2 ON f2.id = s2.file_id
+pub(crate) const PREFERRED_SOURCE: &str = "(SELECT s2.id FROM source s2 JOIN file f2 ON f2.id = s2.file_id
     WHERE s2.track_id = t.id AND s2.kind = 'file' AND f2.state = 'present' ORDER BY s2.lossless DESC, s2.id LIMIT 1)";
 
 impl Store {
@@ -248,18 +250,18 @@ fn read_rows(c: &Connection, ids: &[TrackId], out: &mut HashMap<TrackId, TrackRo
     let marks = vec!["?"; ids.len()].join(",");
     let sql = format!(
         "SELECT t.id, r.id, rl.id, rl.idiom, COALESCE(t.title, r.title),
-                (SELECT a.name FROM credit c JOIN agent a ON a.id = c.agent_id
-                 WHERE c.subject_kind = 2 AND c.subject_id = r.id AND c.role = 'artist' ORDER BY c.sort LIMIT 1),
-                rl.title,
-                (SELECT a.name FROM credit c JOIN agent a ON a.id = c.agent_id
-                 WHERE c.subject_kind = 3 AND c.subject_id = rl.id AND c.role = 'album_artist' ORDER BY c.sort LIMIT 1),
+                a.name, rl.title, aa.name,
                 m.position, t.position, rl.year, COALESCE(t.length_ms, r.length_ms),
-                s.codec, s.sample_rate, s.bits, ro.path, f.rel_path
+                s.codec, s.sample_rate, s.bits, ro.path, f.rel_path, a.id, aa.id
          FROM track t
          JOIN recording r ON r.id = t.recording_id
          JOIN medium m ON m.id = t.medium_id
          JOIN edition e ON e.id = m.edition_id
          JOIN release rl ON rl.id = e.release_id
+         LEFT JOIN agent a ON a.id = (SELECT c.agent_id FROM credit c
+             WHERE c.subject_kind = 2 AND c.subject_id = r.id AND c.role = 'artist' ORDER BY c.sort LIMIT 1)
+         LEFT JOIN agent aa ON aa.id = (SELECT c.agent_id FROM credit c
+             WHERE c.subject_kind = 3 AND c.subject_id = rl.id AND c.role = 'album_artist' ORDER BY c.sort LIMIT 1)
          LEFT JOIN source s ON s.id = {PREFERRED_SOURCE}
          LEFT JOIN file f ON f.id = s.file_id
          LEFT JOIN root ro ON ro.id = f.root_id
@@ -277,8 +279,10 @@ fn read_rows(c: &Connection, ids: &[TrackId], out: &mut HashMap<TrackId, TrackRo
             idiom: idiom.and_then(|v| Idiom::ALL.into_iter().find(|i| *i as u8 == v)),
             title: r.get(4)?,
             artist: r.get(5)?,
+            artist_id: r.get::<_, Option<i64>>(17)?.map(AgentId),
             album: r.get(6)?,
             album_artist: r.get(7)?,
+            album_artist_id: r.get::<_, Option<i64>>(18)?.map(AgentId),
             disc: r.get(8)?,
             number: r.get(9)?,
             year: r.get(10)?,

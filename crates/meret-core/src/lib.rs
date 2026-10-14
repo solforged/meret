@@ -18,11 +18,12 @@ use meret_engine::output::null::NullBackend;
 use meret_engine::{Engine, EngineEvent};
 use meret_graph::Trail;
 use meret_jobs::Scheduler;
-use meret_model::{Idiom, RootId, TrackId};
+use meret_model::{AgentId, Idiom, ReleaseId, RootId, TrackId};
 use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError};
 use meret_provider::Registry;
 use meret_query::{Input, Term, parse};
 use meret_store::{HotColumns, LibraryFacts, PersonHit, ReleaseHit, Store, TrackRow, plan};
+pub use meret_store::{Colleague, PersonPage, PersonRelease, ReleasePage, TrackCredit};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, watch};
 
@@ -382,23 +383,23 @@ impl Core {
         let list = self.list(query)?;
         let end = (index + MAX_QUEUE).min(list.tracks.len());
         let rows = self.store.track_rows(list.tracks.get(index..end).unwrap_or(&[]))?;
-        let items = rows
-            .into_iter()
-            .filter_map(|r| {
-                Some(QueueItem {
-                    token: 0,
-                    uri: file_uri(Path::new(r.path.as_deref()?)),
-                    track: Some(r.track),
-                    recording: Some(r.recording),
-                    release: Some(r.release),
-                    work: None,
-                    idiom: r.idiom.unwrap_or(Idiom::Album),
-                    from_stop: None,
-                    why: None,
-                })
-            })
-            .collect();
-        self.play(items)
+        self.play(queue_items(rows))
+    }
+
+    /// A release pane. None when the release doesn't exist.
+    pub fn release(&self, release: ReleaseId) -> Result<Option<ReleasePage>> {
+        Ok(self.store.release_page(release)?)
+    }
+
+    /// A person pane. None when the person doesn't exist.
+    pub fn person(&self, agent: AgentId) -> Result<Option<PersonPage>> {
+        Ok(self.store.person_page(agent)?)
+    }
+
+    /// Plays a release's tracklist from row `index`, replacing the queue.
+    pub fn play_release(&self, release: ReleaseId, index: usize) -> Result<()> {
+        let page = self.store.release_page(release)?.ok_or_else(|| CoreError::Query("that release is gone".into()))?;
+        self.play(queue_items(page.tracks.into_iter().skip(index)))
     }
 
     /// Plays a file directly, outside the library.
@@ -441,6 +442,25 @@ impl Core {
     pub fn stop(&self) {
         let _ = self.player.lock().stop();
     }
+}
+
+/// Rows with a present file, as queue items.
+fn queue_items(rows: impl IntoIterator<Item = TrackRow>) -> Vec<QueueItem> {
+    rows.into_iter()
+        .filter_map(|r| {
+            Some(QueueItem {
+                token: 0,
+                uri: file_uri(Path::new(r.path.as_deref()?)),
+                track: Some(r.track),
+                recording: Some(r.recording),
+                release: Some(r.release),
+                work: None,
+                idiom: r.idiom.unwrap_or(Idiom::Album),
+                from_stop: None,
+                why: None,
+            })
+        })
+        .collect()
 }
 
 fn now_s() -> i64 {

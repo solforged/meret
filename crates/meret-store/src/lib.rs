@@ -10,6 +10,7 @@
 mod columns;
 mod library;
 mod migrate;
+mod pages;
 mod plan;
 pub mod search;
 mod writer;
@@ -21,6 +22,7 @@ use rusqlite::{Connection, OpenFlags};
 
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
 pub use library::{LibraryFacts, RecentRelease, TrackRow};
+pub use pages::{Colleague, PersonPage, PersonRelease, ReleasePage, TrackCredit};
 pub use plan::{Plan, format_code, plan};
 pub use search::{PersonHit, ReleaseHit};
 pub use writer::Writer;

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Result, anyhow};
-use meret_api::{Api, StatusDto, TransportDto};
+use meret_api::{Api, StatusDto, TargetDto, ThreadDto, ThreadKind, TransportDto};
 use meret_core::{CoreConfig, OutputChoice};
 use meret_engine::{Anchor, EngineEvent, decode};
 use tokio::sync::broadcast::error::RecvError;
@@ -166,6 +166,83 @@ pub fn search(api: &Api, rt: &tokio::runtime::Runtime, input: &str) -> Result<()
     }
     println!("All {} tracks → {}", s.tracks, s.query);
     Ok(())
+}
+
+/// Walks a trail the way the panes do: a search, then one numbered line
+/// per step. Each pane is printed with its lines numbered for the next step.
+pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[usize]) -> Result<()> {
+    settle(api, rt);
+    let s = api.search(search).map_err(|e| anyhow!(e))?;
+    let mut trail = api.start_trail(TargetDto::Search { query: s.query.clone() });
+    println!("search {}: {} tracks", s.query, s.tracks);
+    let mut lines: Vec<(ThreadKind, TargetDto, String)> = s
+        .people
+        .iter()
+        .map(|h| (ThreadKind::Matched, TargetDto::Person { id: h.id }, format!("{} · {}", h.title, h.detail)))
+        .chain(s.releases.iter().map(|h| (ThreadKind::Matched, TargetDto::Release { id: h.id }, format!("{} · {}", h.title, h.detail))))
+        .collect();
+    print_lines(&lines);
+    for &step in steps {
+        let (via, to, _) = lines.get(step).cloned().ok_or_else(|| anyhow!("there's no line {step}"))?;
+        let t = Instant::now();
+        trail = api.follow(trail.current, to.clone(), via).map_err(|e| anyhow!(e))?;
+        lines = match to {
+            TargetDto::Release { id } => {
+                let r = api.release(id).map_err(|e| anyhow!(e))?;
+                println!(
+                    "\n{} · {} · {}  ({:.2?})",
+                    r.title,
+                    r.artist.as_deref().unwrap_or("no album artist"),
+                    [r.idiom.clone(), r.year.map(|y| y.to_string()), Some(format!("{} tracks", r.tracks)), Some(r.formats.join(", "))]
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>()
+                        .join(" · "),
+                    t.elapsed()
+                );
+                for row in &r.rows {
+                    let artist = row.artist.as_deref().filter(|a| Some(*a) != r.artist.as_deref()).unwrap_or("");
+                    println!("    {}-{:02} {:<44.44} {artist}", row.disc, row.number, row.title);
+                }
+                r.credits.iter().map(|c| (c.kind, c.to.clone(), thread_line(&c.label, c))).collect()
+            }
+            TargetDto::Person { id } => {
+                let p = api.person(id).map_err(|e| anyhow!(e))?;
+                println!("\n{} · {} tracks  ({:.2?})", p.name, p.tracks, t.elapsed());
+                [("releases", &p.releases), ("on", &p.appears_on), ("worked with", &p.worked_with)]
+                    .into_iter()
+                    .flat_map(|(group, list)| {
+                        list.iter().map(move |c| (c.kind, c.to.clone(), thread_line(group, c)))
+                    })
+                    .collect()
+            }
+            TargetDto::Search { .. } => unreachable!("a search is only a root"),
+        };
+        print_lines(&lines);
+    }
+    let strip: Vec<String> = trail
+        .stops
+        .iter()
+        .filter(|s| s.on_path)
+        .map(|s| match &s.via {
+            Some(via) => format!("—{via}→ {}", s.title),
+            None => s.title.clone(),
+        })
+        .collect();
+    println!("\ntrail: {}", strip.join(" "));
+    Ok(())
+}
+
+fn thread_line(label: &str, c: &ThreadDto) -> String {
+    [c.title.as_str(), c.detail.as_str(), c.source.as_str()].into_iter().filter(|s| !s.is_empty()).fold(label.to_string(), |acc, s| {
+        if acc == label { format!("{acc} {s}") } else { format!("{acc} · {s}") }
+    })
+}
+
+fn print_lines(lines: &[(ThreadKind, TargetDto, String)]) {
+    for (i, (_, _, text)) in lines.iter().enumerate() {
+        println!("  [{i}] {text}");
+    }
 }
 
 pub struct PlayOptions {

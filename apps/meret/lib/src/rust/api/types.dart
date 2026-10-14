@@ -268,6 +268,45 @@ class NowDto {
           error == other.error;
 }
 
+class PersonDto {
+  final PlatformInt64 id;
+  final String name;
+  final int tracks;
+  final List<ThreadDto> releases;
+  final List<ThreadDto> appearsOn;
+  final List<ThreadDto> workedWith;
+
+  const PersonDto({
+    required this.id,
+    required this.name,
+    required this.tracks,
+    required this.releases,
+    required this.appearsOn,
+    required this.workedWith,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      tracks.hashCode ^
+      releases.hashCode ^
+      appearsOn.hashCode ^
+      workedWith.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PersonDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          tracks == other.tracks &&
+          releases == other.releases &&
+          appearsOn == other.appearsOn &&
+          workedWith == other.workedWith;
+}
+
 class QueryDto {
   final QueryKind kind;
   final String canonical;
@@ -291,6 +330,7 @@ class QueryDto {
 enum QueryKind { search, command, invalid }
 
 class RecentDto {
+  final PlatformInt64 releaseId;
   final String title;
   final String? artist;
   final int? year;
@@ -299,6 +339,7 @@ class RecentDto {
   final String query;
 
   const RecentDto({
+    required this.releaseId,
     required this.title,
     this.artist,
     this.year,
@@ -309,6 +350,7 @@ class RecentDto {
 
   @override
   int get hashCode =>
+      releaseId.hashCode ^
       title.hashCode ^
       artist.hashCode ^
       year.hashCode ^
@@ -321,12 +363,72 @@ class RecentDto {
       identical(this, other) ||
       other is RecentDto &&
           runtimeType == other.runtimeType &&
+          releaseId == other.releaseId &&
           title == other.title &&
           artist == other.artist &&
           year == other.year &&
           tracks == other.tracks &&
           addedMs == other.addedMs &&
           query == other.query;
+}
+
+class ReleaseDto {
+  final PlatformInt64 id;
+  final String title;
+  final String? artist;
+  final int? year;
+  final String? idiom;
+  final int tracks;
+  final int discs;
+  final BigInt lengthMs;
+  final List<String> formats;
+  final List<TrackRowDto> rows;
+  final List<ThreadDto> credits;
+
+  const ReleaseDto({
+    required this.id,
+    required this.title,
+    this.artist,
+    this.year,
+    this.idiom,
+    required this.tracks,
+    required this.discs,
+    required this.lengthMs,
+    required this.formats,
+    required this.rows,
+    required this.credits,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      artist.hashCode ^
+      year.hashCode ^
+      idiom.hashCode ^
+      tracks.hashCode ^
+      discs.hashCode ^
+      lengthMs.hashCode ^
+      formats.hashCode ^
+      rows.hashCode ^
+      credits.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ReleaseDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          artist == other.artist &&
+          year == other.year &&
+          idiom == other.idiom &&
+          tracks == other.tracks &&
+          discs == other.discs &&
+          lengthMs == other.lengthMs &&
+          formats == other.formats &&
+          rows == other.rows &&
+          credits == other.credits;
 }
 
 class RootDto {
@@ -506,8 +608,10 @@ class StatusDto {
 class StopDto {
   final int index;
   final int? parent;
-  final String entity;
+  final TargetDto target;
+  final String title;
   final String? via;
+  final String? viaSource;
   final bool onPath;
   final bool isFork;
   final bool isPeek;
@@ -515,8 +619,10 @@ class StopDto {
   const StopDto({
     required this.index,
     this.parent,
-    required this.entity,
+    required this.target,
+    required this.title,
     this.via,
+    this.viaSource,
     required this.onPath,
     required this.isFork,
     required this.isPeek,
@@ -526,8 +632,10 @@ class StopDto {
   int get hashCode =>
       index.hashCode ^
       parent.hashCode ^
-      entity.hashCode ^
+      target.hashCode ^
+      title.hashCode ^
       via.hashCode ^
+      viaSource.hashCode ^
       onPath.hashCode ^
       isFork.hashCode ^
       isPeek.hashCode;
@@ -539,19 +647,101 @@ class StopDto {
           runtimeType == other.runtimeType &&
           index == other.index &&
           parent == other.parent &&
-          entity == other.entity &&
+          target == other.target &&
+          title == other.title &&
           via == other.via &&
+          viaSource == other.viaSource &&
           onPath == other.onPath &&
           isFork == other.isFork &&
           isPeek == other.isPeek;
+}
+
+@freezed
+sealed class TargetDto with _$TargetDto {
+  const TargetDto._();
+
+  const factory TargetDto.search({required String query}) = TargetDto_Search;
+  const factory TargetDto.release({required PlatformInt64 id}) =
+      TargetDto_Release;
+  const factory TargetDto.person({required PlatformInt64 id}) =
+      TargetDto_Person;
+}
+
+class ThreadDto {
+  final ThreadKind kind;
+  final String label;
+  final String source;
+  final TargetDto to;
+  final String title;
+  final String detail;
+
+  const ThreadDto({
+    required this.kind,
+    required this.label,
+    required this.source,
+    required this.to,
+    required this.title,
+    required this.detail,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      label.hashCode ^
+      source.hashCode ^
+      to.hashCode ^
+      title.hashCode ^
+      detail.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ThreadDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          label == other.label &&
+          source == other.source &&
+          to == other.to &&
+          title == other.title &&
+          detail == other.detail;
+}
+
+enum ThreadKind {
+  composedBy,
+  arrangedBy,
+  lyricsBy,
+  sungBy,
+  performedBy,
+  conductedBy,
+  producedBy,
+  engineeredBy,
+  memberOf,
+  workedWith,
+  recordingOf,
+  arrangedAs,
+  coverOf,
+  sampled,
+  sameSession,
+  scored,
+  label,
+  cites,
+  soundsLike,
+  listenedAfter,
+  by,
+  albumArtist,
+  appearsOn,
+  matched,
 }
 
 class TrackRowDto {
   final PlatformInt64 trackId;
   final String title;
   final String? artist;
+  final PlatformInt64? artistId;
   final String album;
   final String? albumArtist;
+  final PlatformInt64? albumArtistId;
+  final PlatformInt64 releaseId;
   final int disc;
   final int number;
   final int? year;
@@ -563,8 +753,11 @@ class TrackRowDto {
     required this.trackId,
     required this.title,
     this.artist,
+    this.artistId,
     required this.album,
     this.albumArtist,
+    this.albumArtistId,
+    required this.releaseId,
     required this.disc,
     required this.number,
     this.year,
@@ -578,8 +771,11 @@ class TrackRowDto {
       trackId.hashCode ^
       title.hashCode ^
       artist.hashCode ^
+      artistId.hashCode ^
       album.hashCode ^
       albumArtist.hashCode ^
+      albumArtistId.hashCode ^
+      releaseId.hashCode ^
       disc.hashCode ^
       number.hashCode ^
       year.hashCode ^
@@ -595,8 +791,11 @@ class TrackRowDto {
           trackId == other.trackId &&
           title == other.title &&
           artist == other.artist &&
+          artistId == other.artistId &&
           album == other.album &&
           albumArtist == other.albumArtist &&
+          albumArtistId == other.albumArtistId &&
+          releaseId == other.releaseId &&
           disc == other.disc &&
           number == other.number &&
           year == other.year &&
