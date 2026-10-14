@@ -26,7 +26,7 @@ pub struct StatusState {
     pub library_version: u64,
 }
 
-const SCAN_VERBS: [&str; 2] = ["scanning", "reading tags"];
+const SCAN_VERBS: [&str; 3] = ["scanning", "reading tags", "reading covers"];
 
 pub(crate) fn initial(registry: &Registry) -> StatusState {
     let mut sources = vec![SourceStatus { name: local_name().into(), detail: "0".into(), ok: true }];
@@ -58,6 +58,7 @@ pub(crate) fn set_scan(s: &mut StatusState, progress: Option<ScanProgress>) {
         let verb = match p.phase {
             Phase::Walking => SCAN_VERBS[0],
             Phase::Reading => SCAN_VERBS[1],
+            Phase::ReadingCovers => SCAN_VERBS[2],
         };
         s.jobs.push(JobGroupStatus { verb: verb.into(), done: p.done, total: p.total, paused_because: None });
     }

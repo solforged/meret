@@ -2,10 +2,12 @@
 //! delegate, Android's MediaSessionService) before any UI exists, so playback
 //! never depends on a window. The UI attaches through `meret-api`.
 
+mod facets;
 mod local_zone;
 mod now;
 mod scan;
 mod status;
+mod views;
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -22,14 +24,16 @@ use meret_model::{AgentId, Idiom, ReleaseId, RootId, TrackId};
 use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError};
 use meret_provider::Registry;
 use meret_query::{Input, Term, parse};
-use meret_store::{HotColumns, LibraryFacts, PersonHit, ReleaseHit, Store, TrackRow, plan};
+use meret_store::{HotColumns, LibraryFacts, PersonHit, ReleaseHit, Store, TrackRow};
 pub use meret_store::{Colleague, PersonPage, PersonRelease, ReleasePage, TrackCredit};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, watch};
 
+pub use facets::{Facet, FacetColumn, Facets};
 pub use local_zone::{LocalZone, file_uri};
 pub use now::NowState;
 pub use status::{SourceStatus, StatusState};
+pub use views::{GroupRow, Item, List, PageItem, RowsPage, SortKey, View};
 
 use scan::ScanRequest;
 
@@ -82,16 +86,6 @@ pub struct Front {
     pub roots: Vec<meret_library::Root>,
 }
 
-/// A query's result, held by the core so the UI can page through it.
-/// Tracks, not row numbers, so it survives the columns being reloaded.
-pub struct List {
-    pub query: String,
-    pub version: u64,
-    /// Unix seconds when it was planned; `last:` and `added:` move with time.
-    pub made_s: i64,
-    pub tracks: Vec<TrackId>,
-}
-
 /// How long a list stays fresh when the library hasn't changed.
 const LIST_TTL_S: i64 = 60;
 
@@ -131,6 +125,7 @@ pub struct Core {
     status: watch::Sender<StatusState>,
     events: broadcast::Sender<EngineEvent>,
     scans: Sender<ScanRequest>,
+    cover_report: Mutex<meret_library::CoverReport>,
     lists: Mutex<VecDeque<Arc<List>>>,
 }
 
@@ -138,7 +133,8 @@ static CORE: OnceLock<Arc<Core>> = OnceLock::new();
 
 /// Starts the process-wide core, or returns the running one. The hot
 /// columns load and known roots rescan in the background.
-pub fn start(config: CoreConfig) -> Result<Arc<Core>> {
+pub fn start(mut config: CoreConfig) -> Result<Arc<Core>> {
+    config.data_dir = std::path::absolute(config.data_dir)?;
     if let Some(c) = CORE.get() {
         return if c.config.data_dir == config.data_dir { Ok(c.clone()) } else { Err(CoreError::AlreadyStarted) };
     }
@@ -207,12 +203,18 @@ impl Core {
             status: watch::channel(status).0,
             events: broadcast::channel(256).0,
             scans,
+            cover_report: Mutex::new(meret_library::CoverReport::default()),
             lists: Mutex::new(VecDeque::with_capacity(LISTS)),
         })
     }
 
     pub fn now(&self) -> watch::Receiver<NowState> {
         self.now.subscribe()
+    }
+
+    /// Cover reads since this core started, including the initial rescan.
+    pub fn cover_report(&self) -> meret_library::CoverReport {
+        *self.cover_report.lock()
     }
 
     pub fn status(&self) -> watch::Receiver<StatusState> {
@@ -243,51 +245,14 @@ impl Core {
         settled
     }
 
+    /// Where covers are written, at every size in `meret_store::COVER_SIZES`.
+    pub fn art_dir(&self) -> PathBuf {
+        self.config.data_dir.join("art")
+    }
+
     /// What's queued, in order.
     pub fn queue(&self) -> Vec<QueueItem> {
         self.player.lock().queue().items.clone()
-    }
-
-    /// The tracks matching `query`, in library order. The latest few lists
-    /// are kept until the library changes, or for a minute, so paging is
-    /// cheap and relative times still move.
-    ///
-    /// The hot columns answer what they can; text, people and release names
-    /// go to full-text search.
-    pub fn list(&self, query: &str) -> Result<Arc<List>> {
-        let version = self.status.borrow().library_version;
-        let now = now_s();
-        {
-            let mut cached = self.lists.lock();
-            cached.retain(|l| l.version == version && now - l.made_s < LIST_TTL_S);
-            if let Some(i) = cached.iter().position(|l| l.query == query) {
-                let l = cached.remove(i).expect("found");
-                cached.push_front(l.clone());
-                return Ok(l);
-            }
-        }
-        // Planned without the cache locked, so a slow search being typed
-        // doesn't hold up a table paging through another list.
-        let cols = self.columns.read();
-        let rows = if query.trim().is_empty() {
-            None
-        } else {
-            match parse(query) {
-                Ok(Input::Search(q)) => self.store.answer_residual(plan(&q, &cols, now), &cols)?,
-                Ok(Input::Command(_)) => return Err(CoreError::Query("a command, not a search".into())),
-                Err(e) => return Err(CoreError::Query(e.to_string())),
-            }
-        };
-        let tracks = match rows {
-            Some(r) => r.iter().map(|i| cols.track[i as usize]).collect(),
-            None => cols.track.clone(),
-        };
-        let list = Arc::new(List { query: query.into(), version, made_s: now, tracks });
-        let mut cached = self.lists.lock();
-        cached.retain(|l| l.query != query);
-        cached.truncate(LISTS - 1);
-        cached.push_front(list.clone());
-        Ok(list)
     }
 
     /// What the query line shows as you type a search: the people and
@@ -300,7 +265,7 @@ impl Core {
             Err(e) => return Err(CoreError::Query(e.to_string())),
         };
         let query = q.to_string();
-        let list = self.list(&query)?;
+        let list = self.list(&query, &View::default())?;
 
         let mut words = vec![];
         let mut people = vec![];
@@ -348,13 +313,6 @@ impl Core {
         })
     }
 
-    /// Rows `offset..offset + limit` of `query`'s result, and its total.
-    pub fn rows(&self, query: &str, offset: usize, limit: usize) -> Result<(usize, Vec<TrackRow>)> {
-        let list = self.list(query)?;
-        let page = list.tracks.get(offset.min(list.tracks.len())..(offset + limit).min(list.tracks.len()));
-        Ok((list.tracks.len(), self.store.track_rows(page.unwrap_or(&[]))?))
-    }
-
     /// What the Front shows about the library. Counts come from the hot
     /// columns; the rest is a few small reads, once per library change.
     pub fn front(&self) -> Result<Front> {
@@ -375,15 +333,6 @@ impl Core {
             facts: self.store.library_facts(6)?,
             roots: meret_library::roots(&self.store)?,
         })
-    }
-
-    /// Plays `query`'s result from row `index`, replacing the queue. Up to
-    /// `MAX_QUEUE` rows are queued.
-    pub fn play_results(&self, query: &str, index: usize) -> Result<()> {
-        let list = self.list(query)?;
-        let end = (index + MAX_QUEUE).min(list.tracks.len());
-        let rows = self.store.track_rows(list.tracks.get(index..end).unwrap_or(&[]))?;
-        self.play(queue_items(rows))
     }
 
     /// A release pane. None when the release doesn't exist.

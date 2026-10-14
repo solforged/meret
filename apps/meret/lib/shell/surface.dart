@@ -12,6 +12,7 @@ import '../panes/pane.dart';
 import '../panes/person_pane.dart';
 import '../panes/release_pane.dart';
 import '../panes/search_pane.dart';
+import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
@@ -138,7 +139,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     if (hit?.kind == HitKind.track) {
       final index = hit!.index;
       if (index == null) throw 'This track has no result index';
-      await widget.core.playResults(hit.query, index.toInt());
+      await widget.core.playResults(hit.query, const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), index.toInt());
       return;
     }
     final version = ++_navigationVersion;
@@ -187,12 +188,21 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       via: stop.via,
       source: stop.viaSource,
       body: body,
+      showTitle: stop.target is! TargetDto_Release,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Shortcuts(
+    final colours = _now?.light;
+    final light = Light(
+      accent: colours == null ? Light.brass.accent : Color(colours.light),
+      wash: colours == null ? Light.brass.wash : Color(colours.wash),
+      dim: colours == null ? Light.brass.dim : Color(colours.dim),
+      track: _now?.trackId?.toInt(),
+      release: _now?.releaseId?.toInt(),
+    );
+    return LightScope(light: light, child: Shortcuts(
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.slash): _Focus(),
         SingleActivator(LogicalKeyboardKey.space): _Toggle(),
@@ -253,7 +263,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -315,7 +325,7 @@ class _NowBar extends StatelessWidget {
           SizedBox(
             width: 120,
             height: 2,
-            child: CustomPaint(painter: _Progress(clock, length)),
+            child: CustomPaint(painter: _Progress(clock, length, Light.of(context).accent)),
           ),
         ]),
       ),
@@ -324,16 +334,17 @@ class _NowBar extends StatelessWidget {
 }
 
 class _Progress extends CustomPainter {
-  _Progress(this.clock, this.length) : super(repaint: clock);
+  _Progress(this.clock, this.length, this.light) : super(repaint: clock);
   final PlayheadClock clock;
   final double length;
+  final Color light;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Offset.zero & size, Paint()..color = Tok.line);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * (clock.positionMs / length).clamp(0, 1), size.height), Paint()..color = Tok.light);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * (clock.positionMs / length).clamp(0, 1), size.height), Paint()..color = light);
   }
 
   @override
-  bool shouldRepaint(_Progress old) => old.length != length;
+  bool shouldRepaint(_Progress old) => old.length != length || old.light != light;
 }

@@ -12,6 +12,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use meret_core::Core;
+use meret_core::{PageItem, View};
 use meret_model::{AgentId, EntityRef, ReleaseId};
 use meret_query::{Input, parse};
 use meret_store::{ColumnId, plan};
@@ -60,7 +61,7 @@ impl Api {
     pub fn run_command(&self, input: &str) -> Result<(), String> {
         match parse(input).map_err(|e| e.to_string())? {
             Input::Command(meret_query::Command::Play { query }) => {
-                self.core.play_results(&query.to_string(), 0).map_err(|e| e.to_string())
+                self.core.play_results(&query.to_string(), &View::default(), 0).map_err(|e| e.to_string())
             }
             Input::Command(c) => Err(format!("{} isn't built yet", verb(&c))),
             Input::Search(_) => Err("a search, not a command".into()),
@@ -88,16 +89,29 @@ impl Api {
         self.core.rescan();
     }
 
-    /// Rows `offset..offset + limit` of the table for `query`, in library
-    /// order. An empty query is everything.
-    pub fn rows(&self, query: &str, offset: u64, limit: u32) -> Result<RowsDto, String> {
-        let (total, rows) = self.core.rows(query, offset as usize, limit as usize).map_err(|e| e.to_string())?;
-        Ok(RowsDto { total: total as u64, offset, rows: rows.into_iter().map(TrackRowDto::from).collect() })
+    /// Display items `offset..offset + limit` of this query and view.
+    pub fn rows(&self, query: &str, view: ViewDto, offset: u64, limit: u32) -> Result<RowsDto, String> {
+        let page = self.core.rows(query, &view.into(), offset as usize, limit as usize).map_err(|e| e.to_string())?;
+        let art_dir = self.core.art_dir();
+        Ok(RowsDto {
+            total: page.total_items as u64,
+            tracks: page.tracks as u64,
+            releases: page.releases as u64,
+            offset,
+            items: page.items.into_iter().map(|item| match item {
+                PageItem::Group(g) => ItemDto::Group(GroupDto::from_group(g, &art_dir)),
+                PageItem::Track { ordinal, row } => ItemDto::Track { ordinal, row: row.into() },
+            }).collect(),
+        })
     }
 
-    /// Replaces the queue with `query`'s result and plays from row `index`.
-    pub fn play_results(&self, query: &str, index: u64) -> Result<(), String> {
-        self.core.play_results(query, index as usize).map_err(|e| e.to_string())
+    /// Replaces the queue from a track ordinal in the view's display order.
+    pub fn play_results(&self, query: &str, view: ViewDto, index: u64) -> Result<(), String> {
+        self.core.play_results(query, &view.into(), index as usize).map_err(|e| e.to_string())
+    }
+
+    pub fn facets(&self, query: &str) -> Result<FacetsDto, String> {
+        self.core.facets(query).map(Into::into).map_err(|e| e.to_string())
     }
 
     /// Every engine event in order, for tools that check playback itself
@@ -112,19 +126,24 @@ impl Api {
         self.core.scans_settled()
     }
 
+    /// Cover reads since startup, including its background rescan.
+    pub fn cover_report(&self) -> meret_library::CoverReport {
+        self.core.cover_report()
+    }
+
     /// Each queued item's token and URI, in order.
     pub fn queue(&self) -> Vec<(u64, String)> {
         self.core.queue().into_iter().map(|i| (i.token, i.uri)).collect()
     }
 
     pub fn now(&self) -> NowDto {
-        NowDto::from(&*self.core.now().borrow())
+        NowDto::from_state(&self.core.now().borrow(), &self.core.art_dir())
     }
 
     /// Waits for Now to change, then returns it.
     pub async fn now_changed(&self, rx: &mut tokio::sync::watch::Receiver<meret_core::NowState>) -> Option<NowDto> {
         rx.changed().await.ok()?;
-        Some(NowDto::from(&*rx.borrow()))
+        Some(NowDto::from_state(&rx.borrow(), &self.core.art_dir()))
     }
 
     pub fn subscribe_now(&self) -> tokio::sync::watch::Receiver<meret_core::NowState> {
@@ -223,7 +242,7 @@ impl Api {
     /// A release pane.
     pub fn release(&self, id: i64) -> Result<ReleaseDto, String> {
         match self.core.release(ReleaseId(id)) {
-            Ok(Some(page)) => Ok(page.into()),
+            Ok(Some(page)) => Ok(ReleaseDto::from_page(page, &self.core.art_dir())),
             Ok(None) => Err("that release is gone".into()),
             Err(e) => Err(e.to_string()),
         }

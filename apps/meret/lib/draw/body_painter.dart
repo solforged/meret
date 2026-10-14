@@ -14,7 +14,7 @@ import '../theme/tokens.dart';
 /// each frame replays it and draws only the hand and the played arc. That's
 /// what keeps it cheap at 120 Hz.
 class BodyPainter extends CustomPainter {
-  BodyPainter({required this.clock, required this.lengthMs, required this.loudness, required this.bands, this.light = Tok.light})
+  BodyPainter({required this.clock, required this.lengthMs, required this.loudness, required this.bands, required this.light})
       : super(repaint: clock);
 
   final PlayheadClock clock;

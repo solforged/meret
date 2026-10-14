@@ -12,6 +12,7 @@ meret-model.workspace = true
 meret-store.workspace = true
 blake3.workspace = true
 ignore.workspace = true
+image.workspace = true
 lofty.workspace = true
 rayon.workspace = true
 rusqlite.workspace = true
@@ -20,3 +21,4 @@ tracing.workspace = true
 
 [dev-dependencies]
 meret-query.workspace = true
+parking_lot.workspace = true

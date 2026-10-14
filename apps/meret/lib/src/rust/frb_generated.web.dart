@@ -49,10 +49,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FidelityDto dco_decode_box_autoadd_fidelity_dto(dynamic raw);
 
   @protected
+  GroupDto dco_decode_box_autoadd_group_dto(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
+  LightDto dco_decode_box_autoadd_light_dto(dynamic raw);
+
+  @protected
   TargetDto dco_decode_box_autoadd_target_dto(dynamic raw);
+
+  @protected
+  TrackRowDto dco_decode_box_autoadd_track_row_dto(dynamic raw);
 
   @protected
   TrailDto dco_decode_box_autoadd_trail_dto(dynamic raw);
@@ -70,10 +79,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
+  ViewDto dco_decode_box_autoadd_view_dto(dynamic raw);
+
+  @protected
   ColumnDto dco_decode_column_dto(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  FacetColumnDto dco_decode_facet_column_dto(dynamic raw);
+
+  @protected
+  FacetDto dco_decode_facet_dto(dynamic raw);
+
+  @protected
+  FacetsDto dco_decode_facets_dto(dynamic raw);
 
   @protected
   FidelityDto dco_decode_fidelity_dto(dynamic raw);
@@ -83,6 +104,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FrontLineDto dco_decode_front_line_dto(dynamic raw);
+
+  @protected
+  GroupDto dco_decode_group_dto(dynamic raw);
 
   @protected
   HistogramDto dco_decode_histogram_dto(dynamic raw);
@@ -103,10 +127,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   IdiomLineDto dco_decode_idiom_line_dto(dynamic raw);
 
   @protected
+  ItemDto dco_decode_item_dto(dynamic raw);
+
+  @protected
   JobDto dco_decode_job_dto(dynamic raw);
 
   @protected
+  LightDto dco_decode_light_dto(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<FacetDto> dco_decode_list_facet_dto(dynamic raw);
 
   @protected
   List<FrontLineDto> dco_decode_list_front_line_dto(dynamic raw);
@@ -116,6 +149,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<IdiomLineDto> dco_decode_list_idiom_line_dto(dynamic raw);
+
+  @protected
+  List<ItemDto> dco_decode_list_item_dto(dynamic raw);
 
   @protected
   List<JobDto> dco_decode_list_job_dto(dynamic raw);
@@ -166,6 +202,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
+  LightDto? dco_decode_opt_box_autoadd_light_dto(dynamic raw);
+
+  @protected
   TrailDto? dco_decode_opt_box_autoadd_trail_dto(dynamic raw);
 
   @protected
@@ -203,6 +242,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchDto dco_decode_search_dto(dynamic raw);
+
+  @protected
+  SortKeyDto dco_decode_sort_key_dto(dynamic raw);
 
   @protected
   SourceDto dco_decode_source_dto(dynamic raw);
@@ -250,6 +292,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  ViewDto dco_decode_view_dto(dynamic raw);
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
@@ -278,10 +323,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FidelityDto sse_decode_box_autoadd_fidelity_dto(SseDeserializer deserializer);
 
   @protected
+  GroupDto sse_decode_box_autoadd_group_dto(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  LightDto sse_decode_box_autoadd_light_dto(SseDeserializer deserializer);
+
+  @protected
   TargetDto sse_decode_box_autoadd_target_dto(SseDeserializer deserializer);
+
+  @protected
+  TrackRowDto sse_decode_box_autoadd_track_row_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TrailDto sse_decode_box_autoadd_trail_dto(SseDeserializer deserializer);
@@ -301,10 +357,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
+  ViewDto sse_decode_box_autoadd_view_dto(SseDeserializer deserializer);
+
+  @protected
   ColumnDto sse_decode_column_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  FacetColumnDto sse_decode_facet_column_dto(SseDeserializer deserializer);
+
+  @protected
+  FacetDto sse_decode_facet_dto(SseDeserializer deserializer);
+
+  @protected
+  FacetsDto sse_decode_facets_dto(SseDeserializer deserializer);
 
   @protected
   FidelityDto sse_decode_fidelity_dto(SseDeserializer deserializer);
@@ -314,6 +382,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FrontLineDto sse_decode_front_line_dto(SseDeserializer deserializer);
+
+  @protected
+  GroupDto sse_decode_group_dto(SseDeserializer deserializer);
 
   @protected
   HistogramDto sse_decode_histogram_dto(SseDeserializer deserializer);
@@ -334,10 +405,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   IdiomLineDto sse_decode_idiom_line_dto(SseDeserializer deserializer);
 
   @protected
+  ItemDto sse_decode_item_dto(SseDeserializer deserializer);
+
+  @protected
   JobDto sse_decode_job_dto(SseDeserializer deserializer);
 
   @protected
+  LightDto sse_decode_light_dto(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<FacetDto> sse_decode_list_facet_dto(SseDeserializer deserializer);
 
   @protected
   List<FrontLineDto> sse_decode_list_front_line_dto(
@@ -351,6 +431,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<IdiomLineDto> sse_decode_list_idiom_line_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<ItemDto> sse_decode_list_item_dto(SseDeserializer deserializer);
 
   @protected
   List<JobDto> sse_decode_list_job_dto(SseDeserializer deserializer);
@@ -407,6 +490,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  LightDto? sse_decode_opt_box_autoadd_light_dto(SseDeserializer deserializer);
+
+  @protected
   TrailDto? sse_decode_opt_box_autoadd_trail_dto(SseDeserializer deserializer);
 
   @protected
@@ -444,6 +530,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchDto sse_decode_search_dto(SseDeserializer deserializer);
+
+  @protected
+  SortKeyDto sse_decode_sort_key_dto(SseDeserializer deserializer);
 
   @protected
   SourceDto sse_decode_source_dto(SseDeserializer deserializer);
@@ -491,6 +580,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  ViewDto sse_decode_view_dto(SseDeserializer deserializer);
+
+  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -530,14 +622,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_group_dto(
+    GroupDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
   );
 
   @protected
+  void sse_encode_box_autoadd_light_dto(
+    LightDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_target_dto(
     TargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_track_row_dto(
+    TrackRowDto self,
     SseSerializer serializer,
   );
 
@@ -563,10 +673,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_view_dto(ViewDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_column_dto(ColumnDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_facet_column_dto(
+    FacetColumnDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_facet_dto(FacetDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_facets_dto(FacetsDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_fidelity_dto(FidelityDto self, SseSerializer serializer);
@@ -576,6 +701,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_front_line_dto(FrontLineDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_group_dto(GroupDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_histogram_dto(HistogramDto self, SseSerializer serializer);
@@ -596,10 +724,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_idiom_line_dto(IdiomLineDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_item_dto(ItemDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_job_dto(JobDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_light_dto(LightDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_facet_dto(List<FacetDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_front_line_dto(
@@ -615,6 +752,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<IdiomLineDto> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_item_dto(List<ItemDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_job_dto(List<JobDto> self, SseSerializer serializer);
@@ -695,6 +835,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_light_dto(
+    LightDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_trail_dto(
     TrailDto? self,
     SseSerializer serializer,
@@ -735,6 +881,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_search_dto(SearchDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_sort_key_dto(SortKeyDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_source_dto(SourceDto self, SseSerializer serializer);
@@ -780,6 +929,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_view_dto(ViewDto self, SseSerializer serializer);
 }
 
 // Section: wire_class

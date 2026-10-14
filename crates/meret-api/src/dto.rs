@@ -1,7 +1,10 @@
 //! Plain data for the UI. Flat structs and simple enums, so flutter_rust_bridge
 //! (and later a websocket) can carry them without custom codecs.
 
+use std::path::Path;
+
 use meret_core::{Front, NowState, PersonPage, ReleasePage, Search, StatusState};
+use meret_core::{Facet, FacetColumn, Facets, GroupRow, SortKey, View};
 use meret_graph::Trail;
 use meret_model::signal::Fidelity;
 use meret_model::thread::source_label;
@@ -33,6 +36,40 @@ pub enum ColumnDto {
     LastPlayed,
     Added,
     Dr,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SortKeyDto {
+    #[default]
+    Library,
+    Title,
+    Artist,
+    Album,
+    Year,
+    Length,
+    Format,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ViewDto {
+    pub sort: SortKeyDto,
+    pub descending: bool,
+    pub group: bool,
+}
+
+impl From<ViewDto> for View {
+    fn from(v: ViewDto) -> Self {
+        let sort = match v.sort {
+            SortKeyDto::Library => SortKey::Library,
+            SortKeyDto::Title => SortKey::Title,
+            SortKeyDto::Artist => SortKey::Artist,
+            SortKeyDto::Album => SortKey::Album,
+            SortKeyDto::Year => SortKey::Year,
+            SortKeyDto::Length => SortKey::Length,
+            SortKeyDto::Format => SortKey::Format,
+        };
+        Self { sort, descending: v.descending, group: v.group }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -75,8 +112,19 @@ pub enum FidelityDto {
     Lossy,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LightDto {
+    pub light: u32,
+    pub wash: u32,
+    pub dim: u32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct NowDto {
+    pub track_id: Option<i64>,
+    pub release_id: Option<i64>,
+    pub cover: Option<String>,
+    pub light: Option<LightDto>,
     pub title: String,
     pub subtitle: String,
     pub anchor: Option<AnchorDto>,
@@ -86,10 +134,14 @@ pub struct NowDto {
     pub error: Option<String>,
 }
 
-impl From<&NowState> for NowDto {
-    fn from(n: &NowState) -> Self {
+impl NowDto {
+    pub fn from_state(n: &NowState, art_dir: &Path) -> Self {
         let now = meret_engine::clock::now_ns();
         NowDto {
+            track_id: n.track.map(|t| t.0),
+            release_id: n.release.map(|r| r.0),
+            cover: n.cover.as_ref().map(|a| meret_store::cover_file(art_dir, &a.hash, 256).to_string_lossy().into_owned()),
+            light: n.cover.as_ref().and_then(|a| Some(LightDto { light: a.light?, wash: a.light_wash?, dim: a.light_dim? })),
             title: n.title.clone(),
             subtitle: n.subtitle.clone(),
             // Re-based to "now", so the receiver can treat it as fresh.
@@ -203,8 +255,92 @@ impl From<TrackRow> for TrackRowDto {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RowsDto {
     pub total: u64,
+    pub tracks: u64,
+    pub releases: u64,
     pub offset: u64,
-    pub rows: Vec<TrackRowDto>,
+    pub items: Vec<ItemDto>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ItemDto {
+    Group(GroupDto),
+    Track { ordinal: u32, row: TrackRowDto },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroupDto {
+    pub release_id: i64,
+    pub title: String,
+    pub album_artist: Option<String>,
+    pub album_artist_id: Option<i64>,
+    pub year: Option<u16>,
+    pub idiom: Option<String>,
+    pub tracks: u32,
+    pub length_ms: u64,
+    pub format: String,
+    pub cover: Option<String>,
+}
+
+impl GroupDto {
+    pub(crate) fn from_group(g: GroupRow, art_dir: &Path) -> Self {
+        let (album_artist_id, album_artist) = match g.album_artist {
+            Some((id, name)) => (Some(id.0), Some(name)),
+            None => (None, None),
+        };
+        Self {
+            release_id: g.release.0,
+            title: g.title,
+            album_artist,
+            album_artist_id,
+            year: g.year,
+            idiom: g.idiom.map(|i| i.as_str().into()),
+            tracks: g.tracks,
+            length_ms: g.length_ms,
+            format: g.formats.join(" · "),
+            cover: g.cover.map(|a| meret_store::cover_file(art_dir, &a.hash, 64).to_string_lossy().into_owned()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FacetsDto {
+    pub idioms: FacetColumnDto,
+    pub people: FacetColumnDto,
+    pub releases: FacetColumnDto,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FacetColumnDto {
+    pub all_query: String,
+    pub tracks: u32,
+    pub entries: Vec<FacetDto>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FacetDto {
+    pub id: i64,
+    pub name: String,
+    pub tracks: u32,
+    pub selected: bool,
+    pub query: String,
+}
+
+impl From<Facets> for FacetsDto {
+    fn from(f: Facets) -> Self {
+        Self { idioms: f.idioms.into(), people: f.people.into(), releases: f.releases.into() }
+    }
+}
+
+impl From<FacetColumn> for FacetColumnDto {
+    fn from(c: FacetColumn) -> Self {
+        Self { all_query: c.all_query, tracks: c.tracks, entries: c.entries.into_iter().map(Into::into).collect() }
+    }
+}
+
+impl From<Facet> for FacetDto {
+    fn from(f: Facet) -> Self {
+        Self { id: f.id, name: f.name, tracks: f.tracks, selected: f.selected, query: f.query }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -496,6 +632,7 @@ pub(crate) const LOCAL_TAGS: &str = "local_tags";
 pub struct ReleaseDto {
     pub id: i64,
     pub title: String,
+    pub cover: Option<String>,
     /// The album artist.
     pub artist: Option<String>,
     pub year: Option<u16>,
@@ -512,8 +649,8 @@ pub struct ReleaseDto {
     pub credits: Vec<ThreadDto>,
 }
 
-impl From<ReleasePage> for ReleaseDto {
-    fn from(p: ReleasePage) -> Self {
+impl ReleaseDto {
+    pub fn from_page(p: ReleasePage, art_dir: &Path) -> Self {
         let rows: Vec<TrackRowDto> = p.tracks.into_iter().map(TrackRowDto::from).collect();
         let mut discs: Vec<u32> = rows.iter().map(|r| r.disc).collect();
         discs.sort_unstable();
@@ -551,6 +688,7 @@ impl From<ReleasePage> for ReleaseDto {
         ReleaseDto {
             id: p.release.0,
             title: p.title,
+            cover: p.cover.as_ref().map(|a| meret_store::cover_file(art_dir, &a.hash, 256).to_string_lossy().into_owned()),
             artist: p.album_artist.map(|(_, name)| name),
             year: p.year,
             idiom: p.idiom.map(|i| singular(i).into()),
@@ -670,5 +808,87 @@ impl TrailDto {
             stops,
             meetings: t.meetings().into_iter().map(|(a, b)| (a as u32, b as u32)).collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod cover_tests {
+    use super::*;
+    use meret_model::TrackId;
+    use meret_store::Artwork;
+
+    fn art(light: Option<u32>) -> Artwork {
+        Artwork {
+            hash: "abcd".into(),
+            light,
+            light_wash: light.map(|c| (c & 0xffffff) | 0x14000000),
+            light_dim: light.map(|c| (c & 0xffffff) | 0x55000000),
+        }
+    }
+
+    #[test]
+    fn now_carries_identity_cover_and_light() {
+        let state = NowState {
+            track: Some(TrackId(7)),
+            release: Some(ReleaseId(9)),
+            cover: Some(art(Some(0xffcc8844))),
+            ..Default::default()
+        };
+        let now = NowDto::from_state(&state, Path::new("/tmp/meret/art"));
+        assert_eq!((now.track_id, now.release_id), (Some(7), Some(9)));
+        assert_eq!(now.cover.as_deref(), Some("/tmp/meret/art/abcd-256.jpg"));
+        assert_eq!(now.light, Some(LightDto { light: 0xffcc8844, wash: 0x14cc8844, dim: 0x55cc8844 }));
+        let pale = NowDto::from_state(&NowState { cover: Some(art(None)), ..Default::default() }, Path::new("/tmp/art"));
+        assert!(pale.cover.is_some());
+        assert_eq!(pale.light, None);
+        let loose = NowDto::from_state(&NowState::default(), Path::new("/tmp/art"));
+        assert_eq!((loose.track_id, loose.release_id, loose.cover, loose.light), (None, None, None, None));
+    }
+
+    #[test]
+    fn release_carries_the_medium_cover_path() {
+        let page = ReleasePage {
+            release: ReleaseId(9),
+            title: "The cover".into(),
+            year: None,
+            idiom: None,
+            album_artist: None,
+            cover: Some(art(None)),
+            tracks: vec![],
+            artists: vec![],
+        };
+        let release = ReleaseDto::from_page(page, Path::new("/tmp/meret/art"));
+        assert_eq!(release.cover.as_deref(), Some("/tmp/meret/art/abcd-256.jpg"));
+    }
+}
+
+#[cfg(test)]
+mod view_tests {
+    use super::*;
+
+    #[test]
+    fn group_carries_small_cover_and_joined_format_labels() {
+        let mut group = GroupRow {
+            release: ReleaseId(1),
+            title: "First Score".into(),
+            year: Some(2000),
+            idiom: Some(Idiom::Score),
+            album_artist: Some((AgentId(2), "Mark Cromer".into())),
+            tracks: 3,
+            length_ms: 120000,
+            formats: vec!["Lossless, up to 16/48", "Hi-res"],
+            cover: Some(meret_store::Artwork { hash: "abcd".into(), light: None, light_wash: None, light_dim: None }),
+        };
+        let dto = GroupDto::from_group(group.clone(), Path::new("/tmp/meret/art"));
+        assert_eq!(dto.cover.as_deref(), Some("/tmp/meret/art/abcd-64.jpg"));
+        assert_eq!(dto.album_artist_id, Some(2));
+        assert_eq!(dto.album_artist.as_deref(), Some("Mark Cromer"));
+        assert_eq!(dto.idiom.as_deref(), Some("score"));
+        assert_eq!(dto.format, "Lossless, up to 16/48 · Hi-res");
+        group.cover = None;
+        assert!(GroupDto::from_group(group, Path::new("/tmp/meret/art")).cover.is_none());
+        assert_eq!(View::from(ViewDto::default()), View::default());
+        assert_eq!(View::from(ViewDto { sort: SortKeyDto::Year, descending: true, group: true }),
+            View { sort: SortKey::Year, descending: true, group: true });
     }
 }

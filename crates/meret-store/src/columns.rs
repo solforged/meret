@@ -1,7 +1,7 @@
 //! The hot column store.
 //!
 //! A struct-of-arrays copy of the columns the table pane sorts, filters and
-//! brushes, indexed by a dense row number. About 40 bytes a track: 40 MB for a
+//! brushes, indexed by a dense row number. About 64 bytes a track: 64 MB for a
 //! million. Filters return roaring bitmaps of row numbers; facet counts and
 //! histograms are single passes over one array.
 //!
@@ -15,6 +15,13 @@ use roaring::RoaringBitmap;
 #[derive(Clone, Debug, Default)]
 pub struct Row {
     pub track: i64,
+    pub release: u32,
+    /// 0 when there is no credited artist.
+    pub artist: u32,
+    pub album_artist: u32,
+    pub title_rank: u32,
+    pub artist_rank: u32,
+    pub album_rank: u32,
     pub year: u16,
     pub length_s: u32,
     pub plays: u32,
@@ -53,6 +60,12 @@ pub struct Histogram {
 #[derive(Default)]
 pub struct HotColumns {
     pub track: Vec<TrackId>,
+    pub release: Vec<u32>,
+    pub artist: Vec<u32>,
+    pub album_artist: Vec<u32>,
+    pub title_rank: Vec<u32>,
+    pub artist_rank: Vec<u32>,
+    pub album_rank: Vec<u32>,
     pub year: Vec<u16>,
     pub length_s: Vec<u32>,
     pub plays: Vec<u32>,
@@ -77,6 +90,12 @@ impl HotColumns {
     pub fn push(&mut self, r: Row) {
         let i = self.track.len() as u32;
         self.track.push(TrackId(r.track));
+        self.release.push(r.release);
+        self.artist.push(r.artist);
+        self.album_artist.push(r.album_artist);
+        self.title_rank.push(r.title_rank);
+        self.artist_rank.push(r.artist_rank);
+        self.album_rank.push(r.album_rank);
         self.year.push(r.year);
         self.length_s.push(r.length_s);
         self.plays.push(r.plays);

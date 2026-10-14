@@ -47,7 +47,21 @@ fn scan(core: &Core, root: RootId) {
     let t = Instant::now();
     let progress = |p: meret_library::ScanProgress| core.status.send_modify(|s| status::set_scan(s, Some(p)));
     match meret_library::scan(&core.store, root, &progress) {
-        Ok(report) => tracing::info!(root = root.0, ?report, took = ?t.elapsed(), "scanned"),
+        Ok(report) => {
+            tracing::info!(root = root.0, ?report, took = ?t.elapsed(), "scanned");
+            let t = Instant::now();
+            match meret_library::covers(&core.store, &core.art_dir(), &progress) {
+                Ok(report) => {
+                    let mut total = core.cover_report.lock();
+                    total.checked += report.checked;
+                    total.found += report.found;
+                    total.files += report.files;
+                    total.unreadable += report.unreadable;
+                    tracing::info!(?report, took = ?t.elapsed(), "read covers");
+                }
+                Err(e) => tracing::error!(error = %e, "cover scan failed"),
+            }
+        }
         Err(e) => tracing::error!(root = root.0, error = %e, "scan failed"),
     }
     core.status.send_modify(|s| status::set_scan(s, None));

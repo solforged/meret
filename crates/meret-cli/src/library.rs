@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use anyhow::{Result, anyhow};
 use meret_api::{Api, StatusDto, TargetDto, ThreadDto, ThreadKind, TransportDto};
+use meret_api::{ItemDto, ViewDto};
 use meret_core::{CoreConfig, OutputChoice};
 use meret_engine::{Anchor, EngineEvent, decode};
 use tokio::sync::broadcast::error::RecvError;
@@ -70,35 +71,64 @@ pub fn add(api: &Api, rt: &tokio::runtime::Runtime, root: &Path) -> Result<()> {
 }
 
 pub fn rescan(api: &Api, rt: &tokio::runtime::Runtime) -> Result<()> {
-    settle(api, rt);
     let t = Instant::now();
+    settle(api, rt);
     api.rescan();
     settle(api, rt);
-    println!("rescanned in {:.2?}; the table holds {} tracks", t.elapsed(), api.status().tracks);
+    let covers = api.cover_report();
+    println!(
+        "rescanned in {:.2?}; the table holds {} tracks; read covers for {} releases, found {}, wrote {} files ({} unreadable)",
+        t.elapsed(), api.status().tracks, covers.checked, covers.found, covers.files, covers.unreadable
+    );
     Ok(())
 }
 
-pub fn ls(api: &Api, rt: &tokio::runtime::Runtime, query: &str, offset: u64, limit: u32) -> Result<()> {
+pub fn ls(api: &Api, rt: &tokio::runtime::Runtime, query: &str, view: ViewDto, offset: u64, limit: u32) -> Result<()> {
     settle(api, rt);
     let t = Instant::now();
-    let page = api.rows(query, offset, limit).map_err(|e| anyhow!(e))?;
+    let page = api.rows(query, view, offset, limit).map_err(|e| anyhow!(e))?;
     let took = t.elapsed();
-    for (i, r) in page.rows.iter().enumerate() {
-        let len = r.length_ms.map(|ms| format!("{}:{:02}", ms / 60_000, ms / 1000 % 60)).unwrap_or_default();
-        println!(
-            "{:>6}  {:>2}-{:<3} {:<40.40} {:<24.24} {:<32.32} {:>4} {:>6}  {}",
-            offset as usize + i,
-            r.disc,
-            r.number,
-            r.title,
-            r.artist.as_deref().unwrap_or(""),
-            r.album,
-            r.year.map(|y| y.to_string()).unwrap_or_default(),
-            len,
-            r.format
-        );
+    for item in &page.items {
+        match item {
+            ItemDto::Group(g) => println!(
+                "\n  {} · {} · {} · {} tracks · {}:{:02} · {}",
+                g.title,
+                g.album_artist.as_deref().unwrap_or(""),
+                g.year.map(|y| y.to_string()).unwrap_or_default(),
+                g.tracks,
+                g.length_ms / 60_000,
+                g.length_ms / 1000 % 60,
+                g.format
+            ),
+            ItemDto::Track { ordinal, row: r } => {
+                let len = r.length_ms.map(|ms| format!("{}:{:02}", ms / 60_000, ms / 1000 % 60)).unwrap_or_default();
+                println!(
+                    "{ordinal:>6}  {:>2}-{:<3} {:<40.40} {:<24.24} {:<32.32} {:>4} {:>6}  {}",
+                    r.disc,
+                    r.number,
+                    r.title,
+                    r.artist.as_deref().unwrap_or(""),
+                    r.album,
+                    r.year.map(|y| y.to_string()).unwrap_or_default(),
+                    len,
+                    r.format
+                );
+            }
+        }
     }
-    println!("{} of {} rows in {took:.2?}", page.rows.len(), page.total);
+    println!("{} of {} items · {} tracks · {} releases in {took:.2?}", page.items.len(), page.total, page.tracks, page.releases);
+    Ok(())
+}
+
+pub fn facets(api: &Api, rt: &tokio::runtime::Runtime, query: &str) -> Result<()> {
+    settle(api, rt);
+    let facets = api.facets(query).map_err(|e| anyhow!(e))?;
+    for (label, column) in [("Idioms", facets.idioms), ("People", facets.people), ("Releases", facets.releases)] {
+        println!("{label} · {} tracks · All → {}", column.tracks, column.all_query);
+        for entry in column.entries {
+            println!("  {} {:>6}  {}  → {}", if entry.selected { "*" } else { " " }, entry.tracks, entry.name, entry.query);
+        }
+    }
     Ok(())
 }
 
@@ -200,6 +230,9 @@ pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[usiz
                         .join(" · "),
                     t.elapsed()
                 );
+                if let Some(cover) = &r.cover {
+                    println!("    cover {cover}");
+                }
                 for row in &r.rows {
                     let artist = row.artist.as_deref().filter(|a| Some(*a) != r.artist.as_deref()).unwrap_or("");
                     println!("    {}-{:02} {:<44.44} {artist}", row.disc, row.number, row.title);
@@ -269,7 +302,7 @@ struct Heard {
 pub fn play(api: &Api, rt: &tokio::runtime::Runtime, query: &str, opts: PlayOptions) -> Result<()> {
     settle(api, rt);
     let mut events = api.subscribe_events();
-    api.play_results(query, opts.from).map_err(|e| anyhow!(e))?;
+    api.play_results(query, ViewDto::default(), opts.from).map_err(|e| anyhow!(e))?;
     let uris: HashMap<u64, String> = api.queue().into_iter().collect();
     println!("queued {} items", uris.len());
 

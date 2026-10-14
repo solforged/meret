@@ -33,8 +33,9 @@ abstract interface class CoreBridge {
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
   Future<void> transport(TransportDto cmd);
   Future<int> addRoot(String path);
-  Future<RowsDto> rows(String query, int offset, int limit);
-  Future<void> playResults(String query, int index);
+  Future<RowsDto> rows(String query, ViewDto view, int offset, int limit);
+  Future<void> playResults(String query, ViewDto view, int index);
+  Future<FacetsDto> facets(String query);
 }
 
 class RustCore implements CoreBridge {
@@ -77,11 +78,13 @@ class RustCore implements CoreBridge {
   @override
   Future<int> addRoot(String path) async => (await rust.addRoot(path: path)).toInt();
   @override
-  Future<RowsDto> rows(String query, int offset, int limit) =>
-      rust.rows(query: query, offset: BigInt.from(offset), limit: limit);
+  Future<RowsDto> rows(String query, ViewDto view, int offset, int limit) =>
+      rust.rows(query: query, view: view, offset: BigInt.from(offset), limit: limit);
   @override
-  Future<void> playResults(String query, int index) =>
-      rust.playResults(query: query, index: BigInt.from(index));
+  Future<void> playResults(String query, ViewDto view, int index) =>
+      rust.playResults(query: query, view: view, index: BigInt.from(index));
+  @override
+  Future<FacetsDto> facets(String query) => rust.facets(query: query);
 }
 
 /// The plates' Tuesday evening, as data.
@@ -98,10 +101,15 @@ class FakeCore implements CoreBridge {
   TrailDto? _trail;
   final _forward = <int, int>{};
   final _results = <String, List<int>>{};
+  final _lists = <(String, ViewDto), (List<int>, List<ItemDto>, int)>{};
   late final _sampleRows = List.generate(_releases.length * 12 * 7, _row);
   final _statuses = StreamController<StatusDto>.broadcast();
   final _now = StreamController<NowDto>.broadcast();
+  static const _sampleLight = LightDto(light: 0xFFDF9672, wash: 0x14DF9672, dim: 0x55DF9672);
   NowDto _state = NowDto(
+    trackId: PlatformInt64Util.from(3),
+    releaseId: PlatformInt64Util.from(1),
+    light: _sampleLight,
     title: 'Small Two of Pieces ~Broken Pieces~',
     subtitle: 'Joanne Hogg · Xenogears, disc 2 · ending',
     anchor: AnchorDto(item: BigInt.one, positionMs: 226000, rate: 1),
@@ -193,7 +201,7 @@ class FakeCore implements CoreBridge {
     final command = input.trim();
     final verb = command.split(RegExp(r'\s+')).first.toLowerCase();
     if (verb == 'play') {
-      await playResults(command.substring(4).trim(), 0);
+      await playResults(command.substring(4).trim(), const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), 0);
       return;
     }
     throw "$verb isn't built yet";
@@ -477,7 +485,7 @@ class FakeCore implements CoreBridge {
       '' => [row.title, row.artist ?? '', row.album, row.albumArtist ?? ''].any((s) => _contains(s, word)),
       'by' || 'sung' || 'composer' || 'composed' => [row.artist ?? '', row.albumArtist ?? ''].any((s) => _contains(s, word)),
       'release' => _contains(row.album, word),
-      'idiom' => word == (row.artist == 'Yasunori Mitsuda' || row.artist == 'Joanne Hogg' ? 'score' : row.artist == 'Bill Evans Trio' ? 'session' : 'album'),
+      'idiom' => word == _idiom(row),
       'format' => word == 'lossy' ? row.format == 'AAC' : word == 'flac' ? row.format.startsWith('FLAC') : false,
       'year' => _number(row.year?.toDouble() ?? 0, value),
       'plays' || 'dr' => _number(0, value),
@@ -516,20 +524,157 @@ class FakeCore implements CoreBridge {
     _empty = false;
     _root = path;
     _libraryVersion += BigInt.one;
+    _results.clear();
+    _lists.clear();
     _statuses.add(_status);
     return 1;
   }
 
   @override
-  Future<RowsDto> rows(String query, int offset, int limit) async {
-    final indices = _matching(query);
-    final start = offset.clamp(0, indices.length);
-    final count = limit.clamp(0, indices.length - start);
+  Future<RowsDto> rows(String query, ViewDto view, int offset, int limit) async {
+    final (indices, items, releases) = _list(query, view);
+    final start = offset.clamp(0, items.length);
+    final count = limit.clamp(0, items.length - start);
     return RowsDto(
-      total: BigInt.from(indices.length),
+      total: BigInt.from(items.length),
+      tracks: BigInt.from(indices.length),
+      releases: BigInt.from(releases),
       offset: BigInt.from(start),
-      rows: List.generate(count, (i) => _row(indices[start + i])),
+      items: items.sublist(start, start + count),
     );
+  }
+
+  (List<int>, List<ItemDto>, int) _list(String query, ViewDto view) {
+    final key = (query, view);
+    final cached = _lists.remove(key);
+    if (cached != null) {
+      _lists[key] = cached;
+      return cached;
+    }
+    final indices = [..._matching(query)];
+    final groups = <int, List<int>>{};
+    for (final index in indices) {
+      groups.putIfAbsent((index ~/ 12) % _releases.length + 1, () => []).add(index);
+    }
+    final items = <ItemDto>[];
+    if (view.group) {
+      final headers = <int, GroupDto>{};
+      for (final entry in groups.entries) {
+        entry.value.sort((a, b) {
+          final number = (a % 12).compareTo(b % 12);
+          return number != 0 ? number : a.compareTo(b);
+        });
+        final rows = entry.value.map(_row).toList();
+        final first = rows.first;
+        headers[entry.key] = GroupDto(
+          releaseId: first.releaseId, title: first.album,
+          albumArtist: first.albumArtist, albumArtistId: first.albumArtistId,
+          year: first.year, idiom: _idiom(first), tracks: rows.length,
+          lengthMs: rows.fold(BigInt.zero, (total, row) => total + (row.lengthMs ?? BigInt.zero)),
+          format: [if (rows.any((row) => row.format != 'AAC')) 'Lossless, up to 16/48', if (rows.any((row) => row.format == 'AAC')) 'Lossy'].join(' · '),
+        );
+      }
+      final releases = groups.keys.toList()..sort((a, b) {
+        final left = headers[a]!, right = headers[b]!;
+        final order = switch (view.sort) {
+          SortKeyDto.library_ || SortKeyDto.artist => a.compareTo(b),
+          SortKeyDto.title || SortKeyDto.album => _fold(left.title).compareTo(_fold(right.title)),
+          SortKeyDto.year => (left.year ?? 0).compareTo(right.year ?? 0),
+          SortKeyDto.length => left.lengthMs.compareTo(right.lengthMs),
+          SortKeyDto.format => (left.format.startsWith('Lossless') ? 1 : 5).compareTo(right.format.startsWith('Lossless') ? 1 : 5),
+        };
+        return order == 0 ? a.compareTo(b) : view.descending ? -order : order;
+      });
+      indices.clear();
+      for (final release in releases) {
+        items.add(ItemDto.group(headers[release]!));
+        for (final index in groups[release]!) {
+          items.add(ItemDto.track(ordinal: indices.length, row: _row(index)));
+          indices.add(index);
+        }
+      }
+    } else {
+      final text = switch (view.sort) {
+        SortKeyDto.title => [for (final row in _sampleRows) _fold(row.title)],
+        SortKeyDto.artist => [for (final row in _sampleRows) _fold(row.artist ?? row.albumArtist ?? '')],
+        SortKeyDto.album => [for (final row in _sampleRows) _fold(row.album)],
+        _ => const <String>[],
+      };
+      if (view.sort != SortKeyDto.library_ || view.descending) {
+        indices.sort((a, b) {
+          final left = _sampleRows[a % _sampleRows.length], right = _sampleRows[b % _sampleRows.length];
+          final order = switch (view.sort) {
+            SortKeyDto.library_ => a.compareTo(b),
+            SortKeyDto.title || SortKeyDto.artist || SortKeyDto.album => text[a % text.length].compareTo(text[b % text.length]),
+            SortKeyDto.year => (left.year ?? 0).compareTo(right.year ?? 0),
+            SortKeyDto.length => (a * 7919 % 240000).compareTo(b * 7919 % 240000),
+            SortKeyDto.format => (left.format == 'AAC' ? 5 : 1).compareTo(right.format == 'AAC' ? 5 : 1),
+          };
+          return order == 0 ? a.compareTo(b) : view.descending ? -order : order;
+        });
+      }
+      for (var ordinal = 0; ordinal < indices.length; ordinal++) {
+        items.add(ItemDto.track(ordinal: ordinal, row: _row(indices[ordinal])));
+      }
+    }
+    final result = (indices, items, groups.length);
+    _lists[key] = result;
+    if (_lists.length > 8) _lists.remove(_lists.keys.first);
+    return result;
+  }
+
+  static String _idiom(TrackRowDto row) => switch (row.albumArtist) {
+    'Yasunori Mitsuda' => 'score',
+    'Bill Evans Trio' => 'session',
+    _ => 'album',
+  };
+
+  @override
+  Future<FacetsDto> facets(String query) async {
+    final clauses = _clauses(query), tokens = _tokens(query);
+    int column((String, String, bool) clause) => clause.$3 ? -1 : switch (clause.$1) {
+      'idiom' => 0, 'by' => 1, 'release' => 2, _ => -1,
+    };
+    String before(int at) => [
+      for (var i = 0; i < tokens.length; i++)
+        if (column(clauses[i]) < at) tokens[i],
+    ].join(' ');
+    FacetColumnDto facetColumn(int at) {
+      final allQuery = before(at);
+      final indices = _matching(allQuery);
+      final entries = <String, (int, int)>{};
+      for (final index in indices) {
+        final row = _sampleRows[index % _sampleRows.length];
+        final names = switch (at) {
+          0 => {_idiom(row): const ['album', 'song', 'work', 'session', 'score', 'set', 'spoken'].indexOf(_idiom(row))},
+          1 => {
+            if (row.artist != null) row.artist!: row.artistId!.toInt(),
+            if (row.albumArtist != null) row.albumArtist!: row.albumArtistId!.toInt(),
+          },
+          _ => {row.album: row.releaseId.toInt()},
+        };
+        for (final entry in names.entries) {
+          entries[entry.key] = (entry.value, (entries[entry.key]?.$2 ?? 0) + 1);
+        }
+      }
+      final names = entries.keys.toList()..sort((a, b) => at == 0
+          ? entries[a]!.$1.compareTo(entries[b]!.$1) : _fold(a).compareTo(_fold(b)));
+      return FacetColumnDto(allQuery: allQuery, tracks: indices.length, entries: [
+        for (final name in names) (() {
+          final selected = clauses.any((clause) => column(clause) == at && clause.$2.toLowerCase() == name.toLowerCase());
+          final next = selected
+              ? [for (var i = 0; i < tokens.length; i++)
+                  if (!(column(clauses[i]) == at && clauses[i].$2.toLowerCase() == name.toLowerCase())) tokens[i]].join(' ')
+              : '$allQuery ${['idiom', 'by', 'release'][at]}:${at == 0 ? name : _quote(name)}'.trim();
+          return FacetDto(
+            id: PlatformInt64Util.from(entries[name]!.$1),
+            name: at == 0 ? const {'album': 'Albums', 'song': 'Songs', 'work': 'Works', 'session': 'Sessions', 'score': 'Scores', 'set': 'Sets', 'spoken': 'Spoken'}[name]! : name,
+            tracks: entries[name]!.$2, selected: selected, query: next,
+          );
+        })(),
+      ]);
+    }
+    return FacetsDto(idioms: facetColumn(0), people: facetColumn(1), releases: facetColumn(2));
   }
 
   static const _releases = [
@@ -574,7 +719,7 @@ class FakeCore implements CoreBridge {
     }
     final sortedFormats = formats.keys.toList()..sort((a, b) => formats[b]!.compareTo(formats[a]!));
     return ReleaseDto(
-      id: id, title: first.album, artist: first.albumArtist, year: first.year,
+      id: id, title: first.album, cover: null, artist: first.albumArtist, year: first.year,
       idiom: first.albumArtist == 'Yasunori Mitsuda' ? 'Score' : first.albumArtist == 'Bill Evans Trio' ? 'Session' : 'Album',
       tracks: rows.length, discs: rows.map((row) => row.disc).toSet().length,
       lengthMs: length, formats: sortedFormats, rows: rows,
@@ -658,14 +803,17 @@ class FakeCore implements CoreBridge {
   }
 
   @override
-  Future<void> playResults(String query, int index) async {
-    final indices = _matching(query);
+  Future<void> playResults(String query, ViewDto view, int index) async {
+    final indices = _list(query, view).$1;
     if (index < 0 || index >= indices.length) throw RangeError.index(index, null, 'index', null, indices.length);
     _playRow(_row(indices[index]));
   }
 
   void _playRow(TrackRowDto row) {
     _state = NowDto(
+      trackId: row.trackId,
+      releaseId: row.releaseId,
+      light: _sampleLight,
       title: row.title,
       subtitle: '${row.artist} · ${row.album}',
       anchor: AnchorDto(item: BigInt.from(row.trackId.toInt()), positionMs: 0, rate: 1),
@@ -695,11 +843,16 @@ class FakeCore implements CoreBridge {
   }
 
   NowDto _with(AnchorDto a) => NowDto(
+        trackId: _state.trackId,
+        releaseId: _state.releaseId,
+        cover: _state.cover,
+        light: _state.light,
         title: _state.title,
         subtitle: _state.subtitle,
         anchor: a,
         lengthMs: _state.lengthMs,
         path: _state.path,
         fidelity: _state.fidelity,
+        error: _state.error,
       );
 }

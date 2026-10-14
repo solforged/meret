@@ -7,6 +7,7 @@
 //!   brushes in memory, so 120 Hz interaction never touches SQLite.
 //! * Full-text search finds people, releases and recordings by name.
 
+mod art;
 mod columns;
 mod library;
 mod migrate;
@@ -20,8 +21,9 @@ use std::path::Path;
 use parking_lot::Mutex;
 use rusqlite::{Connection, OpenFlags};
 
+pub use art::{Artwork, COVER_SIZES, cover_file};
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
-pub use library::{LibraryFacts, RecentRelease, TrackRow};
+pub use library::{LibraryFacts, RecentRelease, ReleaseHead, TrackRow};
 pub use pages::{Colleague, PersonPage, PersonRelease, ReleasePage, TrackCredit};
 pub use plan::{Plan, format_code, plan};
 pub use search::{PersonHit, ReleaseHit};

@@ -56,17 +56,30 @@ Future<FrontDto> front() => RustLib.instance.api.crateApiCoreFront();
 /// `build`.
 Future<RowsDto> rows({
   required String query,
+  required ViewDto view,
   required BigInt offset,
   required int limit,
 }) => RustLib.instance.api.crateApiCoreRows(
   query: query,
+  view: view,
   offset: offset,
   limit: limit,
 );
 
-/// Plays `query`'s result from row `index`, replacing the queue.
-Future<void> playResults({required String query, required BigInt index}) =>
-    RustLib.instance.api.crateApiCorePlayResults(query: query, index: index);
+/// Plays from a track ordinal in this view, replacing the queue.
+Future<void> playResults({
+  required String query,
+  required ViewDto view,
+  required BigInt index,
+}) => RustLib.instance.api.crateApiCorePlayResults(
+  query: query,
+  view: view,
+  index: index,
+);
+
+/// The cascaded idiom, person and release column browser.
+Future<FacetsDto> facets({required String query}) =>
+    RustLib.instance.api.crateApiCoreFacets(query: query);
 
 /// The query line's hits as you type a search: people, releases and tracks.
 /// Errors when the input isn't a search.
