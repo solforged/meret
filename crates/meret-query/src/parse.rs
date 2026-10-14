@@ -196,6 +196,15 @@ mod tests {
     }
 
     #[test]
+    fn commands_read_back_from_their_canonical_form() {
+        for s in ["play idiom:work year:1970s", "queue", "want sung:\"Joanne Hogg\"", r#"crate add "Celtic, via games""#, "crate new tuesdays idiom:score"] {
+            let Input::Command(c) = parse(s).unwrap() else { panic!("{s} is a command") };
+            assert_eq!(c.to_string(), s);
+            assert_eq!(parse(&c.to_string()).unwrap(), Input::Command(c));
+        }
+    }
+
+    #[test]
     fn errors_say_what_was_wrong() {
         assert_eq!(parse(r#"sung:"Joanne"#), Err(ParseError::UnclosedQuote(0)));
         assert_eq!(parse("colour:red"), Err(ParseError::UnknownKey("colour".into())));

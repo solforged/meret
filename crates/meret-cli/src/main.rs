@@ -10,6 +10,7 @@
 //!
 //! meret library add ~/Music          add a root to the library and scan it into the store
 //! meret library ls 'year:1990s'      page through a query, as the table does
+//! meret library front                print the Front: the library by idiom and format, what's new, what needs you
 //! meret library play 'year:1998' --from 3 --tail 8   play results, timing every join
 //! ```
 
@@ -82,6 +83,8 @@ enum LibraryCmd {
     Add { root: PathBuf },
     /// Rescan every root.
     Rescan,
+    /// Print the Front, as the app's first pane shows it.
+    Front,
     /// Print a page of a query's rows ('' for everything).
     Ls {
         #[arg(default_value = "")]
@@ -157,6 +160,7 @@ fn main() -> Result<()> {
             match cmd {
                 LibraryCmd::Add { root } => library::add(&api, &rt, &root),
                 LibraryCmd::Rescan => library::rescan(&api, &rt),
+                LibraryCmd::Front => library::front(&api, &rt),
                 LibraryCmd::Ls { query, offset, limit } => library::ls(&api, &rt, &query, offset, limit),
                 LibraryCmd::Play { query, from, count, tail, .. } => {
                     library::play(&api, &rt, &query, library::PlayOptions { from, count, tail })

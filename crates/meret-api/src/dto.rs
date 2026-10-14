@@ -1,10 +1,12 @@
 //! Plain data for the UI. Flat structs and simple enums, so flutter_rust_bridge
 //! (and later a websocket) can carry them without custom codecs.
 
-use meret_core::{NowState, StatusState};
-use meret_store::TrackRow;
+use meret_core::{Front, NowState, StatusState};
 use meret_graph::Trail;
+use meret_model::Idiom;
 use meret_model::signal::Fidelity;
+use meret_query::{NameField, Term};
+use meret_store::{TrackRow, format_code};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum QueryKind {
@@ -194,6 +196,146 @@ pub struct RowsDto {
     pub total: u64,
     pub offset: u64,
     pub rows: Vec<TrackRowDto>,
+}
+
+/// The Front: one flat page of doors into the library (plate 02). Only
+/// what the library can answer; leads, crates and trails join it as they
+/// exist. A line with a `query` opens it as a table.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FrontDto {
+    pub tracks: u64,
+    pub releases: u64,
+    /// Idioms with at least one release, in the order of idioms.md.
+    pub idioms: Vec<IdiomLineDto>,
+    /// What you own by format, largest first; the lines don't overlap.
+    pub formats: Vec<FrontLineDto>,
+    /// Releases, newest first.
+    pub added_lately: Vec<RecentDto>,
+    /// Things to fix, only those that are non-zero.
+    pub needs_you: Vec<FrontLineDto>,
+    pub roots: Vec<RootDto>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct IdiomLineDto {
+    /// "Albums", "Scores"…
+    pub label: String,
+    pub releases: u64,
+    pub tracks: u64,
+    pub query: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FrontLineDto {
+    pub label: String,
+    pub count: u64,
+    pub note: String,
+    pub query: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecentDto {
+    pub title: String,
+    pub artist: Option<String>,
+    pub year: Option<u16>,
+    pub tracks: u32,
+    /// Unix milliseconds.
+    pub added_ms: i64,
+    pub query: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RootDto {
+    pub id: i64,
+    pub path: String,
+    pub online: bool,
+}
+
+impl From<Front> for FrontDto {
+    fn from(f: Front) -> Self {
+        let mut idioms: Vec<IdiomLineDto> = Idiom::ALL
+            .into_iter()
+            .map(|i| IdiomLineDto {
+                label: plural(i).into(),
+                releases: f.facts.releases_by_idiom[i as usize],
+                tracks: f.tracks_by_idiom[i as usize] as u64,
+                query: Some(format!("idiom:{}", i.as_str())),
+            })
+            .collect();
+        idioms.push(IdiomLineDto {
+            label: "Not sorted yet".into(),
+            releases: f.facts.releases_by_idiom[0],
+            tracks: f.tracks_by_idiom[0] as u64,
+            query: None,
+        });
+        idioms.retain(|l| l.releases > 0);
+
+        use format_code::*;
+        let by = |code: u8| f.tracks_by_format[code as usize];
+        let line = |label: &str, count, note: &str, query: Option<&str>| FrontLineDto {
+            label: label.into(),
+            count,
+            note: note.into(),
+            query: query.map(Into::into),
+        };
+        let mut formats = vec![
+            line("Lossless, up to 16/48", by(FLAC_CD), "FLAC, ALAC, WAV, AIFF", Some("format:flac -format:hires")),
+            line("Hi-res", by(HI_RES), "over 16 bit or 48 kHz", Some("format:hires")),
+            line("DSD", by(DSD), "", Some("format:dsd")),
+            line("Native chiptune", by(CHIPTUNE), "SPC, NSF, VGM", Some("format:chiptune")),
+            line("Lossy", by(LOSSY), "MP3, AAC, Ogg, Opus", Some("format:lossy")),
+            line("Unknown format", by(UNKNOWN), "", None),
+        ];
+        formats.retain(|l| l.count > 0);
+        formats.sort_by_key(|l| std::cmp::Reverse(l.count));
+
+        let offline = f.roots.iter().filter(|r| !r.online).count() as u64;
+        let mut needs_you = vec![
+            line("Files whose tags can't be read", f.facts.unreadable, "tried again on every scan", None),
+            line("Tracks with no artist tag", f.facts.no_artist, "they sort last", None),
+            line("Files that have gone", f.facts.missing, "kept, with their plays", None),
+            line("Folders not connected", offline, "their tracks come back when they do", None),
+        ];
+        needs_you.retain(|l| l.count > 0);
+
+        FrontDto {
+            tracks: f.tracks,
+            releases: f.facts.releases_by_idiom.iter().sum(),
+            idioms,
+            formats,
+            added_lately: f
+                .facts
+                .added_lately
+                .into_iter()
+                .map(|r| RecentDto {
+                    query: Term::Named { field: NameField::Release, value: r.title.clone() }.to_string(),
+                    title: r.title,
+                    artist: r.artist,
+                    year: r.year,
+                    tracks: r.tracks,
+                    added_ms: r.added_ms,
+                })
+                .collect(),
+            needs_you,
+            roots: f
+                .roots
+                .into_iter()
+                .map(|r| RootDto { id: r.id.0, path: r.path.display().to_string(), online: r.online })
+                .collect(),
+        }
+    }
+}
+
+fn plural(i: Idiom) -> &'static str {
+    match i {
+        Idiom::Album => "Albums",
+        Idiom::Song => "Songs",
+        Idiom::Work => "Works",
+        Idiom::Session => "Sessions",
+        Idiom::Score => "Scores",
+        Idiom::Set => "Sets",
+        Idiom::Spoken => "Spoken",
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

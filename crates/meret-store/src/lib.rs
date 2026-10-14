@@ -18,7 +18,7 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, OpenFlags};
 
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
-pub use library::TrackRow;
+pub use library::{LibraryFacts, RecentRelease, TrackRow};
 pub use plan::{Plan, format_code, plan};
 pub use writer::Writer;
 

@@ -13,6 +13,14 @@ import 'package:meret/src/rust/api/core.dart' as rust;
 import 'package:meret/src/rust/frb_generated.dart';
 
 final _lib = '${Directory.current.path}/../../target/debug/libmeret_ffi.dylib';
+late Directory _fixtureDir;
+Future<void>? _scan;
+
+Future<void> _scanFixture(CoreBridge core) => _scan ??= () async {
+  final scanned = core.status().firstWhere((status) => status.tracks >= BigInt.one);
+  expect(await core.addRoot(_fixtureDir.path), greaterThan(0));
+  await scanned.timeout(const Duration(seconds: 10));
+}();
 
 void main() {
   setUpAll(() async {
@@ -20,6 +28,9 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('meret-bridge-test');
     await rust.startCore(dataDir: dir.path, nullOutput: true);
     addTearDown(() => dir.delete(recursive: true));
+    _fixtureDir = await Directory.systemTemp.createTemp('meret-library-test');
+    await File('${Directory.current.path}/test/fixtures/tone-16-44.flac').copy('${_fixtureDir.path}/tone.flac');
+    addTearDown(() => _fixtureDir.delete(recursive: true));
   });
 
   test('the query line parses through Rust', () {
@@ -30,9 +41,13 @@ void main() {
     expect(core.parse('colour:red').kind, QueryKind.invalid);
   });
 
-  test('the status line streams the registry', () async {
-    final s = await RustCore().status().first;
-    expect(s.sources.map((x) => x.name), containsAll(['This Mac', 'MusicBrainz']));
+  test('a command runs from its canonical form, and unbuilt ones say so', () async {
+    final core = RustCore();
+    final queue = core.parse('queue  year:2010');
+    expect(queue.kind, QueryKind.command);
+    expect(queue.canonical, 'queue year:2010');
+    await expectLater(core.runCommand(queue.canonical), throwsA(contains("queue isn't built yet")));
+    await core.runCommand(core.parse('play release:nothing-here').canonical);
   });
 
   test('playing a FLAC streams Now with a bit-perfect path and a moving anchor', () async {
@@ -53,14 +68,21 @@ void main() {
     await core.transport(const TransportDto.stop());
   });
 
+  test('the Front reports the scanned fixture, its idiom door and folder', () async {
+    final core = RustCore();
+    await _scanFixture(core);
+    final front = await core.front();
+    expect(front.tracks, BigInt.one);
+    expect(front.idioms.any((idiom) => idiom.query != null && idiom.tracks == BigInt.one), isTrue);
+    expect(front.roots, hasLength(1));
+    expect(front.roots.single.path, await _fixtureDir.resolveSymbolicLinks());
+    expect(front.roots.single.online, isTrue);
+  });
+
   test('a scanned folder supplies table rows and plays its results', () async {
     final core = RustCore();
-    final dir = await Directory.systemTemp.createTemp('meret-library-test');
     try {
-      await File('${Directory.current.path}/test/fixtures/tone-16-44.flac').copy('${dir.path}/tone.flac');
-      final scanned = core.status().firstWhere((status) => status.tracks >= BigInt.one);
-      expect(await core.addRoot(dir.path), greaterThan(0));
-      await scanned.timeout(const Duration(seconds: 10));
+      await _scanFixture(core);
 
       final page = await core.rows('', 0, 50);
       expect(page.total, greaterThanOrEqualTo(BigInt.one));
@@ -76,7 +98,6 @@ void main() {
       expect(now.path.map((stage) => stage.detail), contains('FLAC 16/44.1'));
     } finally {
       await core.transport(const TransportDto.stop());
-      await dir.delete(recursive: true);
     }
   });
 }

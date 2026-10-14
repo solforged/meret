@@ -1,13 +1,13 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
 import '../draw/histogram_header.dart';
 import '../theme/tokens.dart';
+import 'add_folder.dart';
 
 /// iTunes' one big table as a pane (plate 04). Numeric headers are
 /// histograms you brush; rows are virtual with a fixed extent, fetched from
@@ -136,8 +136,7 @@ class _TablePaneState extends State<TablePane> {
       _actionError = null;
     });
     try {
-      final path = await getDirectoryPath();
-      if (path != null && mounted) await widget.core.addRoot(path);
+      await addMusicFolder(widget.core, isMounted: () => mounted);
     } catch (error) {
       if (mounted) setState(() => _actionError = error.toString());
     } finally {

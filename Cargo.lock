@@ -1346,6 +1346,7 @@ dependencies = [
  "ignore",
  "lofty",
  "meret-model",
+ "meret-query",
  "meret-store",
  "rayon",
  "rusqlite",

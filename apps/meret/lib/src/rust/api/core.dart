@@ -43,6 +43,15 @@ Future<void> transport({required TransportDto cmd}) =>
 Future<PlatformInt64> addRoot({required String path}) =>
     RustLib.instance.api.crateApiCoreAddRoot(path: path);
 
+/// Runs a query-line command: `play <query>` plays what matches; the
+/// other commands return an error that says they aren't built yet.
+Future<void> runCommand({required String input}) =>
+    RustLib.instance.api.crateApiCoreRunCommand(input: input);
+
+/// The Front: the library by idiom and format, what arrived lately, what
+/// needs you, and the folders. Ask again when `libraryVersion` moves.
+Future<FrontDto> front() => RustLib.instance.api.crateApiCoreFront();
+
 /// A page of the table for `query`. Call as rows scroll into view, never in
 /// `build`.
 Future<RowsDto> rows({

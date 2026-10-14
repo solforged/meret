@@ -174,6 +174,22 @@ impl fmt::Display for Query {
     }
 }
 
+impl fmt::Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let with_query = |f: &mut fmt::Formatter<'_>, verb: &str, q: &Query| {
+            if q.clauses.is_empty() { f.write_str(verb) } else { write!(f, "{verb} {q}") }
+        };
+        match self {
+            Command::Play { query } => with_query(f, "play", query),
+            Command::Queue { query } => with_query(f, "queue", query),
+            Command::Want { query } => with_query(f, "want", query),
+            Command::CrateAdd { name } => write!(f, "crate add {}", quoted(name)),
+            Command::CrateNew { name, rule: None } => write!(f, "crate new {}", quoted(name)),
+            Command::CrateNew { name, rule: Some(rule) } => write!(f, "crate new {} {rule}", quoted(name)),
+        }
+    }
+}
+
 impl fmt::Display for Clause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (&self.term, self.negated) {

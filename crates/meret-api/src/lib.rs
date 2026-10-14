@@ -33,9 +33,7 @@ impl Api {
     pub fn parse_query(&self, input: &str) -> QueryDto {
         match parse(input) {
             Ok(Input::Search(q)) => QueryDto { kind: QueryKind::Search, canonical: q.to_string(), error: None },
-            Ok(Input::Command(c)) => {
-                QueryDto { kind: QueryKind::Command, canonical: format!("{c:?}"), error: None }
-            }
+            Ok(Input::Command(c)) => QueryDto { kind: QueryKind::Command, canonical: c.to_string(), error: None },
             Err(e) => QueryDto { kind: QueryKind::Invalid, canonical: String::new(), error: Some(e.to_string()) },
         }
     }
@@ -44,11 +42,29 @@ impl Api {
     pub fn histogram(&self, column: ColumnDto, query: &str, lo: f64, hi: f64, bins: u32) -> HistogramDto {
         let cols = self.core.columns.read();
         let rows = match parse(query) {
-            Ok(Input::Search(q)) => plan(&q, &cols, now_s()).rows.unwrap_or_else(|| cols.all()),
-            _ => cols.all(),
-        };
+            Ok(Input::Search(q)) => self.core.store.answer_residual(plan(&q, &cols, now_s()), &cols).ok().flatten(),
+            _ => None,
+        }
+        .unwrap_or_else(|| cols.all());
         let h = cols.histogram(column.into(), &rows, lo, hi, bins as usize);
         HistogramDto { lo: h.lo, hi: h.hi, bins: h.bins, matched: rows.len() }
+    }
+
+    /// The Front. Ask again when the status line's `library_version` moves.
+    pub fn front(&self) -> Result<FrontDto, String> {
+        self.core.front().map(FrontDto::from).map_err(|e| e.to_string())
+    }
+
+    /// Runs a command from the query line. `play <query>` plays what
+    /// matches from the top; the other commands aren't built yet and say so.
+    pub fn run_command(&self, input: &str) -> Result<(), String> {
+        match parse(input).map_err(|e| e.to_string())? {
+            Input::Command(meret_query::Command::Play { query }) => {
+                self.core.play_results(&query.to_string(), 0).map_err(|e| e.to_string())
+            }
+            Input::Command(c) => Err(format!("{} isn't built yet", verb(&c))),
+            Input::Search(_) => Err("a search, not a command".into()),
+        }
     }
 
     pub fn transport(&self, cmd: TransportDto) -> Result<(), String> {
@@ -170,4 +186,14 @@ fn now_ms() -> i64 {
 
 fn now_s() -> i64 {
     now_ms() / 1000
+}
+
+fn verb(c: &meret_query::Command) -> &'static str {
+    use meret_query::Command::*;
+    match c {
+        Play { .. } => "play",
+        Queue { .. } => "queue",
+        Want { .. } => "want",
+        CrateAdd { .. } | CrateNew { .. } => "crate",
+    }
 }

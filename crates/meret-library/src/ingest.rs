@@ -14,7 +14,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use meret_model::{EntityKind, RootId};
+use meret_model::{EntityKind, Idiom, RootId};
 use meret_store::{Store, StoreError, next_rev};
 use rayon::prelude::*;
 use rusqlite::{OptionalExtension, Transaction, params};
@@ -276,6 +276,7 @@ fn ingest(
         None => artist,
     };
     let release = release(tx, &album, album_artist, t.year, rev, provenance)?;
+    set_idiom(tx, release, crate::idiom::signal(&stat.rel_path, &t), rev)?;
     let medium = medium(tx, release, t.disc.unwrap_or(1), rev)?;
     let length = t.length_ms as i64;
 
@@ -372,6 +373,25 @@ fn release(
         credit(tx, EntityKind::Release, id, a, "album_artist", rev, provenance)?;
     }
     Ok(id)
+}
+
+/// Gives a release its first idiom: what a file's signal says, or Album
+/// when nothing does. A signal replaces the default, never another signal
+/// or your choice, so the first file that says something decides.
+fn set_idiom(tx: &Transaction<'_>, release: i64, signal: Option<(Idiom, &str)>, rev: i64) -> rusqlite::Result<()> {
+    use crate::idiom::source;
+    match signal {
+        Some((idiom, from)) => tx.execute(
+            "UPDATE release SET idiom = ?2, idiom_source = ?3, rev = ?4
+             WHERE id = ?1 AND (idiom IS NULL OR idiom_source = ?5)",
+            params![release, idiom as u8, from, rev, source::DEFAULT],
+        )?,
+        None => tx.execute(
+            "UPDATE release SET idiom = ?2, idiom_source = ?3, rev = ?4 WHERE id = ?1 AND idiom IS NULL",
+            params![release, Idiom::Album as u8, source::DEFAULT, rev],
+        )?,
+    };
+    Ok(())
 }
 
 fn medium(tx: &Transaction<'_>, release: i64, disc: u32, rev: i64) -> rusqlite::Result<i64> {
@@ -502,6 +522,47 @@ mod tests {
         let again = scan(&store, root, &|_| {}).unwrap();
         assert_eq!((again.added, again.changed, again.moved, again.removed, again.unreadable), (1, 0, 0, 0, 1));
         assert_eq!(store.load_columns().unwrap().len(), 3);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_genre_on_any_file_outranks_the_album_default() {
+        let (dir, store) = library();
+        let music = dir.join("music");
+        put(&music, "x/1.flac", Some(("Opening", "Mitsuda", "Xenogears", 1)));
+        put(&music, "x/2.flac", Some(("Ending", "Mitsuda", "Xenogears", 2)));
+        put(&music, "w/1.flac", Some(("So What", "Davis", "Kind of Blue", 1)));
+        put(&music, "p/1.flac", Some(("Glass", "Iona", "Open Sky", 1)));
+        for (rel, genre) in [("x/2.flac", "Video Game Soundtrack"), ("w/1.flac", "Jazz")] {
+            let path = music.join(rel);
+            let mut file = lofty::read_from_path(&path).unwrap();
+            file.primary_tag_mut().unwrap().set_genre(genre.into());
+            file.save_to_path(&path, WriteOptions::default()).unwrap();
+        }
+        let root = add_root(&store, &music).unwrap();
+        scan(&store, root, &|_| {}).unwrap();
+
+        let cols = store.load_columns().unwrap();
+        let idioms: HashMap<String, Option<Idiom>> =
+            store.track_rows(&cols.track).unwrap().into_iter().map(|r| (r.title, r.idiom)).collect();
+        assert_eq!(idioms["Opening"], Some(Idiom::Score), "the release's other file said Score");
+        assert_eq!(idioms["Ending"], Some(Idiom::Score));
+        assert_eq!(idioms["So What"], Some(Idiom::Session));
+        assert_eq!(idioms["Glass"], Some(Idiom::Album), "nothing said otherwise");
+
+        // The Front counts releases, not tracks.
+        let facts = store.library_facts(10).unwrap();
+        assert_eq!(facts.releases_by_idiom[Idiom::Score as usize], 1);
+        assert_eq!(facts.releases_by_idiom[Idiom::Album as usize], 1);
+        assert_eq!(facts.added_lately.len(), 3);
+
+        let rows = |q: &str| {
+            let meret_query::Input::Search(q) = meret_query::parse(q).unwrap() else { unreachable!() };
+            store.answer_residual(meret_store::plan(&q, &cols, 0), &cols).unwrap().map(|r| r.len())
+        };
+        assert_eq!(rows(r#"release:"xenogears""#), Some(2), "release names ignore case");
+        assert_eq!(rows(r#"-release:Xenogears"#), Some(2));
+        assert_eq!(rows("idiom:score"), Some(2));
         std::fs::remove_dir_all(dir).ok();
     }
 

@@ -55,6 +55,18 @@ pub fn add_root(path: String) -> Result<i64, String> {
     api()?.add_root(&path)
 }
 
+/// Runs a query-line command: `play <query>` plays what matches; the
+/// other commands return an error that says they aren't built yet.
+pub fn run_command(input: String) -> Result<(), String> {
+    api()?.run_command(&input)
+}
+
+/// The Front: the library by idiom and format, what arrived lately, what
+/// needs you, and the folders. Ask again when `libraryVersion` moves.
+pub fn front() -> Result<FrontDto, String> {
+    api()?.front()
+}
+
 /// A page of the table for `query`. Call as rows scroll into view, never in
 /// `build`.
 pub fn rows(query: String, offset: u64, limit: u32) -> Result<RowsDto, String> {

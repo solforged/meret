@@ -37,6 +37,77 @@ enum ColumnDto { year, length, plays, lastPlayed, added, dr }
 
 enum FidelityDto { bitPerfect, altered, lossy }
 
+class FrontDto {
+  final BigInt tracks;
+  final BigInt releases;
+  final List<IdiomLineDto> idioms;
+  final List<FrontLineDto> formats;
+  final List<RecentDto> addedLately;
+  final List<FrontLineDto> needsYou;
+  final List<RootDto> roots;
+
+  const FrontDto({
+    required this.tracks,
+    required this.releases,
+    required this.idioms,
+    required this.formats,
+    required this.addedLately,
+    required this.needsYou,
+    required this.roots,
+  });
+
+  @override
+  int get hashCode =>
+      tracks.hashCode ^
+      releases.hashCode ^
+      idioms.hashCode ^
+      formats.hashCode ^
+      addedLately.hashCode ^
+      needsYou.hashCode ^
+      roots.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FrontDto &&
+          runtimeType == other.runtimeType &&
+          tracks == other.tracks &&
+          releases == other.releases &&
+          idioms == other.idioms &&
+          formats == other.formats &&
+          addedLately == other.addedLately &&
+          needsYou == other.needsYou &&
+          roots == other.roots;
+}
+
+class FrontLineDto {
+  final String label;
+  final BigInt count;
+  final String note;
+  final String? query;
+
+  const FrontLineDto({
+    required this.label,
+    required this.count,
+    required this.note,
+    this.query,
+  });
+
+  @override
+  int get hashCode =>
+      label.hashCode ^ count.hashCode ^ note.hashCode ^ query.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FrontLineDto &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          count == other.count &&
+          note == other.note &&
+          query == other.query;
+}
+
 class HistogramDto {
   final double lo;
   final double hi;
@@ -63,6 +134,34 @@ class HistogramDto {
           hi == other.hi &&
           bins == other.bins &&
           matched == other.matched;
+}
+
+class IdiomLineDto {
+  final String label;
+  final BigInt releases;
+  final BigInt tracks;
+  final String? query;
+
+  const IdiomLineDto({
+    required this.label,
+    required this.releases,
+    required this.tracks,
+    this.query,
+  });
+
+  @override
+  int get hashCode =>
+      label.hashCode ^ releases.hashCode ^ tracks.hashCode ^ query.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is IdiomLineDto &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          releases == other.releases &&
+          tracks == other.tracks &&
+          query == other.query;
 }
 
 class JobDto {
@@ -149,6 +248,65 @@ class QueryDto {
 }
 
 enum QueryKind { search, command, invalid }
+
+class RecentDto {
+  final String title;
+  final String? artist;
+  final int? year;
+  final int tracks;
+  final PlatformInt64 addedMs;
+  final String query;
+
+  const RecentDto({
+    required this.title,
+    this.artist,
+    this.year,
+    required this.tracks,
+    required this.addedMs,
+    required this.query,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      artist.hashCode ^
+      year.hashCode ^
+      tracks.hashCode ^
+      addedMs.hashCode ^
+      query.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RecentDto &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          artist == other.artist &&
+          year == other.year &&
+          tracks == other.tracks &&
+          addedMs == other.addedMs &&
+          query == other.query;
+}
+
+class RootDto {
+  final PlatformInt64 id;
+  final String path;
+  final bool online;
+
+  const RootDto({required this.id, required this.path, required this.online});
+
+  @override
+  int get hashCode => id.hashCode ^ path.hashCode ^ online.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RootDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          path == other.path &&
+          online == other.online;
+}
 
 class RowsDto {
   final BigInt total;

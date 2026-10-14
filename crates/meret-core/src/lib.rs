@@ -21,7 +21,7 @@ use meret_model::{Idiom, RootId, TrackId};
 use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError};
 use meret_provider::Registry;
 use meret_query::{Input, parse};
-use meret_store::{HotColumns, Store, TrackRow, plan};
+use meret_store::{HotColumns, LibraryFacts, Store, TrackRow, plan};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, watch};
 
@@ -66,6 +66,18 @@ pub struct CoreConfig {
     pub output: OutputChoice,
     /// MusicBrainz asks for a contact in the User-Agent.
     pub contact: String,
+}
+
+/// See `Core::front`.
+#[derive(Clone, Debug)]
+pub struct Front {
+    pub tracks: u64,
+    /// Indexed by `Idiom as u8`; 0 is unknown.
+    pub tracks_by_idiom: [u32; 8],
+    /// Indexed by `meret_store::format_code`.
+    pub tracks_by_format: [u64; 6],
+    pub facts: LibraryFacts,
+    pub roots: Vec<meret_library::Root>,
 }
 
 /// A query's result, held by the core so the UI can page through it.
@@ -217,8 +229,8 @@ impl Core {
     /// kept until the query or the library changes, or for a minute, so
     /// paging is cheap and relative times still move.
     ///
-    /// Only clauses the hot columns answer filter yet; text, people and
-    /// names wait for FTS5 and the edge table.
+    /// Clauses the hot columns answer filter, and so do release names;
+    /// text, people and the other names wait for FTS5 and the edge table.
     pub fn list(&self, query: &str) -> Result<Arc<List>> {
         let version = self.status.borrow().library_version;
         let now = now_s();
@@ -235,7 +247,7 @@ impl Core {
             None
         } else {
             match parse(query) {
-                Ok(Input::Search(q)) => plan(&q, &cols, now).rows,
+                Ok(Input::Search(q)) => self.store.answer_residual(plan(&q, &cols, now), &cols)?,
                 Ok(Input::Command(_)) => return Err(CoreError::Query("a command, not a search".into())),
                 Err(e) => return Err(CoreError::Query(e.to_string())),
             }
@@ -254,6 +266,28 @@ impl Core {
         let list = self.list(query)?;
         let page = list.tracks.get(offset.min(list.tracks.len())..(offset + limit).min(list.tracks.len()));
         Ok((list.tracks.len(), self.store.track_rows(page.unwrap_or(&[]))?))
+    }
+
+    /// What the Front shows about the library. Counts come from the hot
+    /// columns; the rest is a few small reads, once per library change.
+    pub fn front(&self) -> Result<Front> {
+        let (tracks, tracks_by_idiom, tracks_by_format) = {
+            let cols = self.columns.read();
+            let mut by_format = [0u64; 6];
+            for &f in &cols.format {
+                if let Some(n) = by_format.get_mut(f as usize) {
+                    *n += 1;
+                }
+            }
+            (cols.len() as u64, cols.idiom_counts(&cols.all()), by_format)
+        };
+        Ok(Front {
+            tracks,
+            tracks_by_idiom,
+            tracks_by_format,
+            facts: self.store.library_facts(6)?,
+            roots: meret_library::roots(&self.store)?,
+        })
     }
 
     /// Plays `query`'s result from row `index`, replacing the queue. Up to
