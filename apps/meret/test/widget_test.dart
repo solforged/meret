@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 import 'package:meret/core/bridge.dart';
 import 'package:meret/core/playhead.dart';
 import 'package:meret/draw/constellation.dart';
@@ -11,21 +12,22 @@ import 'package:meret/now/now_pane.dart';
 import 'package:meret/panes/front_pane.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/search_pane.dart';
+import 'package:meret/panes/person_pane.dart';
+import 'package:meret/panes/release_pane.dart';
 import 'package:meret/panes/table_pane.dart';
 import 'package:meret/shell/pane_row.dart';
 import 'package:meret/shell/query_line.dart';
 import 'package:meret/theme/tokens.dart';
 
 void main() {
-  testWidgets('the fake trail opens after the Front without a table', (tester) async {
-    await _surface(tester, FakeCore());
+  testWidgets('the fake library opens at the Front without a trail', (tester) async {
+    final core = FakeCore();
+    await _surface(tester, core);
 
     expect(find.byType(FrontPane), findsOneWidget);
     expect(find.byType(TablePane), findsNothing);
-    final panes = tester.widget<PaneRow>(find.byType(PaneRow));
-    expect(panes.children, hasLength(6));
-    expect(panes.children.skip(1).cast<Pane>().map((pane) => pane.kind), ['RECORDING', 'PERSON', 'RELEASE', 'PERSON', 'PERSON']);
-    expect((panes.children.last as Pane).title, 'Iona');
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(await core.trail(), isNull);
   });
 
   testWidgets('on a phone, one pane is visible and Now is a bar', (tester) async {
@@ -80,9 +82,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(tester.widget<TablePane>(find.byType(TablePane)).query, 'idiom:score');
-    expect(tester.widget<SearchPane>(find.byType(SearchPane)).search.query, 'idiom:score');
+    expect(tester.widget<SearchPane>(find.byType(SearchPane)).query, 'idiom:score');
     final trail = (await core.trail())!;
-    expect(trail.stops.single.entity, 'search:idiom:score');
+    expect(trail.stops.single.target, const TargetDto.search(query: 'idiom:score'));
     final painter = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((widget) => widget.painter).whereType<ConstellationPainter>().single;
     expect(painter.semanticsBuilder(const Size(1000, 64)).single.properties.label, 'idiom:score');
     expect(find.byKey(const ValueKey('query-hits')), findsNothing);
@@ -165,7 +167,7 @@ void main() {
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
   });
 
-  testWidgets('a highlighted person opens its table to the right of the rooted search', (tester) async {
+  testWidgets('a highlighted person opens to the right of the rooted search', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
     await tester.enterText(find.byType(TextField), 'Iona');
@@ -174,12 +176,15 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.widgetList<TablePane>(find.byType(TablePane)).map((table) => table.query), ['Iona', 'by:"Iona"']);
+    expect(tester.widgetList<TablePane>(find.byType(TablePane)).map((table) => table.query), ['Iona']);
+    expect(find.byType(PersonPane), findsOneWidget);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(3));
-    expect((await core.trail())!.stops.single.entity, 'search:Iona');
+    final trail = (await core.trail())!;
+    expect(trail.stops.first.target, const TargetDto.search(query: 'Iona'));
+    expect(trail.stops.last.target, isA<TargetDto_Person>());
   });
 
-  testWidgets('clicking a release hit opens the search then its release table', (tester) async {
+  testWidgets('clicking a release hit opens the search then its release pane', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
     await tester.enterText(find.byType(TextField), 'Open');
@@ -187,11 +192,17 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('query-hit-0')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.widgetList<TablePane>(find.byType(TablePane)).map((table) => table.query), ['Open', 'release:"Open Sky"']);
-    expect((await core.trail())!.stops.single.entity, 'search:Open');
+    expect(tester.widgetList<TablePane>(find.byType(TablePane)).map((table) => table.query), ['Open']);
+    final release = tester.widget<ReleasePane>(find.byType(ReleasePane));
+    final trail = (await core.trail())!;
+    expect(trail.stops.first.target, const TargetDto.search(query: 'Open'));
+    expect(trail.stops.last.target, TargetDto.release(id: release.id));
+    expect(trail.stops.last.title, 'Open Sky');
+    expect(trail.stops.last.via, 'matched');
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(3));
   });
 
-  testWidgets('a person in the search strip opens its table without starting another trail', (tester) async {
+  testWidgets('a person in the search strip follows without starting another trail', (tester) async {
     final core = FakeCore();
     final hit = (await core.search('Iona')).people.single;
     await _surface(tester, core);
@@ -203,8 +214,12 @@ void main() {
     await tester.tap(find.byKey(ValueKey('search-hit-person-${hit.id}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.widgetList<TablePane>(find.byType(TablePane)).map((table) => table.query), ['Iona', 'by:"Iona"']);
-    expect(await core.trail(), same(trail));
+    expect(tester.widgetList<TablePane>(find.byType(TablePane)).map((table) => table.query), ['Iona']);
+    expect(find.byType(PersonPane), findsOneWidget);
+    final followed = (await core.trail())!;
+    expect(followed.rootQuery, trail!.rootQuery);
+    expect(followed.stops.first.target, trail.stops.first.target);
+    expect(followed.stops.last.target, TargetDto.person(id: hit.id));
   });
 
   testWidgets('Enter on a track hit plays its result index without changing the trail', (tester) async {
@@ -262,22 +277,22 @@ void main() {
     expect(find.byType(TablePane), findsNothing);
   });
 
-  testWidgets('Command-L opens a table and Command-1 keeps the forward panes', (tester) async {
-    await _surface(tester, FakeCore());
+  testWidgets('Command-L roots Everything and Command-1 leaves forward navigation on Front', (tester) async {
+    final core = FakeCore();
+    await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(7));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
     expect(tester.widget<TablePane>(find.byType(TablePane)).query, '');
+    final trail = await core.trail();
+    expect(trail!.stops.single.target, const TargetDto.search(query: ''));
 
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
-    for (var i = 0; i < 6; i++) {
-      await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
-      await tester.pump(const Duration(milliseconds: 300));
-    }
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(7));
-    expect(find.byType(TablePane), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(await core.trail(), same(trail));
 
-    await _commandKey(tester, LogicalKeyboardKey.digit1);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
   });
@@ -381,6 +396,138 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('album and artist cells open typed panes and their titles stay on the strip', (tester) async {
+    final core = FakeCore();
+    final row = (await core.rows('', 0, 1)).rows.single;
+    await _surface(tester, core);
+    await _commandKey(tester, LogicalKeyboardKey.keyL);
+    await tester.tap(find.byKey(ValueKey('table-album-${row.trackId}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_paneTitles(tester), ['Everything', row.album]);
+    expect(tester.widget<ReleasePane>(find.byType(ReleasePane)).id, row.releaseId);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(ValueKey('table-artist-${row.trackId}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_paneTitles(tester), ['Everything', row.artist]);
+    expect(tester.widget<PersonPane>(find.byType(PersonPane)).id, row.artistId);
+    final trail = (await core.trail())!;
+    expect(trail.stops.map((stop) => stop.title), ['Everything', row.album, row.artist]);
+    final labels = _trailPainter(tester).semanticsBuilder(const Size(1000, 64)).map((node) => node.properties.label);
+    expect(labels, containsAll(['Everything', row.album, row.artist]));
+  });
+
+  testWidgets('following from an earlier pane branches and replaces its later panes', (tester) async {
+    final core = FakeCore();
+    final row = (await core.rows('', 0, 1)).rows.single;
+    await _surface(tester, core);
+    await _commandKey(tester, LogicalKeyboardKey.keyL);
+    await tester.tap(find.byKey(ValueKey('table-album-${row.trackId}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    final release = await core.release(row.releaseId);
+    final credit = release.credits.first;
+    await tester.tap(find.byKey(ValueKey('thread-${credit.kind.name}-${credit.to}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_paneTitles(tester), ['Everything', row.album, credit.title]);
+
+    await tester.tap(find.byKey(ValueKey('table-artist-${row.trackId}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_paneTitles(tester), ['Everything', row.artist]);
+    expect(find.byType(ReleasePane), findsNothing);
+    final trail = (await core.trail())!;
+    expect(trail.stops.where((stop) => !stop.onPath), hasLength(2));
+    expect(trail.stops.first.isFork, isTrue);
+  });
+
+  testWidgets('back and forward round trip, then back at the root shows only Front', (tester) async {
+    final core = FakeCore();
+    final row = (await core.rows('', 0, 1)).rows.single;
+    await _surface(tester, core);
+    await _commandKey(tester, LogicalKeyboardKey.keyL);
+    await tester.tap(find.byKey(ValueKey('table-album-${row.trackId}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_paneTitles(tester), ['Everything']);
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_paneTitles(tester), ['Everything', row.album]);
+    for (var i = 0; i < 2; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(find.byType(FrontPane), findsOneWidget);
+  });
+
+  testWidgets('a release row and Enter play the release from that index', (tester) async {
+    final core = _RecordingCore();
+    final row = (await core.rows('', 0, 1)).rows.single;
+    await core.startTrail(TargetDto.release(id: row.releaseId));
+    await _surface(tester, core);
+    await tester.pump();
+    final credit = (await core.release(row.releaseId)).credits.first;
+    await tester.widget<ReleasePane>(find.byType(ReleasePane)).onFollow(credit.to, credit.kind);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('release-row-2')));
+    await tester.pump();
+    expect(core.releasesPlayed, [(row.releaseId.toInt(), 2, 0)]);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(core.releasesPlayed, [(row.releaseId.toInt(), 2, 0), (row.releaseId.toInt(), 2, 0)]);
+    await tester.tap(find.widgetWithText(TextButton, 'Play'));
+    await tester.pump();
+    expect(core.releasesPlayed.last, (row.releaseId.toInt(), 0, 0));
+    expect((await core.trail())!.current, 1);
+  });
+
+  testWidgets('Command-Enter follows the selected table row and a strip star goes back', (tester) async {
+    final core = FakeCore();
+    final row = (await core.rows('', 0, 1)).rows.single;
+    await _surface(tester, core);
+    await _commandKey(tester, LogicalKeyboardKey.keyL);
+    final title = find.descendant(of: find.byKey(const ValueKey('table-row-0')), matching: find.text(row.title));
+    await tester.tap(title);
+    await _commandKey(tester, LogicalKeyboardKey.enter);
+    expect(_paneTitles(tester), ['Everything', row.album]);
+    await tester.tap(find.byKey(const ValueKey('trail-stop-0')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_paneTitles(tester), ['Everything']);
+    expect((await core.trail())!.current, 0);
+  });
+
+  test('fake releases, people, recent doors and hits share row identities', () async {
+    final core = FakeCore();
+    final row = (await core.rows('', 2, 1)).rows.single;
+    final release = await core.release(row.releaseId);
+    final person = await core.person(row.artistId!);
+    expect(release.title, row.album);
+    expect(release.rows.every((track) => track.releaseId == release.id), isTrue);
+    expect(person.name, row.artist);
+    expect(person.appearsOn.single.to, TargetDto.release(id: row.releaseId));
+    expect(person.workedWith, isNotEmpty);
+    final hit = (await core.search(row.artist!)).people.single;
+    expect(hit.id, row.artistId);
+    for (final recent in (await core.front()).addedLately) {
+      expect((await core.release(recent.releaseId)).title, recent.title);
+    }
+    await expectLater(FakeCore.empty().release(row.releaseId), throwsA(isA<String>()));
+  });
+
 }
 
 Future<void> _surface(WidgetTester tester, CoreBridge core, {Size size = const Size(2560, 1440)}) async {
@@ -390,6 +537,10 @@ Future<void> _surface(WidgetTester tester, CoreBridge core, {Size size = const S
   await tester.pumpWidget(MeretApp(core: core));
   await tester.pump();
 }
+
+List<String> _paneTitles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children.skip(1).cast<Pane>().map((pane) => pane.title).toList();
+
+ConstellationPainter _trailPainter(WidgetTester tester) => tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((widget) => widget.painter).whereType<ConstellationPainter>().single;
 
 Future<void> _commandKey(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
@@ -407,6 +558,7 @@ class _RecordingCore extends FakeCore {
   final offsets = <int>[];
   final played = <(String, int)>[];
   int frontCalls = 0;
+  final releasesPlayed = <(int, int, int?)>[];
 
   @override
   Future<FrontDto> front() {
@@ -425,6 +577,12 @@ class _RecordingCore extends FakeCore {
     played.add((query, index));
     return super.playResults(query, index);
   }
+  @override
+  Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop}) {
+    releasesPlayed.add((id.toInt(), index, fromStop));
+    return super.playRelease(id: id, index: index, fromStop: fromStop);
+  }
+
 }
 
 class _InvalidCore extends FakeCore {

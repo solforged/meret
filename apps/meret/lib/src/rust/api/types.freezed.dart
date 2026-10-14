@@ -13,6 +13,376 @@ part of 'types.dart';
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
+mixin _$TargetDto {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is TargetDto);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'TargetDto()';
+}
+
+
+}
+
+/// @nodoc
+class $TargetDtoCopyWith<$Res>  {
+$TargetDtoCopyWith(TargetDto _, $Res Function(TargetDto) __);
+}
+
+
+/// Adds pattern-matching-related methods to [TargetDto].
+extension TargetDtoPatterns on TargetDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( TargetDto_Search value)?  search,TResult Function( TargetDto_Release value)?  release,TResult Function( TargetDto_Person value)?  person,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case TargetDto_Search() when search != null:
+return search(_that);case TargetDto_Release() when release != null:
+return release(_that);case TargetDto_Person() when person != null:
+return person(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( TargetDto_Search value)  search,required TResult Function( TargetDto_Release value)  release,required TResult Function( TargetDto_Person value)  person,}){
+final _that = this;
+switch (_that) {
+case TargetDto_Search():
+return search(_that);case TargetDto_Release():
+return release(_that);case TargetDto_Person():
+return person(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( TargetDto_Search value)?  search,TResult? Function( TargetDto_Release value)?  release,TResult? Function( TargetDto_Person value)?  person,}){
+final _that = this;
+switch (_that) {
+case TargetDto_Search() when search != null:
+return search(_that);case TargetDto_Release() when release != null:
+return release(_that);case TargetDto_Person() when person != null:
+return person(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String query)?  search,TResult Function( PlatformInt64 id)?  release,TResult Function( PlatformInt64 id)?  person,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case TargetDto_Search() when search != null:
+return search(_that.query);case TargetDto_Release() when release != null:
+return release(_that.id);case TargetDto_Person() when person != null:
+return person(_that.id);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String query)  search,required TResult Function( PlatformInt64 id)  release,required TResult Function( PlatformInt64 id)  person,}) {final _that = this;
+switch (_that) {
+case TargetDto_Search():
+return search(_that.query);case TargetDto_Release():
+return release(_that.id);case TargetDto_Person():
+return person(_that.id);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String query)?  search,TResult? Function( PlatformInt64 id)?  release,TResult? Function( PlatformInt64 id)?  person,}) {final _that = this;
+switch (_that) {
+case TargetDto_Search() when search != null:
+return search(_that.query);case TargetDto_Release() when release != null:
+return release(_that.id);case TargetDto_Person() when person != null:
+return person(_that.id);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class TargetDto_Search extends TargetDto {
+  const TargetDto_Search({required this.query}): super._();
+  
+
+ final  String query;
+
+/// Create a copy of TargetDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$TargetDto_SearchCopyWith<TargetDto_Search> get copyWith => _$TargetDto_SearchCopyWithImpl<TargetDto_Search>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is TargetDto_Search&&(identical(other.query, query) || other.query == query));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,query);
+}
+
+@override
+String toString() {
+    return 'TargetDto.search(query: $query)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $TargetDto_SearchCopyWith<$Res> implements $TargetDtoCopyWith<$Res> {
+  factory $TargetDto_SearchCopyWith(TargetDto_Search value, $Res Function(TargetDto_Search) _then) = _$TargetDto_SearchCopyWithImpl;
+@useResult
+$Res call({
+ String query
+});
+
+
+
+
+}
+/// @nodoc
+class _$TargetDto_SearchCopyWithImpl<$Res>
+    implements $TargetDto_SearchCopyWith<$Res> {
+  _$TargetDto_SearchCopyWithImpl(this._self, this._then);
+
+  final TargetDto_Search _self;
+  final $Res Function(TargetDto_Search) _then;
+
+/// Create a copy of TargetDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? query = null,}) {
+  return _then(TargetDto_Search(
+query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class TargetDto_Release extends TargetDto {
+  const TargetDto_Release({required this.id}): super._();
+  
+
+ final  PlatformInt64 id;
+
+/// Create a copy of TargetDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$TargetDto_ReleaseCopyWith<TargetDto_Release> get copyWith => _$TargetDto_ReleaseCopyWithImpl<TargetDto_Release>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is TargetDto_Release&&(identical(other.id, id) || other.id == id));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,id);
+}
+
+@override
+String toString() {
+    return 'TargetDto.release(id: $id)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $TargetDto_ReleaseCopyWith<$Res> implements $TargetDtoCopyWith<$Res> {
+  factory $TargetDto_ReleaseCopyWith(TargetDto_Release value, $Res Function(TargetDto_Release) _then) = _$TargetDto_ReleaseCopyWithImpl;
+@useResult
+$Res call({
+ PlatformInt64 id
+});
+
+
+
+
+}
+/// @nodoc
+class _$TargetDto_ReleaseCopyWithImpl<$Res>
+    implements $TargetDto_ReleaseCopyWith<$Res> {
+  _$TargetDto_ReleaseCopyWithImpl(this._self, this._then);
+
+  final TargetDto_Release _self;
+  final $Res Function(TargetDto_Release) _then;
+
+/// Create a copy of TargetDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? id = null,}) {
+  return _then(TargetDto_Release(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as PlatformInt64,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class TargetDto_Person extends TargetDto {
+  const TargetDto_Person({required this.id}): super._();
+  
+
+ final  PlatformInt64 id;
+
+/// Create a copy of TargetDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$TargetDto_PersonCopyWith<TargetDto_Person> get copyWith => _$TargetDto_PersonCopyWithImpl<TargetDto_Person>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is TargetDto_Person&&(identical(other.id, id) || other.id == id));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,id);
+}
+
+@override
+String toString() {
+    return 'TargetDto.person(id: $id)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $TargetDto_PersonCopyWith<$Res> implements $TargetDtoCopyWith<$Res> {
+  factory $TargetDto_PersonCopyWith(TargetDto_Person value, $Res Function(TargetDto_Person) _then) = _$TargetDto_PersonCopyWithImpl;
+@useResult
+$Res call({
+ PlatformInt64 id
+});
+
+
+
+
+}
+/// @nodoc
+class _$TargetDto_PersonCopyWithImpl<$Res>
+    implements $TargetDto_PersonCopyWith<$Res> {
+  _$TargetDto_PersonCopyWithImpl(this._self, this._then);
+
+  final TargetDto_Person _self;
+  final $Res Function(TargetDto_Person) _then;
+
+/// Create a copy of TargetDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? id = null,}) {
+  return _then(TargetDto_Person(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as PlatformInt64,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$TransportDto {
 
 

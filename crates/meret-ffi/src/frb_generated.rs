@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1157380497;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 462110804;
 
 // Section: executor
 
@@ -74,6 +74,41 @@ fn wire__crate__api__core__add_root_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::add_root(api_path)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__follow_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "follow",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_from_stop = <u32>::sse_decode(&mut deserializer);
+            let api_to = <crate::api::types::TargetDto>::sse_decode(&mut deserializer);
+            let api_via = <crate::api::types::ThreadKind>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::follow(api_from_stop, api_to, api_via)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -215,6 +250,75 @@ fn wire__crate__api__core__parse_query_impl(
         },
     )
 }
+fn wire__crate__api__core__person_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "person",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::person(api_id)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__play_release_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "play_release",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <i64>::sse_decode(&mut deserializer);
+            let api_index = <u32>::sse_decode(&mut deserializer);
+            let api_from_stop = <Option<u32>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok =
+                        crate::api::core::play_release(api_id, api_index, api_from_stop)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__play_results_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -243,6 +347,39 @@ fn wire__crate__api__core__play_results_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::play_results(api_query, api_index)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__release_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "release",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::release(api_id)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -384,7 +521,7 @@ fn wire__crate__api__core__start_core_impl(
         },
     )
 }
-fn wire__crate__api__core__start_search_trail_impl(
+fn wire__crate__api__core__start_trail_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -392,7 +529,7 @@ fn wire__crate__api__core__start_search_trail_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "start_search_trail",
+            debug_name: "start_trail",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -406,11 +543,11 @@ fn wire__crate__api__core__start_search_trail_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_query = <String>::sse_decode(&mut deserializer);
+            let api_to = <crate::api::types::TargetDto>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::core::start_search_trail(api_query)?;
+                    let output_ok = crate::api::core::start_trail(api_to)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -443,6 +580,103 @@ fn wire__crate__api__core__trail_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::trail()?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__trail_back_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "trail_back",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::trail_back()?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__trail_forward_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "trail_forward",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::trail_forward()?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__trail_go_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "trail_go",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_stop = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::trail_go(api_stop)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -628,6 +862,15 @@ const _: fn() = || {
         let _: Option<String> = NowDto.error;
     }
     {
+        let PersonDto = None::<crate::api::types::PersonDto>.unwrap();
+        let _: i64 = PersonDto.id;
+        let _: String = PersonDto.name;
+        let _: u32 = PersonDto.tracks;
+        let _: Vec<crate::api::types::ThreadDto> = PersonDto.releases;
+        let _: Vec<crate::api::types::ThreadDto> = PersonDto.appears_on;
+        let _: Vec<crate::api::types::ThreadDto> = PersonDto.worked_with;
+    }
+    {
         let QueryDto = None::<crate::api::types::QueryDto>.unwrap();
         let _: crate::api::types::QueryKind = QueryDto.kind;
         let _: String = QueryDto.canonical;
@@ -635,12 +878,27 @@ const _: fn() = || {
     }
     {
         let RecentDto = None::<crate::api::types::RecentDto>.unwrap();
+        let _: i64 = RecentDto.release_id;
         let _: String = RecentDto.title;
         let _: Option<String> = RecentDto.artist;
         let _: Option<u16> = RecentDto.year;
         let _: u32 = RecentDto.tracks;
         let _: i64 = RecentDto.added_ms;
         let _: String = RecentDto.query;
+    }
+    {
+        let ReleaseDto = None::<crate::api::types::ReleaseDto>.unwrap();
+        let _: i64 = ReleaseDto.id;
+        let _: String = ReleaseDto.title;
+        let _: Option<String> = ReleaseDto.artist;
+        let _: Option<u16> = ReleaseDto.year;
+        let _: Option<String> = ReleaseDto.idiom;
+        let _: u32 = ReleaseDto.tracks;
+        let _: u32 = ReleaseDto.discs;
+        let _: u64 = ReleaseDto.length_ms;
+        let _: Vec<String> = ReleaseDto.formats;
+        let _: Vec<crate::api::types::TrackRowDto> = ReleaseDto.rows;
+        let _: Vec<crate::api::types::ThreadDto> = ReleaseDto.credits;
     }
     {
         let RootDto = None::<crate::api::types::RootDto>.unwrap();
@@ -690,19 +948,44 @@ const _: fn() = || {
         let StopDto = None::<crate::api::types::StopDto>.unwrap();
         let _: u32 = StopDto.index;
         let _: Option<u32> = StopDto.parent;
-        let _: String = StopDto.entity;
+        let _: crate::api::types::TargetDto = StopDto.target;
+        let _: String = StopDto.title;
         let _: Option<String> = StopDto.via;
+        let _: Option<String> = StopDto.via_source;
         let _: bool = StopDto.on_path;
         let _: bool = StopDto.is_fork;
         let _: bool = StopDto.is_peek;
+    }
+    match None::<crate::api::types::TargetDto>.unwrap() {
+        crate::api::types::TargetDto::Search { query } => {
+            let _: String = query;
+        }
+        crate::api::types::TargetDto::Release { id } => {
+            let _: i64 = id;
+        }
+        crate::api::types::TargetDto::Person { id } => {
+            let _: i64 = id;
+        }
+    }
+    {
+        let ThreadDto = None::<crate::api::types::ThreadDto>.unwrap();
+        let _: crate::api::types::ThreadKind = ThreadDto.kind;
+        let _: String = ThreadDto.label;
+        let _: String = ThreadDto.source;
+        let _: crate::api::types::TargetDto = ThreadDto.to;
+        let _: String = ThreadDto.title;
+        let _: String = ThreadDto.detail;
     }
     {
         let TrackRowDto = None::<crate::api::types::TrackRowDto>.unwrap();
         let _: i64 = TrackRowDto.track_id;
         let _: String = TrackRowDto.title;
         let _: Option<String> = TrackRowDto.artist;
+        let _: Option<i64> = TrackRowDto.artist_id;
         let _: String = TrackRowDto.album;
         let _: Option<String> = TrackRowDto.album_artist;
+        let _: Option<i64> = TrackRowDto.album_artist_id;
+        let _: i64 = TrackRowDto.release_id;
         let _: u32 = TrackRowDto.disc;
         let _: u32 = TrackRowDto.number;
         let _: Option<u16> = TrackRowDto.year;
@@ -956,6 +1239,18 @@ impl SseDecode for crate::api::types::JobDto {
     }
 }
 
+impl SseDecode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::types::FrontLineDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1100,6 +1395,18 @@ impl SseDecode for Vec<crate::api::types::StopDto> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::ThreadDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::ThreadDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::types::TrackRowDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1167,6 +1474,17 @@ impl SseDecode for Option<crate::api::types::FidelityDto> {
     }
 }
 
+impl SseDecode for Option<i64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<i64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::types::TrailDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1211,6 +1529,26 @@ impl SseDecode for Option<u64> {
     }
 }
 
+impl SseDecode for crate::api::types::PersonDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <i64>::sse_decode(deserializer);
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_tracks = <u32>::sse_decode(deserializer);
+        let mut var_releases = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_appearsOn = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_workedWith = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        return crate::api::types::PersonDto {
+            id: var_id,
+            name: var_name,
+            tracks: var_tracks,
+            releases: var_releases,
+            appears_on: var_appearsOn,
+            worked_with: var_workedWith,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::QueryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1241,6 +1579,7 @@ impl SseDecode for crate::api::types::QueryKind {
 impl SseDecode for crate::api::types::RecentDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_releaseId = <i64>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_artist = <Option<String>>::sse_decode(deserializer);
         let mut var_year = <Option<u16>>::sse_decode(deserializer);
@@ -1248,6 +1587,7 @@ impl SseDecode for crate::api::types::RecentDto {
         let mut var_addedMs = <i64>::sse_decode(deserializer);
         let mut var_query = <String>::sse_decode(deserializer);
         return crate::api::types::RecentDto {
+            release_id: var_releaseId,
             title: var_title,
             artist: var_artist,
             year: var_year,
@@ -1264,6 +1604,36 @@ impl SseDecode for (u32, u32) {
         let mut var_field0 = <u32>::sse_decode(deserializer);
         let mut var_field1 = <u32>::sse_decode(deserializer);
         return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for crate::api::types::ReleaseDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <i64>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_artist = <Option<String>>::sse_decode(deserializer);
+        let mut var_year = <Option<u16>>::sse_decode(deserializer);
+        let mut var_idiom = <Option<String>>::sse_decode(deserializer);
+        let mut var_tracks = <u32>::sse_decode(deserializer);
+        let mut var_discs = <u32>::sse_decode(deserializer);
+        let mut var_lengthMs = <u64>::sse_decode(deserializer);
+        let mut var_formats = <Vec<String>>::sse_decode(deserializer);
+        let mut var_rows = <Vec<crate::api::types::TrackRowDto>>::sse_decode(deserializer);
+        let mut var_credits = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        return crate::api::types::ReleaseDto {
+            id: var_id,
+            title: var_title,
+            artist: var_artist,
+            year: var_year,
+            idiom: var_idiom,
+            tracks: var_tracks,
+            discs: var_discs,
+            length_ms: var_lengthMs,
+            formats: var_formats,
+            rows: var_rows,
+            credits: var_credits,
+        };
     }
 }
 
@@ -1372,19 +1742,101 @@ impl SseDecode for crate::api::types::StopDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_index = <u32>::sse_decode(deserializer);
         let mut var_parent = <Option<u32>>::sse_decode(deserializer);
-        let mut var_entity = <String>::sse_decode(deserializer);
+        let mut var_target = <crate::api::types::TargetDto>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
         let mut var_via = <Option<String>>::sse_decode(deserializer);
+        let mut var_viaSource = <Option<String>>::sse_decode(deserializer);
         let mut var_onPath = <bool>::sse_decode(deserializer);
         let mut var_isFork = <bool>::sse_decode(deserializer);
         let mut var_isPeek = <bool>::sse_decode(deserializer);
         return crate::api::types::StopDto {
             index: var_index,
             parent: var_parent,
-            entity: var_entity,
+            target: var_target,
+            title: var_title,
             via: var_via,
+            via_source: var_viaSource,
             on_path: var_onPath,
             is_fork: var_isFork,
             is_peek: var_isPeek,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::TargetDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_query = <String>::sse_decode(deserializer);
+                return crate::api::types::TargetDto::Search { query: var_query };
+            }
+            1 => {
+                let mut var_id = <i64>::sse_decode(deserializer);
+                return crate::api::types::TargetDto::Release { id: var_id };
+            }
+            2 => {
+                let mut var_id = <i64>::sse_decode(deserializer);
+                return crate::api::types::TargetDto::Person { id: var_id };
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
+impl SseDecode for crate::api::types::ThreadDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_kind = <crate::api::types::ThreadKind>::sse_decode(deserializer);
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_to = <crate::api::types::TargetDto>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_detail = <String>::sse_decode(deserializer);
+        return crate::api::types::ThreadDto {
+            kind: var_kind,
+            label: var_label,
+            source: var_source,
+            to: var_to,
+            title: var_title,
+            detail: var_detail,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::ThreadKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::ThreadKind::ComposedBy,
+            1 => crate::api::types::ThreadKind::ArrangedBy,
+            2 => crate::api::types::ThreadKind::LyricsBy,
+            3 => crate::api::types::ThreadKind::SungBy,
+            4 => crate::api::types::ThreadKind::PerformedBy,
+            5 => crate::api::types::ThreadKind::ConductedBy,
+            6 => crate::api::types::ThreadKind::ProducedBy,
+            7 => crate::api::types::ThreadKind::EngineeredBy,
+            8 => crate::api::types::ThreadKind::MemberOf,
+            9 => crate::api::types::ThreadKind::WorkedWith,
+            10 => crate::api::types::ThreadKind::RecordingOf,
+            11 => crate::api::types::ThreadKind::ArrangedAs,
+            12 => crate::api::types::ThreadKind::CoverOf,
+            13 => crate::api::types::ThreadKind::Sampled,
+            14 => crate::api::types::ThreadKind::SameSession,
+            15 => crate::api::types::ThreadKind::Scored,
+            16 => crate::api::types::ThreadKind::Label,
+            17 => crate::api::types::ThreadKind::Cites,
+            18 => crate::api::types::ThreadKind::SoundsLike,
+            19 => crate::api::types::ThreadKind::ListenedAfter,
+            20 => crate::api::types::ThreadKind::By,
+            21 => crate::api::types::ThreadKind::AlbumArtist,
+            22 => crate::api::types::ThreadKind::AppearsOn,
+            23 => crate::api::types::ThreadKind::Matched,
+            _ => unreachable!("Invalid variant for ThreadKind: {}", inner),
         };
     }
 }
@@ -1395,8 +1847,11 @@ impl SseDecode for crate::api::types::TrackRowDto {
         let mut var_trackId = <i64>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_artist = <Option<String>>::sse_decode(deserializer);
+        let mut var_artistId = <Option<i64>>::sse_decode(deserializer);
         let mut var_album = <String>::sse_decode(deserializer);
         let mut var_albumArtist = <Option<String>>::sse_decode(deserializer);
+        let mut var_albumArtistId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_releaseId = <i64>::sse_decode(deserializer);
         let mut var_disc = <u32>::sse_decode(deserializer);
         let mut var_number = <u32>::sse_decode(deserializer);
         let mut var_year = <Option<u16>>::sse_decode(deserializer);
@@ -1407,8 +1862,11 @@ impl SseDecode for crate::api::types::TrackRowDto {
             track_id: var_trackId,
             title: var_title,
             artist: var_artist,
+            artist_id: var_artistId,
             album: var_album,
             album_artist: var_albumArtist,
+            album_artist_id: var_albumArtistId,
+            release_id: var_releaseId,
             disc: var_disc,
             number: var_number,
             year: var_year,
@@ -1507,19 +1965,26 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__core__add_root_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__core__front_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__core__histogram_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__start_search_trail_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__core__follow_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__core__front_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__core__histogram_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1532,7 +1997,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        5 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1799,6 +2264,31 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::NowDto>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::PersonDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.tracks.into_into_dart().into_dart(),
+            self.0.releases.into_into_dart().into_dart(),
+            self.0.appears_on.into_into_dart().into_dart(),
+            self.0.worked_with.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::PersonDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::PersonDto>>
+    for crate::api::types::PersonDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::PersonDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::QueryDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -1846,6 +2336,7 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::QueryKind>>
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::RecentDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.0.release_id.into_into_dart().into_dart(),
             self.0.title.into_into_dart().into_dart(),
             self.0.artist.into_into_dart().into_dart(),
             self.0.year.into_into_dart().into_dart(),
@@ -1864,6 +2355,36 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::RecentDto>>
     for crate::api::types::RecentDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::RecentDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ReleaseDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.artist.into_into_dart().into_dart(),
+            self.0.year.into_into_dart().into_dart(),
+            self.0.idiom.into_into_dart().into_dart(),
+            self.0.tracks.into_into_dart().into_dart(),
+            self.0.discs.into_into_dart().into_dart(),
+            self.0.length_ms.into_into_dart().into_dart(),
+            self.0.formats.into_into_dart().into_dart(),
+            self.0.rows.into_into_dart().into_dart(),
+            self.0.credits.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::ReleaseDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ReleaseDto>>
+    for crate::api::types::ReleaseDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::ReleaseDto> {
         self.into()
     }
 }
@@ -2013,8 +2534,10 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::StopDto> {
         [
             self.0.index.into_into_dart().into_dart(),
             self.0.parent.into_into_dart().into_dart(),
-            self.0.entity.into_into_dart().into_dart(),
+            self.0.target.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
             self.0.via.into_into_dart().into_dart(),
+            self.0.via_source.into_into_dart().into_dart(),
             self.0.on_path.into_into_dart().into_dart(),
             self.0.is_fork.into_into_dart().into_dart(),
             self.0.is_peek.into_into_dart().into_dart(),
@@ -2034,14 +2557,115 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::StopDto>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TargetDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self.0 {
+            crate::api::types::TargetDto::Search { query } => {
+                [0.into_dart(), query.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::types::TargetDto::Release { id } => {
+                [1.into_dart(), id.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::types::TargetDto::Person { id } => {
+                [2.into_dart(), id.into_into_dart().into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::TargetDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::TargetDto>>
+    for crate::api::types::TargetDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::TargetDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ThreadDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.kind.into_into_dart().into_dart(),
+            self.0.label.into_into_dart().into_dart(),
+            self.0.source.into_into_dart().into_dart(),
+            self.0.to.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.detail.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::ThreadDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ThreadDto>>
+    for crate::api::types::ThreadDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::ThreadDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ThreadKind> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self.0 {
+            crate::api::types::ThreadKind::ComposedBy => 0.into_dart(),
+            crate::api::types::ThreadKind::ArrangedBy => 1.into_dart(),
+            crate::api::types::ThreadKind::LyricsBy => 2.into_dart(),
+            crate::api::types::ThreadKind::SungBy => 3.into_dart(),
+            crate::api::types::ThreadKind::PerformedBy => 4.into_dart(),
+            crate::api::types::ThreadKind::ConductedBy => 5.into_dart(),
+            crate::api::types::ThreadKind::ProducedBy => 6.into_dart(),
+            crate::api::types::ThreadKind::EngineeredBy => 7.into_dart(),
+            crate::api::types::ThreadKind::MemberOf => 8.into_dart(),
+            crate::api::types::ThreadKind::WorkedWith => 9.into_dart(),
+            crate::api::types::ThreadKind::RecordingOf => 10.into_dart(),
+            crate::api::types::ThreadKind::ArrangedAs => 11.into_dart(),
+            crate::api::types::ThreadKind::CoverOf => 12.into_dart(),
+            crate::api::types::ThreadKind::Sampled => 13.into_dart(),
+            crate::api::types::ThreadKind::SameSession => 14.into_dart(),
+            crate::api::types::ThreadKind::Scored => 15.into_dart(),
+            crate::api::types::ThreadKind::Label => 16.into_dart(),
+            crate::api::types::ThreadKind::Cites => 17.into_dart(),
+            crate::api::types::ThreadKind::SoundsLike => 18.into_dart(),
+            crate::api::types::ThreadKind::ListenedAfter => 19.into_dart(),
+            crate::api::types::ThreadKind::By => 20.into_dart(),
+            crate::api::types::ThreadKind::AlbumArtist => 21.into_dart(),
+            crate::api::types::ThreadKind::AppearsOn => 22.into_dart(),
+            crate::api::types::ThreadKind::Matched => 23.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::ThreadKind>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ThreadKind>>
+    for crate::api::types::ThreadKind
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::ThreadKind> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TrackRowDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.0.track_id.into_into_dart().into_dart(),
             self.0.title.into_into_dart().into_dart(),
             self.0.artist.into_into_dart().into_dart(),
+            self.0.artist_id.into_into_dart().into_dart(),
             self.0.album.into_into_dart().into_dart(),
             self.0.album_artist.into_into_dart().into_dart(),
+            self.0.album_artist_id.into_into_dart().into_dart(),
+            self.0.release_id.into_into_dart().into_dart(),
             self.0.disc.into_into_dart().into_dart(),
             self.0.number.into_into_dart().into_dart(),
             self.0.year.into_into_dart().into_dart(),
@@ -2304,6 +2928,16 @@ impl SseEncode for crate::api::types::JobDto {
     }
 }
 
+impl SseEncode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <String>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::types::FrontLineDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2424,6 +3058,16 @@ impl SseEncode for Vec<crate::api::types::StopDto> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::ThreadDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::ThreadDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::types::TrackRowDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2477,6 +3121,16 @@ impl SseEncode for Option<crate::api::types::FidelityDto> {
     }
 }
 
+impl SseEncode for Option<i64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <i64>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::types::TrailDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2517,6 +3171,18 @@ impl SseEncode for Option<u64> {
     }
 }
 
+impl SseEncode for crate::api::types::PersonDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.name, serializer);
+        <u32>::sse_encode(self.tracks, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.releases, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.appears_on, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.worked_with, serializer);
+    }
+}
+
 impl SseEncode for crate::api::types::QueryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2546,6 +3212,7 @@ impl SseEncode for crate::api::types::QueryKind {
 impl SseEncode for crate::api::types::RecentDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.release_id, serializer);
         <String>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.artist, serializer);
         <Option<u16>>::sse_encode(self.year, serializer);
@@ -2560,6 +3227,23 @@ impl SseEncode for (u32, u32) {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.0, serializer);
         <u32>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::ReleaseDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.artist, serializer);
+        <Option<u16>>::sse_encode(self.year, serializer);
+        <Option<String>>::sse_encode(self.idiom, serializer);
+        <u32>::sse_encode(self.tracks, serializer);
+        <u32>::sse_encode(self.discs, serializer);
+        <u64>::sse_encode(self.length_ms, serializer);
+        <Vec<String>>::sse_encode(self.formats, serializer);
+        <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.credits, serializer);
     }
 }
 
@@ -2630,11 +3314,86 @@ impl SseEncode for crate::api::types::StopDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.index, serializer);
         <Option<u32>>::sse_encode(self.parent, serializer);
-        <String>::sse_encode(self.entity, serializer);
+        <crate::api::types::TargetDto>::sse_encode(self.target, serializer);
+        <String>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.via, serializer);
+        <Option<String>>::sse_encode(self.via_source, serializer);
         <bool>::sse_encode(self.on_path, serializer);
         <bool>::sse_encode(self.is_fork, serializer);
         <bool>::sse_encode(self.is_peek, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::TargetDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::types::TargetDto::Search { query } => {
+                <i32>::sse_encode(0, serializer);
+                <String>::sse_encode(query, serializer);
+            }
+            crate::api::types::TargetDto::Release { id } => {
+                <i32>::sse_encode(1, serializer);
+                <i64>::sse_encode(id, serializer);
+            }
+            crate::api::types::TargetDto::Person { id } => {
+                <i32>::sse_encode(2, serializer);
+                <i64>::sse_encode(id, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
+impl SseEncode for crate::api::types::ThreadDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::types::ThreadKind>::sse_encode(self.kind, serializer);
+        <String>::sse_encode(self.label, serializer);
+        <String>::sse_encode(self.source, serializer);
+        <crate::api::types::TargetDto>::sse_encode(self.to, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <String>::sse_encode(self.detail, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::ThreadKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::ThreadKind::ComposedBy => 0,
+                crate::api::types::ThreadKind::ArrangedBy => 1,
+                crate::api::types::ThreadKind::LyricsBy => 2,
+                crate::api::types::ThreadKind::SungBy => 3,
+                crate::api::types::ThreadKind::PerformedBy => 4,
+                crate::api::types::ThreadKind::ConductedBy => 5,
+                crate::api::types::ThreadKind::ProducedBy => 6,
+                crate::api::types::ThreadKind::EngineeredBy => 7,
+                crate::api::types::ThreadKind::MemberOf => 8,
+                crate::api::types::ThreadKind::WorkedWith => 9,
+                crate::api::types::ThreadKind::RecordingOf => 10,
+                crate::api::types::ThreadKind::ArrangedAs => 11,
+                crate::api::types::ThreadKind::CoverOf => 12,
+                crate::api::types::ThreadKind::Sampled => 13,
+                crate::api::types::ThreadKind::SameSession => 14,
+                crate::api::types::ThreadKind::Scored => 15,
+                crate::api::types::ThreadKind::Label => 16,
+                crate::api::types::ThreadKind::Cites => 17,
+                crate::api::types::ThreadKind::SoundsLike => 18,
+                crate::api::types::ThreadKind::ListenedAfter => 19,
+                crate::api::types::ThreadKind::By => 20,
+                crate::api::types::ThreadKind::AlbumArtist => 21,
+                crate::api::types::ThreadKind::AppearsOn => 22,
+                crate::api::types::ThreadKind::Matched => 23,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -2644,8 +3403,11 @@ impl SseEncode for crate::api::types::TrackRowDto {
         <i64>::sse_encode(self.track_id, serializer);
         <String>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.artist, serializer);
+        <Option<i64>>::sse_encode(self.artist_id, serializer);
         <String>::sse_encode(self.album, serializer);
         <Option<String>>::sse_encode(self.album_artist, serializer);
+        <Option<i64>>::sse_encode(self.album_artist_id, serializer);
+        <i64>::sse_encode(self.release_id, serializer);
         <u32>::sse_encode(self.disc, serializer);
         <u32>::sse_encode(self.number, serializer);
         <Option<u16>>::sse_encode(self.year, serializer);

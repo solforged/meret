@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
 import '../theme/tokens.dart';
@@ -7,10 +8,11 @@ import 'pane.dart';
 
 /// The Front is a flat set of doors the library can actually answer.
 class FrontPane extends StatefulWidget {
-  const FrontPane({super.key, required this.core, required this.onQuery, this.libraryVersion, this.jobs = const []});
+  const FrontPane({super.key, required this.core, required this.onQuery, this.onRelease, this.libraryVersion, this.jobs = const []});
 
   final CoreBridge core;
   final ValueChanged<String> onQuery;
+  final Future<void> Function(PlatformInt64)? onRelease;
   final BigInt? libraryVersion;
   final List<JobDto> jobs;
 
@@ -134,7 +136,13 @@ class _FrontPaneState extends State<FrontPane> {
 
   Widget _recent(FrontDto front) => _section('Added lately', [
     for (final recent in front.addedLately)
-      _door(query: recent.query, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _Door(onTap: widget.onRelease == null ? null : () async {
+        try {
+          await widget.onRelease!(recent.releaseId);
+        } catch (error) {
+          if (mounted) setState(() => _error = error.toString());
+        }
+      }, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text([recent.title, if (recent.artist?.isNotEmpty ?? false) recent.artist!].join(' · '), style: Tok.body),
         Text([if (recent.year != null) '${recent.year}', '${recent.tracks} ${recent.tracks == 1 ? 'track' : 'tracks'}', _age(recent)].join(' · '), style: Tok.label),
       ])),

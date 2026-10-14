@@ -73,9 +73,52 @@ Future<void> playResults({required String query, required BigInt index}) =>
 Future<SearchDto> search({required String input}) =>
     RustLib.instance.api.crateApiCoreSearch(input: input);
 
-/// Ends the current trail and roots a new one at the search `query`.
-Future<TrailDto> startSearchTrail({required String query}) =>
-    RustLib.instance.api.crateApiCoreStartSearchTrail(query: query);
+/// A release pane: the tracklist, its formats and credits.
+Future<ReleaseDto> release({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiCoreRelease(id: id);
+
+/// A person pane: their releases, what they're on, who they worked with.
+Future<PersonDto> person({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiCorePerson(id: id);
+
+/// Plays a release's tracklist from row `index`, replacing the queue.
+/// `from_stop` is the pane it was played from; that stop is marked played.
+Future<void> playRelease({
+  required PlatformInt64 id,
+  required int index,
+  int? fromStop,
+}) => RustLib.instance.api.crateApiCorePlayRelease(
+  id: id,
+  index: index,
+  fromStop: fromStop,
+);
+
+/// Ends the current trail and roots a new one at `to`.
+Future<TrailDto> startTrail({required TargetDto to}) =>
+    RustLib.instance.api.crateApiCoreStartTrail(to: to);
+
+/// Follows a thread from stop `from_stop`, the pane it was picked in; from
+/// a pane before the last, this starts a branch.
+Future<TrailDto> follow({
+  required int fromStop,
+  required TargetDto to,
+  required ThreadKind via,
+}) => RustLib.instance.api.crateApiCoreFollow(
+  fromStop: fromStop,
+  to: to,
+  via: via,
+);
+
+/// `[`: one stop back. None at the root.
+Future<TrailDto?> trailBack() => RustLib.instance.api.crateApiCoreTrailBack();
+
+/// `]`: forward to the newest stop opened from this one. None when there's none.
+Future<TrailDto?> trailForward() =>
+    RustLib.instance.api.crateApiCoreTrailForward();
+
+/// A star on the strip, clicked: that stop becomes current.
+Future<TrailDto> trailGo({required int stop}) =>
+    RustLib.instance.api.crateApiCoreTrailGo(stop: stop);
 
 Future<TrailDto?> trail() => RustLib.instance.api.crateApiCoreTrail();
 

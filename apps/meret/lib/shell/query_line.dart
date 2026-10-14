@@ -142,7 +142,8 @@ class _QueryLineState extends State<QueryLine> {
       }
       if (mounted && generation == _generation) {
         _dismiss();
-        widget.focus.unfocus();
+        // Back to the surface's own focus, where `[` `]` and the other keys live.
+        widget.focus.unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
       }
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _submitError = error.toString());

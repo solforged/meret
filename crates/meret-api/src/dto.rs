@@ -1,12 +1,15 @@
 //! Plain data for the UI. Flat structs and simple enums, so flutter_rust_bridge
 //! (and later a websocket) can carry them without custom codecs.
 
-use meret_core::{Front, NowState, Search, StatusState};
+use meret_core::{Front, NowState, PersonPage, ReleasePage, Search, StatusState};
 use meret_graph::Trail;
-use meret_model::Idiom;
 use meret_model::signal::Fidelity;
+use meret_model::thread::source_label;
+use meret_model::{AgentId, EntityRef, Idiom, ReleaseId};
 use meret_query::{NameField, Term};
 use meret_store::{TrackRow, format_code};
+
+pub use meret_model::ThreadKind;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum QueryKind {
@@ -153,8 +156,11 @@ pub struct TrackRowDto {
     pub track_id: i64,
     pub title: String,
     pub artist: Option<String>,
+    pub artist_id: Option<i64>,
     pub album: String,
     pub album_artist: Option<String>,
+    pub album_artist_id: Option<i64>,
+    pub release_id: i64,
     pub disc: u32,
     pub number: u32,
     pub year: Option<u16>,
@@ -178,8 +184,11 @@ impl From<TrackRow> for TrackRowDto {
             track_id: r.track.0,
             title: r.title,
             artist: r.artist,
+            artist_id: r.artist_id.map(|a| a.0),
             album: r.album,
             album_artist: r.album_artist,
+            album_artist_id: r.album_artist_id.map(|a| a.0),
+            release_id: r.release.0,
             disc: r.disc,
             number: r.number,
             year: r.year,
@@ -324,6 +333,7 @@ pub struct FrontLineDto {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecentDto {
+    pub release_id: i64,
     pub title: String,
     pub artist: Option<String>,
     pub year: Option<u16>,
@@ -398,6 +408,7 @@ impl From<Front> for FrontDto {
                 .into_iter()
                 .map(|r| RecentDto {
                     query: Term::Named { field: NameField::Release, value: r.title.clone() }.to_string(),
+                    release_id: r.release.0,
                     title: r.title,
                     artist: r.artist,
                     year: r.year,
@@ -427,14 +438,196 @@ fn plural(i: Idiom) -> &'static str {
     }
 }
 
+/// What a pane is about, and where a thread can lead.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TargetDto {
+    /// A search; only ever a trail's root.
+    Search { query: String },
+    Release { id: i64 },
+    Person { id: i64 },
+}
+
+impl TargetDto {
+    /// The trail stop, and the root query a search carries.
+    pub fn entity(&self) -> (EntityRef, Option<String>) {
+        match self {
+            TargetDto::Search { query } => (EntityRef::Search, Some(query.clone())),
+            TargetDto::Release { id } => (EntityRef::Release(ReleaseId(*id)), None),
+            TargetDto::Person { id } => (EntityRef::Agent(AgentId(*id)), None),
+        }
+    }
+
+    fn of(e: EntityRef, root_query: Option<&str>) -> Self {
+        match e {
+            EntityRef::Search => TargetDto::Search { query: root_query.unwrap_or_default().into() },
+            EntityRef::Release(r) => TargetDto::Release { id: r.0 },
+            EntityRef::Agent(a) => TargetDto::Person { id: a.0 },
+            // Only `Api` writes the trail, and it only opens these three.
+            other => unreachable!("{other:?} is not a pane yet"),
+        }
+    }
+}
+
+/// A thread out of a pane. Following it opens `to` to the right.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ThreadDto {
+    pub kind: ThreadKind,
+    /// "by", "album artist", "on", "worked with".
+    pub label: String,
+    /// "tags", "your library".
+    pub source: String,
+    pub to: TargetDto,
+    pub title: String,
+    /// "1-03, 1-07"; "2010 · 12 tracks"; "3 releases".
+    pub detail: String,
+}
+
+impl ThreadDto {
+    fn local(kind: ThreadKind, to: TargetDto, title: String, detail: String) -> Self {
+        ThreadDto { kind, label: kind.label().into(), source: source_label(LOCAL_TAGS).into(), to, title, detail }
+    }
+}
+
+/// Threads read from file tags.
+pub(crate) const LOCAL_TAGS: &str = "local_tags";
+
+/// A release pane (plate 01, the middle pane).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReleaseDto {
+    pub id: i64,
+    pub title: String,
+    /// The album artist.
+    pub artist: Option<String>,
+    pub year: Option<u16>,
+    /// "Score", "Album"; None when not sorted yet.
+    pub idiom: Option<String>,
+    pub tracks: u32,
+    pub discs: u32,
+    pub length_ms: u64,
+    /// Its files' formats, most tracks first: "FLAC 16/44.1", "MP3".
+    pub formats: Vec<String>,
+    /// The tracklist; row i plays with `play_release(id, i)`.
+    pub rows: Vec<TrackRowDto>,
+    /// The album artist, then each track artist and where they are.
+    pub credits: Vec<ThreadDto>,
+}
+
+impl From<ReleasePage> for ReleaseDto {
+    fn from(p: ReleasePage) -> Self {
+        let rows: Vec<TrackRowDto> = p.tracks.into_iter().map(TrackRowDto::from).collect();
+        let mut discs: Vec<u32> = rows.iter().map(|r| r.disc).collect();
+        discs.sort_unstable();
+        discs.dedup();
+        let mut formats: Vec<(String, usize)> = vec![];
+        for r in rows.iter().filter(|r| !r.format.is_empty()) {
+            match formats.iter_mut().find(|(f, _)| *f == r.format) {
+                Some((_, n)) => *n += 1,
+                None => formats.push((r.format.clone(), 1)),
+            }
+        }
+        formats.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+
+        let mut credits = vec![];
+        if let Some((agent, name)) = &p.album_artist {
+            credits.push(ThreadDto::local(ThreadKind::AlbumArtist, TargetDto::Person { id: agent.0 }, name.clone(), String::new()));
+        }
+        for a in p.artists {
+            let everywhere = a.positions.len() == rows.len();
+            // The album artist on every track is already said.
+            if everywhere && p.album_artist.as_ref().is_some_and(|(id, _)| *id == a.agent) {
+                continue;
+            }
+            let detail = if everywhere {
+                format!("all {} tracks", rows.len())
+            } else if a.positions.len() > 6 {
+                format!("{} tracks", a.positions.len())
+            } else {
+                let multi = discs.len() > 1;
+                a.positions.iter().map(|&(d, n)| if multi { format!("{d}-{n:02}") } else { n.to_string() }).collect::<Vec<_>>().join(", ")
+            };
+            credits.push(ThreadDto::local(ThreadKind::By, TargetDto::Person { id: a.agent.0 }, a.name, detail));
+        }
+
+        ReleaseDto {
+            id: p.release.0,
+            title: p.title,
+            artist: p.album_artist.map(|(_, name)| name),
+            year: p.year,
+            idiom: p.idiom.map(|i| singular(i).into()),
+            tracks: rows.len() as u32,
+            discs: discs.len() as u32,
+            length_ms: rows.iter().filter_map(|r| r.length_ms).sum(),
+            formats: formats.into_iter().map(|(f, _)| f).collect(),
+            rows,
+            credits,
+        }
+    }
+}
+
+/// A person pane (plate 01, the first pane). Groups are people here too.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PersonDto {
+    pub id: i64,
+    pub name: String,
+    /// Their tracks: all of their own releases', and theirs on others'.
+    pub tracks: u32,
+    /// Releases they're the album artist of, by year.
+    pub releases: Vec<ThreadDto>,
+    /// Other people's releases they're on, by year.
+    pub appears_on: Vec<ThreadDto>,
+    /// People who share releases with them, most shared first.
+    pub worked_with: Vec<ThreadDto>,
+}
+
+impl From<PersonPage> for PersonDto {
+    fn from(p: PersonPage) -> Self {
+        let n = |n: u32, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+        let release = |r: meret_core::PersonRelease, own: bool| {
+            let count = if own { n(r.tracks, "track", "tracks") } else { format!("{} of {}", r.theirs, n(r.tracks, "track", "tracks")) };
+            let detail = r.year.map(|y| format!("{y} · {count}")).unwrap_or(count);
+            ThreadDto::local(ThreadKind::AppearsOn, TargetDto::Release { id: r.release.0 }, r.title, detail)
+        };
+        PersonDto {
+            id: p.agent.0,
+            name: p.name,
+            tracks: p.tracks,
+            releases: p.releases.into_iter().map(|r| release(r, true)).collect(),
+            appears_on: p.appears_on.into_iter().map(|r| release(r, false)).collect(),
+            worked_with: p
+                .worked_with
+                .into_iter()
+                .map(|c| {
+                    let detail = n(c.releases, "release", "releases");
+                    ThreadDto::local(ThreadKind::WorkedWith, TargetDto::Person { id: c.agent.0 }, c.name, detail)
+                })
+                .collect(),
+        }
+    }
+}
+
+fn singular(i: Idiom) -> &'static str {
+    match i {
+        Idiom::Album => "Album",
+        Idiom::Song => "Song",
+        Idiom::Work => "Work",
+        Idiom::Session => "Session",
+        Idiom::Score => "Score",
+        Idiom::Set => "Set",
+        Idiom::Spoken => "Spoken",
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct StopDto {
     pub index: u32,
     pub parent: Option<u32>,
-    /// "agent:10", "release:20".
-    pub entity: String,
-    /// The thread into this stop: "composed by".
+    pub target: TargetDto,
+    /// The release's title, the person's name, or the search.
+    pub title: String,
+    /// The thread into this stop: "on". None for the root.
     pub via: Option<String>,
+    /// Where that thread came from: "tags".
+    pub via_source: Option<String>,
     pub on_path: bool,
     pub is_fork: bool,
     pub is_peek: bool,
@@ -449,25 +642,22 @@ pub struct TrailDto {
 }
 
 impl TrailDto {
-    pub fn from_trail(t: &Trail, now: i64) -> Self {
+    /// `title` names a stop: a release's title, a person's name.
+    pub fn from_trail(t: &Trail, now: i64, title: impl Fn(&TargetDto) -> String) -> Self {
         let path = t.path();
         let forks = t.forks(now);
         let stops = (0..t.len())
             .filter(|&i| !t.stop(i).pruned)
             .map(|i| {
                 let s = t.stop(i);
-                let entity = match s.entity {
-                    meret_model::EntityRef::Search => format!("search:{}", t.root_query.as_deref().unwrap_or("")),
-                    e => serde_json::to_value(e)
-                        .ok()
-                        .map(|v| format!("{}:{}", v["kind"].as_str().unwrap_or(""), v["id"]))
-                        .unwrap_or_default(),
-                };
+                let target = TargetDto::of(s.entity, t.root_query.as_deref());
                 StopDto {
                     index: i as u32,
                     parent: s.parent.map(|p| p as u32),
-                    entity,
+                    title: title(&target),
+                    target,
                     via: s.via.as_ref().map(|v| v.kind.label().to_string()),
+                    via_source: s.via.as_ref().map(|v| source_label(&v.source).to_string()),
                     on_path: path.contains(&i),
                     is_fork: forks.contains(&i),
                     is_peek: t.is_peek(i, now),

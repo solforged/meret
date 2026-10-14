@@ -123,12 +123,62 @@ void main() {
     expect(releases.releases.single.kind, HitKind.release);
     expect(releases.releases.single.title, row.album);
 
-    final trail = await core.startSearchTrail(hits.query);
+    final trail = await core.startTrail(TargetDto.search(query: hits.query));
     expect(trail.stops, hasLength(1));
-    expect(trail.stops.single.entity, startsWith('search:'));
-    expect(trail.stops.single.entity, 'search:${hits.query}');
+    expect(trail.stops.single.target, TargetDto.search(query: hits.query));
     expect(trail.current, trail.stops.single.index);
-    expect((await core.trail())!.stops.single.entity, trail.stops.single.entity);
+    expect((await core.trail())!.stops.single.target, trail.stops.single.target);
     await expectLater(core.search('queue ${hits.query}'), throwsA(isA<String>()));
+  });
+
+  test('release and person panes follow the fixture credits and navigate their trail', () async {
+    final core = RustCore();
+    await _scanFixture(core);
+    final row = (await core.rows('', 0, 1)).rows.single;
+    final root = await core.startTrail(const TargetDto.search(query: ''));
+    final releaseTrail = await core.follow(root.current, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn);
+    final releaseStop = releaseTrail.current;
+    expect(releaseTrail.stops.last.title, row.album);
+    expect(releaseTrail.stops.last.via, 'on');
+    expect(releaseTrail.stops.last.viaSource, 'tags');
+    final release = await core.release(row.releaseId);
+    expect(release.id, row.releaseId);
+    expect(release.title, row.album);
+    expect(release.tracks, 1);
+    expect(release.rows.single.trackId, row.trackId);
+    expect(release.formats, ['FLAC 16/44.1']);
+    expect(release.lengthMs, row.lengthMs);
+    final credit = release.credits.first;
+    expect(credit.source, 'tags');
+    final personId = (credit.to as TargetDto_Person).id;
+    final person = await core.person(personId);
+    expect(person.id, row.artistId);
+    expect(person.name, row.artist);
+    expect(person.tracks, 1);
+    expect([...person.releases, ...person.appearsOn].single.to, TargetDto.release(id: row.releaseId));
+    final personTrail = await core.follow(releaseStop, credit.to, credit.kind);
+    final personStop = personTrail.current;
+    expect(personTrail.stops.last.title, person.name);
+    expect(personTrail.stops.where((stop) => stop.onPath), hasLength(3));
+
+    final back = (await core.trailBack())!;
+    expect(back.current, releaseStop);
+    expect(back.stops.where((stop) => stop.onPath), hasLength(2));
+    expect((await core.trailForward())!.current, personStop);
+    expect((await core.trailGo(root.current)).stops.where((stop) => stop.onPath), hasLength(1));
+    expect(await core.trailBack(), isNull);
+    expect((await core.trailForward())!.current, releaseStop);
+    await core.trailGo(personStop);
+
+    try {
+      final started = core.now().firstWhere((now) => now.title == row.title && now.path.isNotEmpty);
+      await core.playRelease(id: release.id, index: 0, fromStop: releaseStop);
+      final now = await started.timeout(const Duration(seconds: 5));
+      expect(now.title, row.title);
+      expect(now.path.map((stage) => stage.detail), contains('FLAC 16/44.1'));
+      expect((await core.trail())!.current, personStop);
+    } finally {
+      await core.transport(const TransportDto.stop());
+    }
   });
 }

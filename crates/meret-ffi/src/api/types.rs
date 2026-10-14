@@ -3,8 +3,8 @@
 use flutter_rust_bridge::frb;
 pub use meret_api::{
     AnchorDto, ColumnDto, FidelityDto, FrontDto, FrontLineDto, HistogramDto, HitDto, HitKind, IdiomLineDto, JobDto,
-    NowDto, QueryDto, QueryKind, RecentDto, RootDto, RowsDto, SearchDto, SourceDto, StageDto, StatusDto, StopDto,
-    TrackRowDto, TrailDto, TransportDto,
+    NowDto, PersonDto, QueryDto, QueryKind, RecentDto, ReleaseDto, RootDto, RowsDto, SearchDto, SourceDto, StageDto,
+    StatusDto, StopDto, TargetDto, ThreadDto, ThreadKind, TrackRowDto, TrailDto, TransportDto,
 };
 
 #[frb(mirror(HitKind))]
@@ -138,8 +138,11 @@ pub struct _TrackRowDto {
     pub track_id: i64,
     pub title: String,
     pub artist: Option<String>,
+    pub artist_id: Option<i64>,
     pub album: String,
     pub album_artist: Option<String>,
+    pub album_artist_id: Option<i64>,
+    pub release_id: i64,
     pub disc: u32,
     pub number: u32,
     pub year: Option<u16>,
@@ -184,6 +187,7 @@ pub struct _FrontLineDto {
 
 #[frb(mirror(RecentDto))]
 pub struct _RecentDto {
+    pub release_id: i64,
     pub title: String,
     pub artist: Option<String>,
     pub year: Option<u16>,
@@ -203,8 +207,10 @@ pub struct _RootDto {
 pub struct _StopDto {
     pub index: u32,
     pub parent: Option<u32>,
-    pub entity: String,
+    pub target: TargetDto,
+    pub title: String,
     pub via: Option<String>,
+    pub via_source: Option<String>,
     pub on_path: bool,
     pub is_fork: bool,
     pub is_peek: bool,
@@ -216,4 +222,74 @@ pub struct _TrailDto {
     pub current: u32,
     pub stops: Vec<StopDto>,
     pub meetings: Vec<(u32, u32)>,
+}
+
+#[frb(mirror(TargetDto))]
+pub enum _TargetDto {
+    Search { query: String },
+    Release { id: i64 },
+    Person { id: i64 },
+}
+
+#[frb(mirror(ThreadKind))]
+pub enum _ThreadKind {
+    ComposedBy,
+    ArrangedBy,
+    LyricsBy,
+    SungBy,
+    PerformedBy,
+    ConductedBy,
+    ProducedBy,
+    EngineeredBy,
+    MemberOf,
+    WorkedWith,
+    RecordingOf,
+    ArrangedAs,
+    CoverOf,
+    Sampled,
+    SameSession,
+    Scored,
+    Label,
+    Cites,
+    SoundsLike,
+    ListenedAfter,
+    By,
+    AlbumArtist,
+    AppearsOn,
+    Matched,
+}
+
+#[frb(mirror(ThreadDto))]
+pub struct _ThreadDto {
+    pub kind: ThreadKind,
+    pub label: String,
+    pub source: String,
+    pub to: TargetDto,
+    pub title: String,
+    pub detail: String,
+}
+
+#[frb(mirror(ReleaseDto))]
+pub struct _ReleaseDto {
+    pub id: i64,
+    pub title: String,
+    pub artist: Option<String>,
+    pub year: Option<u16>,
+    pub idiom: Option<String>,
+    pub tracks: u32,
+    pub discs: u32,
+    pub length_ms: u64,
+    pub formats: Vec<String>,
+    pub rows: Vec<TrackRowDto>,
+    pub credits: Vec<ThreadDto>,
+}
+
+#[frb(mirror(PersonDto))]
+pub struct _PersonDto {
+    pub id: i64,
+    pub name: String,
+    pub tracks: u32,
+    pub releases: Vec<ThreadDto>,
+    pub appears_on: Vec<ThreadDto>,
+    pub worked_with: Vec<ThreadDto>,
 }

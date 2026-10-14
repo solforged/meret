@@ -84,9 +84,46 @@ pub fn search(input: String) -> Result<SearchDto, String> {
     api()?.search(&input)
 }
 
-/// Ends the current trail and roots a new one at the search `query`.
-pub fn start_search_trail(query: String) -> Result<TrailDto, String> {
-    Ok(api()?.start_search_trail(&query))
+/// A release pane: the tracklist, its formats and credits.
+pub fn release(id: i64) -> Result<ReleaseDto, String> {
+    api()?.release(id)
+}
+
+/// A person pane: their releases, what they're on, who they worked with.
+pub fn person(id: i64) -> Result<PersonDto, String> {
+    api()?.person(id)
+}
+
+/// Plays a release's tracklist from row `index`, replacing the queue.
+/// `from_stop` is the pane it was played from; that stop is marked played.
+pub fn play_release(id: i64, index: u32, from_stop: Option<u32>) -> Result<(), String> {
+    api()?.play_release(id, index, from_stop)
+}
+
+/// Ends the current trail and roots a new one at `to`.
+pub fn start_trail(to: TargetDto) -> Result<TrailDto, String> {
+    Ok(api()?.start_trail(to))
+}
+
+/// Follows a thread from stop `from_stop`, the pane it was picked in; from
+/// a pane before the last, this starts a branch.
+pub fn follow(from_stop: u32, to: TargetDto, via: ThreadKind) -> Result<TrailDto, String> {
+    api()?.follow(from_stop, to, via)
+}
+
+/// `[`: one stop back. None at the root.
+pub fn trail_back() -> Result<Option<TrailDto>, String> {
+    Ok(api()?.trail_back())
+}
+
+/// `]`: forward to the newest stop opened from this one. None when there's none.
+pub fn trail_forward() -> Result<Option<TrailDto>, String> {
+    Ok(api()?.trail_forward())
+}
+
+/// A star on the strip, clicked: that stop becomes current.
+pub fn trail_go(stop: u32) -> Result<TrailDto, String> {
+    api()?.trail_go(stop)
 }
 
 pub fn trail() -> Result<Option<TrailDto>, String> {

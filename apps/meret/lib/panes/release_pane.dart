@@ -1,0 +1,229 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
+
+import '../core/bridge.dart';
+import '../theme/tokens.dart';
+
+/// A release's local edition, tracklist and sourced credits.
+class ReleasePane extends StatefulWidget {
+  const ReleasePane({super.key, required this.core, required this.id, required this.fromStop, required this.onFollow});
+
+  final CoreBridge core;
+  final PlatformInt64 id;
+  final int fromStop;
+  final Future<void> Function(TargetDto, ThreadKind) onFollow;
+
+  @override
+  State<ReleasePane> createState() => _ReleasePaneState();
+}
+
+class _ReleasePaneState extends State<ReleasePane> {
+  final _focus = FocusNode();
+  ReleaseDto? _release;
+  String? _error;
+  int? _selected;
+  int _generation = 0;
+  bool _allCredits = false;
+
+  /// A compilation credits every track; past this many, the rest fold under one line.
+  static const _credits = 8;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(ReleasePane old) {
+    super.didUpdateWidget(old);
+    if (old.id != widget.id || old.core != widget.core) _load();
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final generation = ++_generation;
+    _release = null;
+    _selected = null;
+    _allCredits = false;
+    try {
+      final release = await widget.core.release(widget.id);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _release = release;
+        _error = null;
+      });
+    } catch (error) {
+      if (mounted && generation == _generation) setState(() => _error = error.toString());
+    }
+  }
+
+  Future<void> _play(int index) async {
+    _focus.requestFocus();
+    setState(() {
+      _selected = index;
+      _error = null;
+    });
+    try {
+      await widget.core.playRelease(id: widget.id, index: index, fromStop: widget.fromStop);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
+  }
+
+  Future<void> _follow(ThreadDto thread) async {
+    try {
+      await widget.onFollow(thread.to, thread.kind);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
+  }
+
+  KeyEventResult _key(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.enter && _selected != null) {
+      _play(_selected!);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  Widget _heading(String label) => Padding(
+    padding: const EdgeInsets.only(top: 18, bottom: 6),
+    child: Container(
+      padding: const EdgeInsets.only(bottom: 6),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
+      child: Text(label, style: Tok.label),
+    ),
+  );
+
+  Widget _row(TrackRowDto row, int index, String? albumArtist) => Semantics(
+    key: ValueKey('release-row-$index'),
+    button: true,
+    selected: _selected == index,
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _play(index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          decoration: BoxDecoration(
+            color: _selected == index ? Tok.panel2 : Colors.transparent,
+            border: const Border(bottom: BorderSide(color: Tok.line)),
+          ),
+          child: Row(children: [
+            SizedBox(width: 42, child: Text(row.number == 0 ? '' : '${row.disc}-${row.number.toString().padLeft(2, '0')}', style: Tok.monoSmall)),
+            Expanded(child: Text(row.title, style: Tok.body, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            // Compilations credit each track; say who when it isn't the album artist.
+            if (row.artist != null && row.artist != albumArtist)
+              Flexible(child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(row.artist!, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              )),
+            const SizedBox(width: 8),
+            Text(_time(row.lengthMs), style: Tok.monoSmall),
+          ]),
+        ),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final release = _release;
+    if (release == null) return Text(_error ?? 'Reading release…', style: Tok.label.copyWith(color: _error == null ? Tok.faint : Tok.warn));
+    final facts = [
+      if (release.idiom != null) release.idiom!,
+      if (release.year != null) '${release.year}',
+      '${release.tracks} ${release.tracks == 1 ? 'track' : 'tracks'}',
+      '${release.discs} ${release.discs == 1 ? 'disc' : 'discs'}',
+      _time(release.lengthMs),
+      ...release.formats,
+    ];
+    return Focus(
+      focusNode: _focus,
+      onKeyEvent: _key,
+      child: CustomScrollView(slivers: [
+        SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (release.artist != null) Text(release.artist!, style: Tok.body.copyWith(color: Tok.muted)),
+          const SizedBox(height: 8),
+          Text(facts.join(' · '), style: Tok.label),
+          Align(alignment: Alignment.centerLeft, child: TextButton(
+            onPressed: release.rows.isEmpty ? null : () => _play(0),
+            child: Text('Play', style: Tok.body.copyWith(color: Tok.gold)),
+          )),
+          if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
+          // Credits before the tracklist, so their threads stay in reach on a long release.
+          if (release.credits.isNotEmpty) _heading('Credits'),
+        ])),
+        SliverList(delegate: SliverChildBuilderDelegate(
+          (_, i) => ThreadLine(thread: release.credits[i], onFollow: () => _follow(release.credits[i])),
+          childCount: _allCredits ? release.credits.length : release.credits.length.clamp(0, _credits),
+        )),
+        if (!_allCredits && release.credits.length > _credits)
+          SliverToBoxAdapter(child: Align(alignment: Alignment.centerLeft, child: TextButton(
+            key: const ValueKey('release-more-credits'),
+            onPressed: () => setState(() => _allCredits = true),
+            child: Text('${release.credits.length - _credits} more', style: Tok.label.copyWith(color: Tok.gold)),
+          ))),
+        SliverToBoxAdapter(child: _heading('Tracklist')),
+        SliverFixedExtentList(
+          itemExtent: 30,
+          delegate: SliverChildBuilderDelegate((_, i) => _row(release.rows[i], i, release.artist), childCount: release.rows.length),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 20)),
+      ]),
+    );
+  }
+}
+
+String _time(BigInt? milliseconds) {
+  if (milliseconds == null) return '';
+  final seconds = milliseconds.toInt() ~/ 1000;
+  return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+}
+
+/// The same labelled, sourced thread grammar in release and person panes.
+class ThreadLine extends StatelessWidget {
+  const ThreadLine({super.key, required this.thread, required this.onFollow});
+
+  final ThreadDto thread;
+  final VoidCallback onFollow;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    key: ValueKey('thread-${thread.kind.name}-${thread.to}'),
+    button: true,
+    label: '${thread.label} · ${thread.title} · ${thread.source}',
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onFollow,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(width: 86, child: Text(thread.label, style: Tok.body.copyWith(color: Tok.gold2, fontStyle: FontStyle.italic))),
+              Expanded(child: Text(thread.title, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 8),
+              Text(thread.source, style: Tok.label.copyWith(color: Tok.dim, fontSize: 10)),
+            ]),
+            if (thread.detail.isNotEmpty) Padding(
+              padding: const EdgeInsets.only(left: 86, top: 2),
+              child: Text(thread.detail, style: Tok.label),
+            ),
+          ]),
+        ),
+      ),
+    ),
+  );
+}

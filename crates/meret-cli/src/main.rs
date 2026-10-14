@@ -12,6 +12,7 @@
 //! meret library ls 'year:1990s'      page through a query, as the table does
 //! meret library front                print the Front: the library by idiom and format, what's new, what needs you
 //! meret library search 'iona'        the query line's hits, timing each prefix as if typed
+//! meret library walk 'xenogears' 1 0  open hit 1, then that pane's thread 0, printing each pane and the trail
 //! meret library play 'year:1998' --from 3 --tail 8   play results, timing every join
 //! ```
 
@@ -89,6 +90,9 @@ enum LibraryCmd {
     /// Print the query line's hits for a search, timing every prefix of it
     /// as if it were typed.
     Search { input: String },
+    /// Search, then open one numbered line per step: a hit from the search,
+    /// then a thread from each pane. Prints every pane and the trail.
+    Walk { search: String, steps: Vec<usize> },
     /// Print a page of a query's rows ('' for everything).
     Ls {
         #[arg(default_value = "")]
@@ -166,6 +170,7 @@ fn main() -> Result<()> {
                 LibraryCmd::Rescan => library::rescan(&api, &rt),
                 LibraryCmd::Front => library::front(&api, &rt),
                 LibraryCmd::Search { input } => library::search(&api, &rt, &input),
+                LibraryCmd::Walk { search, steps } => library::walk(&api, &rt, &search, &steps),
                 LibraryCmd::Ls { query, offset, limit } => library::ls(&api, &rt, &query, offset, limit),
                 LibraryCmd::Play { query, from, count, tail, .. } => {
                     library::play(&api, &rt, &query, library::PlayOptions { from, count, tail })
