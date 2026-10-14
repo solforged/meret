@@ -1,0 +1,18 @@
+[package]
+name = "meret-store"
+description = "SQLite schema, the single writer, reader pool, and the hot column store."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+meret-model.workspace = true
+meret-query.workspace = true
+crossbeam-channel.workspace = true
+parking_lot.workspace = true
+roaring.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
