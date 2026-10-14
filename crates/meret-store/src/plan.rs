@@ -17,6 +17,18 @@ pub mod format_code {
     pub const DSD: u8 = 3;
     pub const CHIPTUNE: u8 = 4;
     pub const LOSSY: u8 = 5;
+
+    /// The code for a source, from what its file says about itself.
+    pub fn classify(codec: Option<&str>, sample_rate: Option<u32>, bits: Option<u8>, lossless: bool) -> u8 {
+        match codec {
+            None => UNKNOWN,
+            Some("DSD") => DSD,
+            Some("SPC" | "NSF" | "VGM" | "GBS" | "PSF") => CHIPTUNE,
+            Some(_) if !lossless => LOSSY,
+            Some(_) if bits.unwrap_or(16) > 16 || sample_rate.unwrap_or(44_100) > 48_000 => HI_RES,
+            Some(_) => FLAC_CD,
+        }
+    }
 }
 
 #[derive(Debug, Default)]

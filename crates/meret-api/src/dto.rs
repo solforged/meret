@@ -2,6 +2,7 @@
 //! (and later a websocket) can carry them without custom codecs.
 
 use meret_core::{NowState, StatusState};
+use meret_store::TrackRow;
 use meret_graph::Trail;
 use meret_model::signal::Fidelity;
 
@@ -125,6 +126,10 @@ pub struct StatusDto {
     pub jobs: Vec<JobDto>,
     pub guessed: u64,
     pub new_leads: u64,
+    /// Tracks in the table.
+    pub tracks: u64,
+    /// Changes whenever the library's rows do; a list refetches when it moves.
+    pub library_version: u64,
 }
 
 impl From<&StatusState> for StatusDto {
@@ -134,8 +139,61 @@ impl From<&StatusState> for StatusDto {
             jobs: s.jobs.iter().map(|j| JobDto { verb: j.verb.clone(), done: j.done, total: j.total }).collect(),
             guessed: s.guessed,
             new_leads: s.new_leads,
+            tracks: s.tracks,
+            library_version: s.library_version,
         }
     }
+}
+
+/// One row of the table.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrackRowDto {
+    pub track_id: i64,
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: String,
+    pub album_artist: Option<String>,
+    pub disc: u32,
+    pub number: u32,
+    pub year: Option<u16>,
+    pub length_ms: Option<u64>,
+    /// "FLAC 16/44.1", "AAC".
+    pub format: String,
+    pub path: Option<String>,
+}
+
+impl From<TrackRow> for TrackRowDto {
+    fn from(r: TrackRow) -> Self {
+        let format = match (r.codec, r.bits, r.sample_rate) {
+            (Some(codec), Some(bits), Some(rate)) => {
+                let khz = rate as f64 / 1000.0;
+                if khz.fract() == 0.0 { format!("{codec} {bits}/{khz:.0}") } else { format!("{codec} {bits}/{khz:.1}") }
+            }
+            (Some(codec), _, _) => codec,
+            (None, _, _) => String::new(),
+        };
+        TrackRowDto {
+            track_id: r.track.0,
+            title: r.title,
+            artist: r.artist,
+            album: r.album,
+            album_artist: r.album_artist,
+            disc: r.disc,
+            number: r.number,
+            year: r.year,
+            length_ms: r.length_ms,
+            format,
+            path: r.path,
+        }
+    }
+}
+
+/// A page of a query's result.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RowsDto {
+    pub total: u64,
+    pub offset: u64,
+    pub rows: Vec<TrackRowDto>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -202,21 +202,21 @@ These are what a spike or a regression test should hold the build to.
 
 ## State of the scaffold
 
-As of 2026-10-13. `cargo test --workspace` runs 53 tests (plus two ignored: a benchmark and a device listing that needs hardware); `flutter test` in `apps/meret` runs 6, three of them through the real Rust core.
+As of 2026-10-13. `cargo test --workspace` runs 67 tests (plus two ignored: a benchmark and a device listing that needs hardware); `flutter test` in `apps/meret` runs 13, four of them through the real Rust core (scan to play included).
 
 | Works | Stubbed or missing |
 |---|---|
-| Query language: parse, canonical form, errors; the planner answers column clauses from bitmaps | Text, people and names (FTS5 and the edge table) |
-| Store: schema v1, migrations, the single writer, readers, hot columns with histograms and facets | Loading hot columns from SQLite; live-query invalidation |
+| Query language: parse, canonical form, errors; the planner answers column clauses from bitmaps | Text, people and names (FTS5 and the edge table); the table ignores those clauses for now |
+| Store: schema v2, migrations, the single writer (a write returns once its batch has committed), readers, hot columns loaded from SQLite at start-up and after every scan, in library order (album artist, album, disc, track), with histograms and facets; lists held by the core and paged | A hot-column snapshot file for a faster cold start; live-query invalidation |
 | Engine: Symphonia decode, the ring, gapless joins, reopening on a format change, seeks that flush, anchors, the signal path. CoreAudio HAL output: device list, hog mode, rate switching, integer physical formats, restoring the device on close, latency-corrected anchors | Device unplug and default-device changes (an unplugged DAC stalls); a resampler for rates the device can't do; releasing hog mode during a long pause; loops; DSD, libgme, vgmstream; dither |
-| Library: parallel stat walk, diff with move detection, tags through lofty | Writing to the store; FSEvents; CUE sheets; artwork and light tokens |
+| Library: parallel stat walk, diff with move detection confirmed by a head hash, tags through lofty. Scans run on a background worker and write roots, files, sources, recordings, tracks, releases, the artist and the album artist through the writer in batches of 256. Missing files and unplugged roots are marked, never deleted; unreadable files are retried on the next scan | FSEvents; CUE sheets; artwork and light tokens; composers, MBIDs and the other tags; idiom detection (releases play as albums until then) |
 | Trails as trees: follow, branch, peek, meet, prune, depth-first play; leads converge | Persistence; the sky's "close neighbours" for meetings |
-| Player: per-idiom resume (plate 09), shuffle that never splits a work | The queue driving zones; `LocalZone` |
+| Player: per-idiom resume (plate 09), shuffle that never splits a work; the queue driving any `Zone`, one item loaded ahead for gapless joins; `LocalZone` over the engine; Now with title and artist | Recording listens (plays and last played stay at zero); previous and next; up next in Now; queues longer than 10,000 rows |
 | Matching, DR, the body summary, sky placement and lasso, job scheduling and rate limits | AcoustID, R128, embeddings, LOD tiles, the persistent job runner |
 | Providers: capability traits, claims, rate-limited HTTP; MusicBrainz recording and artist threads | Every other provider; Music Assistant is a shell |
-| Flutter: the surface, width classes, the `Flow` pane row with spines, the trail strip, query line, status line, Now with the body and signal path, brushable histogram headers; bridge streams for Now and status | Real panes from the core; paged rows; the sky; fonts; menu bar and Media3 glue |
+| Flutter: the surface, width classes, the `Flow` pane row with spines, the trail strip, the query line (on macOS also the window's title bar), status line with scan progress, Now with the body and signal path, brushable histogram headers; the table pane with paged rows from the core, Enter or a double-click to play, and adding a music folder | Other panes from the core; the sky; fonts; menu bar and Media3 glue |
 
-Measured so far: through the MacBook Pro speakers, 16/44.1 and 24/96 FLAC play bit-perfect (the speakers switch to 96 kHz and back to 48 afterwards), 8 s of audio takes 8.3 s of wall clock including the device open, and sends 2–5 anchors; the null output sends **one** for a 6-second file; decoding runs at 1,200–2,600× real time; the core cross-compiles for `aarch64-linux-android`.
+Measured so far: through the MacBook Pro speakers, 16/44.1 and 24/96 FLAC play bit-perfect (the speakers switch to 96 kHz and back to 48 afterwards), 8 s of audio takes 8.3 s of wall clock including the device open, and sends 2–5 anchors; the null output sends **one** for a 6-second file; decoding runs at 1,200–2,600× real time; the core cross-compiles for `aarch64-linux-android`. Scanning 928 files (3.7 GB, mostly AAC and Vorbis) into an empty store takes 0.1 s, and rescanning them unchanged takes 9 ms. A page of 50 rows comes back in about 0.1 ms. Through the Studio Display speakers, six tracks of a 16/44.1 FLAC album played through the queue, bit-perfect in hog mode. Every join came as Ended then Started, and the device started each track within 0.02 ms of the previous one's last frame (−0.24 ms after a full 82-second track, inside the anchors' 2 ms tolerance). There was no reopen and no gap.
 
 ## Working on it
 
@@ -227,11 +227,21 @@ cargo run -p meret-cli --release -- devices
 cargo run -p meret-cli --release -- play some.flac          # default device, hog mode; --shared, --device NAME, --null --speed 20
 cargo run -p meret-cli --release -- scan ~/Music --stat-only
 
+# The library, through meret-api. --data defaults to the app's own directory
+# (~/Library/Application Support/io.sowilo.meret), so the CLI and the app share one library.
+cargo run -p meret-cli --release -- library add ~/Music            # scan a root into the store, with progress
+cargo run -p meret-cli --release -- library ls 'year:1990s' --limit 20
+cargo run -p meret-cli --release -- library play 'format:flac' --from 3 --count 5 --tail 6   # times every join
+
 cd apps/meret
 flutter test                                 # bridge tests need: cargo build -p meret-ffi
 flutter run -d macos --dart-define=MERET_FAKE=true   # mock data, no Rust
 flutter_rust_bridge_codegen generate         # after changing crates/meret-ffi/src/api
 ```
+
+`library play` prints Started and Ended in the order the engine sent them. For each join it also prints the gap between where the device put the last frame of one track and the first frame of the next, worked out from the anchors. `--tail N` seeks into each track's last N seconds, so an album's joins can be heard in a minute.
+
+The macOS app isn't sandboxed (decided 2026-10-13). Like most audiophile players sold outside the App Store, it reads music folders anywhere directly, so there are no security-scoped bookmarks to keep. The folder picker is `file_selector`.
 
 Building the app needs Xcode on macOS and a JDK on Android. CocoaPods is not needed. `apps/meret/hook/build.dart` is a native-assets build hook: it compiles `crates/meret-ffi` for whichever target Flutter asks for, and Flutter bundles the library. Plugins come through Swift Package Manager (`enable-swift-package-manager` in the pubspec). The hook requires a pinned toolchain, so `rust-toolchain.toml` names an exact version. `crates/meret-ffi/rust-toolchain.toml` is a symlink to it; bump the version there.
 
@@ -248,8 +258,8 @@ Fine for personal use; they matter before distributing anything.
 
 ## Order of work
 
-1. **Spikes, to test the decisions.** (a) Flutter: a million-row virtual table, 100,000 stars and the body painter, measured in DevTools on a ProMotion Mac and a 120 Hz Android phone. (b) The engine: gapless FLAC through the CoreAudio HAL with hog mode and rate switching. Output, hog mode and rate switching are done; gapless on a real device still needs an album played through the queue, and a USB DAC to prove integer formats. These two gate the stack.
-2. **The iTunes core.** Library, store, hot columns, the table pane, local playback on the Mac, the menu bar.
+1. **Spikes, to test the decisions.** (a) Flutter: a million-row virtual table, 100,000 stars and the body painter, measured in DevTools on a ProMotion Mac and a 120 Hz Android phone. (b) The engine: gapless FLAC through the CoreAudio HAL with hog mode and rate switching. The engine side is done, including a gapless album through the queue on a real device; a USB DAC still has to prove integer formats. These two gate the stack.
+2. **The iTunes core.** Library, store, hot columns, the table pane and local playback on the Mac work end to end. Left: listens, previous and next, FSEvents, the menu bar.
 3. **Trails.** Panes, threads from MusicBrainz and VGMdb, trees, the Front.
 4. **Analysis and the sky.** Loudness, DR, the body, embeddings, placement, leads.
 5. **Android.** AAudio, the Media3 service, the satellite sync, hand-off.

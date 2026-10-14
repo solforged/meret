@@ -4,38 +4,53 @@
 
 mod local_zone;
 mod now;
+mod scan;
 mod status;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
+use crossbeam_channel::Sender;
 use meret_engine::engine::EngineConfig;
 use meret_engine::output::OutputBackend;
 use meret_engine::output::null::NullBackend;
-use meret_engine::{Control, Engine, Load, decode};
+use meret_engine::{Engine, EngineEvent};
 use meret_graph::Trail;
 use meret_jobs::Scheduler;
+use meret_model::{Idiom, RootId, TrackId};
+use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError};
 use meret_provider::Registry;
-use meret_store::{HotColumns, Store};
+use meret_query::{Input, parse};
+use meret_store::{HotColumns, Store, TrackRow, plan};
 use parking_lot::{Mutex, RwLock};
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 
+pub use local_zone::{LocalZone, file_uri};
 pub use now::NowState;
 pub use status::{SourceStatus, StatusState};
+
+use scan::ScanRequest;
+
+/// How many results "play these" queues, from the row it starts at.
+pub const MAX_QUEUE: usize = 10_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
     #[error(transparent)]
     Store(#[from] meret_store::StoreError),
     #[error(transparent)]
+    Scan(#[from] meret_library::ScanError),
+    #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
-    Decode(#[from] meret_engine::DecodeError),
+    Zone(#[from] ZoneError),
+    #[error("{0}")]
+    Query(String),
     #[error("the core is already running with a different data directory")]
     AlreadyStarted,
 }
 
-pub type Result<T> = std::result::Result<T, CoreError>;
+pub type Result<T, E = CoreError> = std::result::Result<T, E>;
 
 #[derive(Clone, Debug)]
 pub enum OutputChoice {
@@ -53,6 +68,19 @@ pub struct CoreConfig {
     pub contact: String,
 }
 
+/// A query's result, held by the core so the UI can page through it.
+/// Tracks, not row numbers, so it survives the columns being reloaded.
+pub struct List {
+    pub query: String,
+    pub version: u64,
+    /// Unix seconds when it was planned; `last:` and `added:` move with time.
+    pub made_s: i64,
+    pub tracks: Vec<TrackId>,
+}
+
+/// How long a list stays fresh when the library hasn't changed.
+const LIST_TTL_S: i64 = 60;
+
 pub struct Core {
     pub config: CoreConfig,
     pub store: Store,
@@ -60,22 +88,32 @@ pub struct Core {
     pub registry: Registry,
     pub scheduler: Mutex<Scheduler>,
     pub trail: Mutex<Option<Trail>>,
-    pub engine: Engine,
+    pub engine: Arc<Engine>,
+    pub local: Arc<LocalZone>,
+    pub player: Mutex<Player>,
     pub runtime: tokio::runtime::Runtime,
     now: watch::Sender<NowState>,
     status: watch::Sender<StatusState>,
+    events: broadcast::Sender<EngineEvent>,
+    scans: Sender<ScanRequest>,
+    list: Mutex<Option<Arc<List>>>,
 }
 
 static CORE: OnceLock<Arc<Core>> = OnceLock::new();
 
-/// Starts the process-wide core, or returns the running one.
+/// Starts the process-wide core, or returns the running one. The hot
+/// columns load and known roots rescan in the background.
 pub fn start(config: CoreConfig) -> Result<Arc<Core>> {
     if let Some(c) = CORE.get() {
         return if c.config.data_dir == config.data_dir { Ok(c.clone()) } else { Err(CoreError::AlreadyStarted) };
     }
-    let core = Arc::new(Core::new(config)?);
+    let (scans, requests) = crossbeam_channel::unbounded();
+    let core = Arc::new(Core::new(config, scans)?);
     let core = CORE.get_or_init(|| core).clone();
     now::spawn_pump(core.clone());
+    scan::spawn_worker(core.clone(), requests);
+    let _ = core.scans.send(ScanRequest::LoadColumns);
+    let _ = core.scans.send(ScanRequest::AllRoots);
     Ok(core)
 }
 
@@ -84,11 +122,12 @@ pub fn get() -> Option<Arc<Core>> {
 }
 
 impl Core {
-    fn new(config: CoreConfig) -> Result<Self> {
+    fn new(config: CoreConfig, scans: Sender<ScanRequest>) -> Result<Self> {
         std::fs::create_dir_all(&config.data_dir)?;
         let store = Store::open(&config.data_dir.join("library.db"))?;
 
-        // TODO(core): load hot columns from a snapshot file, then from SQLite.
+        // TODO(core): load hot columns from a snapshot file first; the scan
+        // worker loads them from SQLite after start-up.
         let columns = RwLock::new(HotColumns::default());
 
         let mut registry = Registry::default();
@@ -108,7 +147,8 @@ impl Core {
             }
             OutputChoice::Null { .. } => EngineConfig::default(),
         };
-        let engine = Engine::spawn(backend, engine_config);
+        let engine = Arc::new(Engine::spawn(backend, engine_config));
+        let local = Arc::new(LocalZone::new(engine.clone()));
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -125,9 +165,14 @@ impl Core {
             scheduler: Mutex::new(Scheduler::default()),
             trail: Mutex::new(None),
             engine,
+            player: Mutex::new(Player::new(local.clone())),
+            local,
             runtime,
             now: watch::channel(NowState::default()).0,
             status: watch::channel(status).0,
+            events: broadcast::channel(256).0,
+            scans,
+            list: Mutex::new(None),
         })
     }
 
@@ -139,34 +184,145 @@ impl Core {
         self.status.subscribe()
     }
 
-    /// Plays a file directly, outside the library. The queue and idiom rules
-    /// arrive with the library; this is enough to drive the engine and Now.
+    /// Every engine event, in order: Started, Ended, anchors, errors.
+    pub fn events(&self) -> broadcast::Receiver<EngineEvent> {
+        self.events.subscribe()
+    }
+
+    /// Adds a folder to the library and scans it in the background.
+    pub fn add_root(&self, path: &Path) -> Result<RootId> {
+        let root = meret_library::add_root(&self.store, path)?;
+        let _ = self.scans.send(ScanRequest::Root(root));
+        Ok(root)
+    }
+
+    /// Rescans every root in the background.
+    pub fn rescan(&self) {
+        let _ = self.scans.send(ScanRequest::AllRoots);
+    }
+
+    /// Resolves once every scan and column load queued so far has finished.
+    pub fn scans_settled(&self) -> tokio::sync::oneshot::Receiver<()> {
+        let (done, settled) = tokio::sync::oneshot::channel();
+        let _ = self.scans.send(ScanRequest::Settled(done));
+        settled
+    }
+
+    /// What's queued, in order.
+    pub fn queue(&self) -> Vec<QueueItem> {
+        self.player.lock().queue().items.clone()
+    }
+
+    /// The tracks matching `query`, in library order. The latest list is
+    /// kept until the query or the library changes, or for a minute, so
+    /// paging is cheap and relative times still move.
+    ///
+    /// Only clauses the hot columns answer filter yet; text, people and
+    /// names wait for FTS5 and the edge table.
+    pub fn list(&self, query: &str) -> Result<Arc<List>> {
+        let version = self.status.borrow().library_version;
+        let now = now_s();
+        let mut cached = self.list.lock();
+        if let Some(l) = cached.as_ref()
+            && l.query == query
+            && l.version == version
+            && now - l.made_s < LIST_TTL_S
+        {
+            return Ok(l.clone());
+        }
+        let cols = self.columns.read();
+        let rows = if query.trim().is_empty() {
+            None
+        } else {
+            match parse(query) {
+                Ok(Input::Search(q)) => plan(&q, &cols, now).rows,
+                Ok(Input::Command(_)) => return Err(CoreError::Query("a command, not a search".into())),
+                Err(e) => return Err(CoreError::Query(e.to_string())),
+            }
+        };
+        let tracks = match rows {
+            Some(r) => r.iter().map(|i| cols.track[i as usize]).collect(),
+            None => cols.track.clone(),
+        };
+        let list = Arc::new(List { query: query.into(), version, made_s: now, tracks });
+        *cached = Some(list.clone());
+        Ok(list)
+    }
+
+    /// Rows `offset..offset + limit` of `query`'s result, and its total.
+    pub fn rows(&self, query: &str, offset: usize, limit: usize) -> Result<(usize, Vec<TrackRow>)> {
+        let list = self.list(query)?;
+        let page = list.tracks.get(offset.min(list.tracks.len())..(offset + limit).min(list.tracks.len()));
+        Ok((list.tracks.len(), self.store.track_rows(page.unwrap_or(&[]))?))
+    }
+
+    /// Plays `query`'s result from row `index`, replacing the queue. Up to
+    /// `MAX_QUEUE` rows are queued.
+    pub fn play_results(&self, query: &str, index: usize) -> Result<()> {
+        let list = self.list(query)?;
+        let end = (index + MAX_QUEUE).min(list.tracks.len());
+        let rows = self.store.track_rows(list.tracks.get(index..end).unwrap_or(&[]))?;
+        let items = rows
+            .into_iter()
+            .filter_map(|r| {
+                Some(QueueItem {
+                    token: 0,
+                    uri: file_uri(Path::new(r.path.as_deref()?)),
+                    track: Some(r.track),
+                    recording: Some(r.recording),
+                    release: Some(r.release),
+                    work: None,
+                    idiom: r.idiom.unwrap_or(Idiom::Album),
+                    from_stop: None,
+                    why: None,
+                })
+            })
+            .collect();
+        self.play(items)
+    }
+
+    /// Plays a file directly, outside the library.
     pub fn play_file(&self, path: &Path) -> Result<()> {
-        let decoder = decode::open(path)?;
-        let title = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        self.now.send_modify(|n| {
-            n.title = title;
-            n.subtitle = path.parent().map(|p| p.display().to_string()).unwrap_or_default();
-            n.item = Some(1);
-        });
-        self.engine.send(Control::Play(Load { item: 1, decoder, start_frame: 0, stages: vec![] }));
+        self.play(vec![QueueItem {
+            token: 0,
+            uri: file_uri(path),
+            track: None,
+            recording: None,
+            release: None,
+            work: None,
+            idiom: Idiom::Album,
+            from_stop: None,
+            why: None,
+        }])
+    }
+
+    fn play(&self, items: Vec<QueueItem>) -> Result<()> {
+        let mut player = self.player.lock();
+        let result = player.play(items, 0).map(|_| ());
+        if let Some(error) = player.take_error() {
+            self.now.send_modify(|n| n.error = Some(error));
+        }
+        result?;
         Ok(())
     }
 
     pub fn pause(&self) {
-        self.engine.send(Control::Pause);
+        let _ = self.local.command(ZoneCommand::Pause);
     }
 
     pub fn resume(&self) {
-        self.engine.send(Control::Resume);
+        let _ = self.local.command(ZoneCommand::Resume);
     }
 
     pub fn seek_ms(&self, ms: u64) {
-        let rate = self.now.borrow().anchor.map(|a| a.sample_rate).unwrap_or(44_100);
-        self.engine.send(Control::Seek(ms * rate as u64 / 1000));
+        let _ = self.local.command(ZoneCommand::Seek { ms });
     }
 
     pub fn stop(&self) {
-        self.engine.send(Control::Stop);
+        let _ = self.player.lock().stop();
     }
+}
+
+fn now_s() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }

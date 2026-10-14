@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../core/bridge.dart';
 import '../theme/tokens.dart';
+import 'window_chrome.dart';
 
 /// `/`: searches everything you own, can stream or have found, and takes
 /// commands. Parsed as you type (a synchronous call; parsing is pure and
 /// takes microseconds). Running a search starts a new trail.
+///
+/// On macOS it is also the window's title bar: the window buttons sit at
+/// its left, and the space around the field moves the window.
 class QueryLine extends StatefulWidget {
   const QueryLine({super.key, required this.core, required this.focus, this.onSubmit});
 
@@ -36,37 +40,52 @@ class _QueryLineState extends State<QueryLine> {
       QueryKind.command => '↵ to run',
       QueryKind.search => '↵ as a table · ⌘↵ as a sky',
     };
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: const BoxDecoration(color: Tok.panel, border: Border(bottom: BorderSide(color: Tok.line))),
-      child: Row(children: [
-        Text('/', style: Tok.monoSmall.copyWith(color: Tok.gold)),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 3,
-          child: TextField(
-            controller: _text,
-            focusNode: widget.focus,
-            style: Tok.monoSmall.copyWith(color: Tok.ink, fontSize: 12.5),
-            cursorColor: Tok.gold,
-            decoration: const InputDecoration.collapsed(hintText: ''),
-            onChanged: (s) => setState(() => _parsed = s.isEmpty ? null : widget.core.parse(s)),
-            onSubmitted: (_) {
-              final p = _parsed;
-              if (p != null && p.kind != QueryKind.invalid) widget.onSubmit?.call(p);
-            },
+    return ValueListenableBuilder(
+      valueListenable: WindowChrome.instance.fullScreen,
+      builder: (context, _, _) => Container(
+        height: 38,
+        decoration: const BoxDecoration(color: Tok.panel, border: Border(bottom: BorderSide(color: Tok.line))),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          WindowDragArea(
+            child: Container(
+              alignment: Alignment.centerLeft,
+              padding: EdgeInsets.only(left: 12 + WindowChrome.instance.buttonsInset, right: 10),
+              child: Text('/', style: Tok.monoSmall.copyWith(color: Tok.gold)),
+            ),
           ),
-        ),
-        Flexible(
-          child: Text(
-            hint,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Tok.label.copyWith(color: p?.kind == QueryKind.invalid ? Tok.ox : Tok.faint),
+          Expanded(
+            flex: 3,
+            child: Center(
+              child: TextField(
+                controller: _text,
+                focusNode: widget.focus,
+                style: Tok.monoSmall.copyWith(color: Tok.ink, fontSize: 12.5),
+                cursorColor: Tok.gold,
+                decoration: const InputDecoration.collapsed(hintText: ''),
+                onChanged: (s) => setState(() => _parsed = s.isEmpty ? null : widget.core.parse(s)),
+                onSubmitted: (_) {
+                  final p = _parsed;
+                  if (p != null && p.kind != QueryKind.invalid) widget.onSubmit?.call(p);
+                },
+              ),
+            ),
           ),
-        ),
-      ]),
+          Expanded(
+            child: WindowDragArea(
+              child: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 12),
+                child: Text(
+                  hint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Tok.label.copyWith(color: p?.kind == QueryKind.invalid ? Tok.ox : Tok.faint),
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 }

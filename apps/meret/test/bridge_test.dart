@@ -3,8 +3,6 @@
 //
 //   cargo build -p meret-ffi   (from the repo root)
 //
-// Skipped when the library isn't there.
-
 import 'dart:async';
 import 'dart:io';
 
@@ -17,13 +15,11 @@ import 'package:meret/src/rust/frb_generated.dart';
 final _lib = '${Directory.current.path}/../../target/debug/libmeret_ffi.dylib';
 
 void main() {
-  final skip = File(_lib).existsSync() ? null : 'build the dylib first: cargo build -p meret-ffi';
-
   setUpAll(() async {
-    if (skip != null) return;
     await RustLib.init(externalLibrary: ExternalLibrary.open(_lib));
     final dir = await Directory.systemTemp.createTemp('meret-bridge-test');
     await rust.startCore(dataDir: dir.path, nullOutput: true);
+    addTearDown(() => dir.delete(recursive: true));
   });
 
   test('the query line parses through Rust', () {
@@ -32,12 +28,12 @@ void main() {
     expect(q.kind, QueryKind.search);
     expect(q.canonical, 'sung:"Joanne Hogg" not:owned year:1990s');
     expect(core.parse('colour:red').kind, QueryKind.invalid);
-  }, skip: skip);
+  });
 
   test('the status line streams the registry', () async {
     final s = await RustCore().status().first;
     expect(s.sources.map((x) => x.name), containsAll(['This Mac', 'MusicBrainz']));
-  }, skip: skip);
+  });
 
   test('playing a FLAC streams Now with a bit-perfect path and a moving anchor', () async {
     final core = RustCore();
@@ -55,5 +51,32 @@ void main() {
     expect(now.fidelity, FidelityDto.bitPerfect);
     expect(now.anchor!.rate, 1.0);
     await core.transport(const TransportDto.stop());
-  }, skip: skip);
+  });
+
+  test('a scanned folder supplies table rows and plays its results', () async {
+    final core = RustCore();
+    final dir = await Directory.systemTemp.createTemp('meret-library-test');
+    try {
+      await File('${Directory.current.path}/test/fixtures/tone-16-44.flac').copy('${dir.path}/tone.flac');
+      final scanned = core.status().firstWhere((status) => status.tracks >= BigInt.one);
+      expect(await core.addRoot(dir.path), greaterThan(0));
+      await scanned.timeout(const Duration(seconds: 10));
+
+      final page = await core.rows('', 0, 50);
+      expect(page.total, greaterThanOrEqualTo(BigInt.one));
+      expect(page.rows, hasLength(1));
+      final row = page.rows.single;
+      expect(row.title, isNotEmpty);
+      expect(row.format, 'FLAC 16/44.1');
+
+      final started = core.now().firstWhere((now) => now.title == row.title && now.path.isNotEmpty);
+      await core.playResults('', 0);
+      final now = await started.timeout(const Duration(seconds: 5));
+      expect(now.title, row.title);
+      expect(now.path.map((stage) => stage.detail), contains('FLAC 16/44.1'));
+    } finally {
+      await core.transport(const TransportDto.stop());
+      await dir.delete(recursive: true);
+    }
+  });
 }

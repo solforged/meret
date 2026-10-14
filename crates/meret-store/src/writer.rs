@@ -13,7 +13,9 @@ use crate::{Result, StoreError};
 
 const MAX_BATCH: usize = 256;
 
-type Job = Box<dyn FnOnce(&Transaction<'_>) + Send>;
+/// Runs once the batch a job was in has committed (or failed to).
+type Done = Box<dyn FnOnce(Option<&str>) + Send>;
+type Job = Box<dyn FnOnce(&Transaction<'_>) -> Done + Send>;
 
 #[derive(Clone)]
 pub struct Writer {
@@ -39,10 +41,16 @@ impl Writer {
         let (done_tx, done_rx) = bounded(1);
         self.tx
             .send(Box::new(move |tx| {
-                let _ = done_tx.send(f(tx));
+                let out = f(tx);
+                Box::new(move |commit_error: Option<&str>| {
+                    let _ = done_tx.send(match (out, commit_error) {
+                        (Ok(_), Some(e)) => Err(StoreError::Commit(e.to_owned())),
+                        (out, _) => out.map_err(StoreError::from),
+                    });
+                })
             }))
             .map_err(|_| StoreError::WriterGone)?;
-        Ok(done_rx.recv().map_err(|_| StoreError::WriterGone)??)
+        done_rx.recv().map_err(|_| StoreError::WriterGone)?
     }
 
     /// Queues a write and returns at once. Errors are logged.
@@ -51,11 +59,13 @@ impl Writer {
             if let Err(e) = f(tx) {
                 tracing::error!(error = %e, "detached write failed");
             }
+            Box::new(|_: Option<&str>| {})
         }));
     }
 }
 
 fn run(conn: &mut Connection, rx: Receiver<Job>) {
+    let mut done: Vec<Done> = Vec::with_capacity(MAX_BATCH);
     while let Ok(first) = rx.recv() {
         let tx = match conn.transaction() {
             Ok(tx) => tx,
@@ -64,12 +74,16 @@ fn run(conn: &mut Connection, rx: Receiver<Job>) {
                 continue;
             }
         };
-        first(&tx);
+        done.push(first(&tx));
         for job in rx.try_iter().take(MAX_BATCH - 1) {
-            job(&tx);
+            done.push(job(&tx));
         }
-        if let Err(e) = tx.commit() {
+        let error = tx.commit().err().map(|e| e.to_string());
+        if let Some(e) = &error {
             tracing::error!(error = %e, "write batch failed to commit");
+        }
+        for d in done.drain(..) {
+            d(error.as_deref());
         }
         // TODO(core): after commit, publish the tables and ids touched so
         // meret-core can invalidate live queries.

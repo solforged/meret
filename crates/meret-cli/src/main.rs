@@ -7,14 +7,21 @@
 //! meret devices                     list output devices
 //! meret play file.flac               play through the engine to the default device
 //! meret play file.flac --null --speed 20   …or to nowhere, faster than real time
+//!
+//! meret library add ~/Music          add a root to the library and scan it into the store
+//! meret library ls 'year:1990s'      page through a query, as the table does
+//! meret library play 'year:1998' --from 3 --tail 8   play results, timing every join
 //! ```
+
+mod library;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
+use meret_core::OutputChoice;
 use meret_engine::engine::EngineConfig;
 use meret_engine::output::OutputBackend;
 use meret_engine::output::null::NullBackend;
@@ -59,6 +66,73 @@ enum Cmd {
         #[arg(long, default_value_t = 1.0)]
         speed: f64,
     },
+    /// The library, through the same API the app uses.
+    Library {
+        /// The data directory. Default: the app's, so both see one library.
+        #[arg(long, global = true)]
+        data: Option<PathBuf>,
+        #[command(subcommand)]
+        cmd: LibraryCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum LibraryCmd {
+    /// Add a folder as a root and scan it into the store.
+    Add { root: PathBuf },
+    /// Rescan every root.
+    Rescan,
+    /// Print a page of a query's rows ('' for everything).
+    Ls {
+        #[arg(default_value = "")]
+        query: String,
+        #[arg(long, default_value_t = 0)]
+        offset: u64,
+        #[arg(long, default_value_t = 50)]
+        limit: u32,
+    },
+    /// Play a query's rows through the queue and time every join.
+    Play {
+        #[arg(default_value = "")]
+        query: String,
+        /// The row to start at.
+        #[arg(long, default_value_t = 0)]
+        from: u64,
+        /// Stop after this many items have ended.
+        #[arg(long)]
+        count: Option<usize>,
+        /// Seek into each item's last N seconds, to hear the joins sooner.
+        #[arg(long)]
+        tail: Option<f64>,
+        #[command(flatten)]
+        out: OutputArgs,
+    },
+}
+
+#[derive(Args)]
+struct OutputArgs {
+    /// Output device, by name or UID. Default: the system's.
+    #[arg(long)]
+    device: Option<String>,
+    /// Share the device instead of taking it (no hog mode).
+    #[arg(long)]
+    shared: bool,
+    /// Play to nowhere instead of a device.
+    #[arg(long)]
+    null: bool,
+    /// With --null: how much faster than real time.
+    #[arg(long, default_value_t = 1.0)]
+    speed: f64,
+}
+
+impl OutputArgs {
+    fn choice(&self) -> OutputChoice {
+        if self.null {
+            OutputChoice::Null { speed: self.speed }
+        } else {
+            OutputChoice::System { device: self.device.clone(), exclusive: !self.shared }
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -72,6 +146,22 @@ fn main() -> Result<()> {
             let backend = if null { Arc::new(NullBackend { speed }) as Arc<dyn OutputBackend> } else { system_backend() };
             let config = EngineConfig { device, exclusive: !shared, ..Default::default() };
             play(file, backend, config)
+        }
+        Cmd::Library { data, cmd } => {
+            let data = data.unwrap_or_else(library::default_data_dir);
+            let output = match &cmd {
+                LibraryCmd::Play { out, .. } => out.choice(),
+                _ => OutputChoice::Null { speed: 1.0 },
+            };
+            let (api, rt) = library::open(&data, output)?;
+            match cmd {
+                LibraryCmd::Add { root } => library::add(&api, &rt, &root),
+                LibraryCmd::Rescan => library::rescan(&api, &rt),
+                LibraryCmd::Ls { query, offset, limit } => library::ls(&api, &rt, &query, offset, limit),
+                LibraryCmd::Play { query, from, count, tail, .. } => {
+                    library::play(&api, &rt, &query, library::PlayOptions { from, count, tail })
+                }
+            }
         }
     }
 }

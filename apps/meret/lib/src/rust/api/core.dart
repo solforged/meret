@@ -39,6 +39,26 @@ Future<HistogramDto> histogram({
 Future<void> transport({required TransportDto cmd}) =>
     RustLib.instance.api.crateApiCoreTransport(cmd: cmd);
 
+/// Adds a music folder and scans it in the background; returns the root id.
+Future<PlatformInt64> addRoot({required String path}) =>
+    RustLib.instance.api.crateApiCoreAddRoot(path: path);
+
+/// A page of the table for `query`. Call as rows scroll into view, never in
+/// `build`.
+Future<RowsDto> rows({
+  required String query,
+  required BigInt offset,
+  required int limit,
+}) => RustLib.instance.api.crateApiCoreRows(
+  query: query,
+  offset: offset,
+  limit: limit,
+);
+
+/// Plays `query`'s result from row `index`, replacing the queue.
+Future<void> playResults({required String query, required BigInt index}) =>
+    RustLib.instance.api.crateApiCorePlayResults(query: query, index: index);
+
 Future<TrailDto?> trail() => RustLib.instance.api.crateApiCoreTrail();
 
 /// Now, pushed whenever it changes: a new item, a new anchor, a new path.
