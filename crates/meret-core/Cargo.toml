@@ -19,6 +19,7 @@ meret-player.workspace = true
 meret-provider.workspace = true
 provider-musicbrainz.workspace = true
 provider-music-assistant.workspace = true
+crossbeam-channel.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

@@ -7,6 +7,7 @@
 //!   brushes in memory, so 120 Hz interaction never touches SQLite.
 
 mod columns;
+mod library;
 mod migrate;
 mod plan;
 mod writer;
@@ -17,6 +18,7 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, OpenFlags};
 
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
+pub use library::TrackRow;
 pub use plan::{Plan, format_code, plan};
 pub use writer::Writer;
 
@@ -26,6 +28,8 @@ pub enum StoreError {
     Sqlite(#[from] rusqlite::Error),
     #[error("the writer thread has stopped")]
     WriterGone,
+    #[error("a write batch failed to commit: {0}")]
+    Commit(String),
 }
 
 pub type Result<T> = std::result::Result<T, StoreError>;
@@ -70,6 +74,8 @@ fn configure(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "foreign_keys", "ON")?;
     conn.pragma_update(None, "temp_store", "MEMORY")?;
     conn.pragma_update(None, "mmap_size", 1i64 << 30)?;
+    // The CLI and the app can share a library; wait out the other's commit.
+    conn.busy_timeout(std::time::Duration::from_secs(5))?;
     Ok(())
 }
 

@@ -50,6 +50,22 @@ pub fn transport(cmd: TransportDto) -> Result<(), String> {
     api()?.transport(cmd)
 }
 
+/// Adds a music folder and scans it in the background; returns the root id.
+pub fn add_root(path: String) -> Result<i64, String> {
+    api()?.add_root(&path)
+}
+
+/// A page of the table for `query`. Call as rows scroll into view, never in
+/// `build`.
+pub fn rows(query: String, offset: u64, limit: u32) -> Result<RowsDto, String> {
+    api()?.rows(&query, offset, limit)
+}
+
+/// Plays `query`'s result from row `index`, replacing the queue.
+pub fn play_results(query: String, index: u64) -> Result<(), String> {
+    api()?.play_results(&query, index)
+}
+
 pub fn trail() -> Result<Option<TrailDto>, String> {
     Ok(api()?.trail())
 }
