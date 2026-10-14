@@ -55,6 +55,7 @@ crossbeam-channel = "0.5"
 ebur128 = "0.1"
 flutter_rust_bridge = "=2.13.0"
 ignore = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 lofty = "0.25"
 parking_lot = "0.12"
 rayon = "1.12"

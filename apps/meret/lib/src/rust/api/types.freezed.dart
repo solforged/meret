@@ -13,6 +13,304 @@ part of 'types.dart';
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
+mixin _$ItemDto {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ItemDto);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'ItemDto()';
+}
+
+
+}
+
+/// @nodoc
+class $ItemDtoCopyWith<$Res>  {
+$ItemDtoCopyWith(ItemDto _, $Res Function(ItemDto) __);
+}
+
+
+/// Adds pattern-matching-related methods to [ItemDto].
+extension ItemDtoPatterns on ItemDto {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ItemDto_Group value)?  group,TResult Function( ItemDto_Track value)?  track,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case ItemDto_Group() when group != null:
+return group(_that);case ItemDto_Track() when track != null:
+return track(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ItemDto_Group value)  group,required TResult Function( ItemDto_Track value)  track,}){
+final _that = this;
+switch (_that) {
+case ItemDto_Group():
+return group(_that);case ItemDto_Track():
+return track(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ItemDto_Group value)?  group,TResult? Function( ItemDto_Track value)?  track,}){
+final _that = this;
+switch (_that) {
+case ItemDto_Group() when group != null:
+return group(_that);case ItemDto_Track() when track != null:
+return track(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( GroupDto field0)?  group,TResult Function( int ordinal,  TrackRowDto row)?  track,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case ItemDto_Group() when group != null:
+return group(_that.field0);case ItemDto_Track() when track != null:
+return track(_that.ordinal,_that.row);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( GroupDto field0)  group,required TResult Function( int ordinal,  TrackRowDto row)  track,}) {final _that = this;
+switch (_that) {
+case ItemDto_Group():
+return group(_that.field0);case ItemDto_Track():
+return track(_that.ordinal,_that.row);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( GroupDto field0)?  group,TResult? Function( int ordinal,  TrackRowDto row)?  track,}) {final _that = this;
+switch (_that) {
+case ItemDto_Group() when group != null:
+return group(_that.field0);case ItemDto_Track() when track != null:
+return track(_that.ordinal,_that.row);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class ItemDto_Group extends ItemDto {
+  const ItemDto_Group(this.field0): super._();
+  
+
+ final  GroupDto field0;
+
+/// Create a copy of ItemDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ItemDto_GroupCopyWith<ItemDto_Group> get copyWith => _$ItemDto_GroupCopyWithImpl<ItemDto_Group>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ItemDto_Group&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,field0);
+}
+
+@override
+String toString() {
+    return 'ItemDto.group(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ItemDto_GroupCopyWith<$Res> implements $ItemDtoCopyWith<$Res> {
+  factory $ItemDto_GroupCopyWith(ItemDto_Group value, $Res Function(ItemDto_Group) _then) = _$ItemDto_GroupCopyWithImpl;
+@useResult
+$Res call({
+ GroupDto field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$ItemDto_GroupCopyWithImpl<$Res>
+    implements $ItemDto_GroupCopyWith<$Res> {
+  _$ItemDto_GroupCopyWithImpl(this._self, this._then);
+
+  final ItemDto_Group _self;
+  final $Res Function(ItemDto_Group) _then;
+
+/// Create a copy of ItemDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(ItemDto_Group(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as GroupDto,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class ItemDto_Track extends ItemDto {
+  const ItemDto_Track({required this.ordinal, required this.row}): super._();
+  
+
+ final  int ordinal;
+ final  TrackRowDto row;
+
+/// Create a copy of ItemDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ItemDto_TrackCopyWith<ItemDto_Track> get copyWith => _$ItemDto_TrackCopyWithImpl<ItemDto_Track>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ItemDto_Track&&(identical(other.ordinal, ordinal) || other.ordinal == ordinal)&&(identical(other.row, row) || other.row == row));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,ordinal,row);
+}
+
+@override
+String toString() {
+    return 'ItemDto.track(ordinal: $ordinal, row: $row)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ItemDto_TrackCopyWith<$Res> implements $ItemDtoCopyWith<$Res> {
+  factory $ItemDto_TrackCopyWith(ItemDto_Track value, $Res Function(ItemDto_Track) _then) = _$ItemDto_TrackCopyWithImpl;
+@useResult
+$Res call({
+ int ordinal, TrackRowDto row
+});
+
+
+
+
+}
+/// @nodoc
+class _$ItemDto_TrackCopyWithImpl<$Res>
+    implements $ItemDto_TrackCopyWith<$Res> {
+  _$ItemDto_TrackCopyWithImpl(this._self, this._then);
+
+  final ItemDto_Track _self;
+  final $Res Function(ItemDto_Track) _then;
+
+/// Create a copy of ItemDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? ordinal = null,Object? row = null,}) {
+  return _then(ItemDto_Track(
+ordinal: null == ordinal ? _self.ordinal : ordinal // ignore: cast_nullable_to_non_nullable
+as int,row: null == row ? _self.row : row // ignore: cast_nullable_to_non_nullable
+as TrackRowDto,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$TargetDto {
 
 

@@ -243,12 +243,17 @@ impl Store {
         })
     }
 
-    /// Tracks credited to someone whose name contains `name`. Any credit
-    /// counts when `role` is `None`; the scan only writes artists and album
-    /// artists so far, so of the roles only `performer:` finds anyone.
+    /// Exact names take precedence over contains matches. Any credit counts
+    /// when `role` is `None`; the scan writes artists and album artists.
     pub fn tracks_by_person(&self, name: &str, role: Option<Role>) -> Result<Vec<TrackId>> {
         let Some((cond, mut params)) = matching(&[name.to_string()], Scope::Title) else { return Ok(vec![]) };
-        let agents = format!("SELECT entity_id FROM search WHERE {cond} AND entity_kind = 6");
+        params.push(name.to_string());
+        let n = params.len();
+        let agents = format!(
+            "SELECT id FROM agent WHERE name = ?{n} COLLATE NOCASE
+             UNION SELECT entity_id FROM search WHERE {cond} AND entity_kind = 6
+             AND NOT EXISTS (SELECT 1 FROM agent WHERE name = ?{n} COLLATE NOCASE)"
+        );
         let sql = match role {
             None => format!(
                 "SELECT t.id FROM credit c JOIN track t ON t.recording_id = c.subject_id
@@ -270,15 +275,20 @@ impl Store {
         self.read(|c| ids(c, &sql, params))
     }
 
-    /// Every track on a release whose title contains `title`.
+    /// Exact release titles take precedence over contains matches.
     pub fn tracks_on_release_named(&self, title: &str) -> Result<Vec<TrackId>> {
-        let Some((cond, params)) = matching(&[title.to_string()], Scope::Title) else { return Ok(vec![]) };
+        let Some((cond, mut params)) = matching(&[title.to_string()], Scope::Title) else { return Ok(vec![]) };
+        params.push(title.to_string());
+        let n = params.len();
         self.read(|c| {
             ids(
                 c,
                 &format!(
                     "SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
-                     WHERE e.release_id IN (SELECT entity_id FROM search WHERE {cond} AND entity_kind = 3)"
+                     WHERE e.release_id IN (
+                         SELECT id FROM release WHERE title = ?{n} COLLATE NOCASE
+                         UNION SELECT entity_id FROM search WHERE {cond} AND entity_kind = 3
+                         AND NOT EXISTS (SELECT 1 FROM release WHERE title = ?{n} COLLATE NOCASE))"
                 ),
                 params,
             )
@@ -402,5 +412,39 @@ mod tests {
         assert!(!word_match("1972", "72"));
         assert!(word_match("光田康典", "康典"), "no word starts without spaces");
         assert!(!word_match("سلام", "لام"), "Arabic separates words with spaces");
+    }
+
+    #[test]
+    fn exact_person_and_release_names_win_over_contains() {
+        use crate::Store;
+        use meret_model::TrackId;
+        use meret_query::Role;
+
+        let dir = std::env::temp_dir().join(format!("meret-exact-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir.join("library.db")).unwrap();
+        store.writer.write(|tx| {
+            tx.execute_batch(
+                "INSERT INTO agent (id, kind, name, rev) VALUES (1, 0, 'Mark Cromer', 1), (2, 0, 'Mark Cromer Ensemble', 1);
+                 INSERT INTO release (id, title, rev) VALUES (1, 'Civilization V', 1), (2, 'Civilization V Expanded', 1);
+                 INSERT INTO edition (id, release_id, rev) VALUES (1, 1, 1), (2, 2, 1);
+                 INSERT INTO medium (id, edition_id, position) VALUES (1, 1, 1), (2, 2, 1);
+                 INSERT INTO recording (id, title, rev) VALUES (1, 'First', 1), (2, 'Second', 1);
+                 INSERT INTO track (id, medium_id, recording_id, position, rev) VALUES (1, 1, 1, 1, 1), (2, 2, 2, 1, 1);
+                 INSERT INTO credit (subject_kind, subject_id, agent_id, role, rev) VALUES (2, 1, 1, 'artist', 1), (2, 2, 2, 'artist', 1);"
+            )?;
+            for id in [1, 2] {
+                super::index_agent(tx, id)?;
+                super::index_release(tx, id)?;
+            }
+            Ok(())
+        }).unwrap();
+        assert_eq!(store.tracks_by_person("MARK CROMER", None).unwrap(), vec![TrackId(1)]);
+        assert_eq!(store.tracks_by_person("Mark Cromer", Some(Role::Performer)).unwrap(), vec![TrackId(1)]);
+        assert_eq!(store.tracks_by_person("cromer", None).unwrap(), vec![TrackId(1), TrackId(2)]);
+        assert_eq!(store.tracks_on_release_named("CIVILIZATION V").unwrap(), vec![TrackId(1)]);
+        assert_eq!(store.tracks_on_release_named("Civilization").unwrap(), vec![TrackId(1), TrackId(2)]);
+        drop(store);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

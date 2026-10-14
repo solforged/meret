@@ -11,12 +11,17 @@ use std::thread;
 
 use meret_engine::{Anchor, EngineEvent};
 use meret_model::signal::SignalPath;
+use meret_model::{ReleaseId, TrackId};
+use meret_store::Artwork;
 
 use crate::Core;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NowState {
     pub item: Option<u64>,
+    pub track: Option<TrackId>,
+    pub release: Option<ReleaseId>,
+    pub cover: Option<Artwork>,
     pub title: String,
     pub subtitle: String,
     pub anchor: Option<Anchor>,
@@ -35,14 +40,17 @@ pub(crate) fn spawn_pump(core: Arc<Core>) {
                 match &e {
                     EngineEvent::Started { item, path } => {
                         core.player.lock().started(*item);
-                        let (title, subtitle, length_ms) = describe(&core, *item);
+                        let described = describe(&core, *item);
                         core.now.send_modify(|n| {
                             n.item = Some(*item);
                             n.path = Some(path.clone());
                             n.error = None;
-                            n.title = title;
-                            n.subtitle = subtitle;
-                            n.length_ms = length_ms;
+                            n.track = described.track;
+                            n.release = described.release;
+                            n.cover = described.cover;
+                            n.title = described.title;
+                            n.subtitle = described.subtitle;
+                            n.length_ms = described.length_ms;
                         });
                     }
                     EngineEvent::Anchor(a) => core.now.send_modify(|n| n.anchor = Some(*a)),
@@ -74,9 +82,8 @@ pub(crate) fn spawn_pump(core: Arc<Core>) {
         .expect("spawn now pump");
 }
 
-/// Title, "artist · album" and length for a queue item: from the library
-/// for a track, from the file name for a loose file.
-fn describe(core: &Core, token: u64) -> (String, String, Option<u64>) {
+/// Library metadata for a track, or the file name for a loose file.
+fn describe(core: &Core, token: u64) -> NowState {
     let item = {
         let player = core.player.lock();
         let q = player.queue();
@@ -88,10 +95,59 @@ fn describe(core: &Core, token: u64) -> (String, String, Option<u64>) {
         && let Some(r) = rows.into_iter().next()
     {
         let subtitle = [r.artist.as_deref(), Some(r.album.as_str())].into_iter().flatten().collect::<Vec<_>>().join(" · ");
-        return (r.title, subtitle, r.length_ms);
+        let cover = core.store.release_art(&[r.release]).ok().and_then(|mut a| a.remove(&r.release));
+        return NowState {
+            track: Some(track),
+            release: Some(r.release),
+            cover,
+            title: r.title,
+            subtitle,
+            length_ms: r.length_ms,
+            ..Default::default()
+        };
     }
     let path = Path::new(item.uri.strip_prefix("file://").unwrap_or(&item.uri));
     let title = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let subtitle = path.parent().map(|p| p.display().to_string()).unwrap_or_default();
-    (title, subtitle, None)
+    NowState { track: item.track, title, subtitle, ..Default::default() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CoreConfig, OutputChoice};
+    use meret_model::EntityKind;
+    use rusqlite::params;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn describing_a_library_track_reads_its_release_cover() {
+        let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("meret-now-{}-{t}", std::process::id()));
+        std::fs::create_dir_all(dir.join("music")).unwrap();
+        let track = dir.join("music/tone.flac");
+        std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/meret/test/fixtures/tone-16-44.flac"), &track).unwrap();
+        let (scans, _) = crossbeam_channel::unbounded();
+        let core = Core::new(CoreConfig { data_dir: dir.clone(), output: OutputChoice::Null { speed: 1.0 }, contact: String::new() }, scans).unwrap();
+        let root = meret_library::add_root(&core.store, &dir.join("music")).unwrap();
+        meret_library::scan(&core.store, root, &|_| {}).unwrap();
+        let row = core.store.track_rows(&core.store.load_columns().unwrap().track).unwrap().remove(0);
+        let release = row.release;
+        core.store.writer.write(move |tx| {
+            tx.execute("INSERT INTO artwork (hash, light, light_wash, light_dim) VALUES (?1, ?2, ?3, ?4)",
+                params![&[1u8; 32], 0xffcc8844i64, 0x14cc8844i64, 0x55cc8844i64])?;
+            tx.execute("INSERT INTO entity_artwork (entity_kind, entity_id, hash) VALUES (?1, ?2, ?3)",
+                params![EntityKind::Release as i64, release.0, &[1u8; 32]])?;
+            Ok(())
+        }).unwrap();
+        core.play_release(release, 0).unwrap();
+        let now = describe(&core, core.queue()[0].token);
+        assert_eq!(now.track, Some(row.track));
+        assert_eq!(now.release, Some(release));
+        assert_eq!(now.cover.unwrap().light, Some(0xffcc8844));
+        assert_eq!(now.title, row.title);
+        core.stop();
+        drop(core);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

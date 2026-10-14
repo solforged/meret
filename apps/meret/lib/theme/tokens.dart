@@ -1,7 +1,6 @@
 import 'package:flutter/painting.dart';
 
-/// The instrument: fixed colours from the trails plates. Only `light` comes
-/// from what's playing (clamped in OKLCH by the core); nothing else changes.
+/// The instrument: fixed colours from the trails plates.
 abstract final class Tok {
   static const void_ = Color(0xFF03050C);
   static const sky = Color(0xFF070B1A);
@@ -21,9 +20,6 @@ abstract final class Tok {
   static const ox = Color(0xFFB0414F);
   static const ok = Color(0xFF8FC2A2);
   static const warn = Color(0xFFE3A066);
-
-  /// Default light; replaced per release by the core's clamped cover colour.
-  static const light = Color(0xFFDF9672);
 
   // TODO(theme): bundle Instrument Sans and Geist Mono as assets.
   static const sans = 'Instrument Sans';

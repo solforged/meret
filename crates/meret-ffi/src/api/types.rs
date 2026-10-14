@@ -6,6 +6,8 @@ pub use meret_api::{
     NowDto, PersonDto, QueryDto, QueryKind, RecentDto, ReleaseDto, RootDto, RowsDto, SearchDto, SourceDto, StageDto,
     StatusDto, StopDto, TargetDto, ThreadDto, ThreadKind, TrackRowDto, TrailDto, TransportDto,
 };
+pub use meret_api::LightDto;
+pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
 
 #[frb(mirror(HitKind))]
 pub enum _HitKind {
@@ -60,6 +62,24 @@ pub enum _ColumnDto {
     Dr,
 }
 
+#[frb(mirror(SortKeyDto))]
+pub enum _SortKeyDto {
+    Library,
+    Title,
+    Artist,
+    Album,
+    Year,
+    Length,
+    Format,
+}
+
+#[frb(mirror(ViewDto))]
+pub struct _ViewDto {
+    pub sort: SortKeyDto,
+    pub descending: bool,
+    pub group: bool,
+}
+
 #[frb(mirror(HistogramDto))]
 pub struct _HistogramDto {
     pub lo: f64,
@@ -98,8 +118,19 @@ pub enum _FidelityDto {
     Lossy,
 }
 
+#[frb(mirror(LightDto))]
+pub struct _LightDto {
+    pub light: u32,
+    pub wash: u32,
+    pub dim: u32,
+}
+
 #[frb(mirror(NowDto))]
 pub struct _NowDto {
+    pub track_id: Option<i64>,
+    pub release_id: Option<i64>,
+    pub cover: Option<String>,
+    pub light: Option<LightDto>,
     pub title: String,
     pub subtitle: String,
     pub anchor: Option<AnchorDto>,
@@ -154,8 +185,53 @@ pub struct _TrackRowDto {
 #[frb(mirror(RowsDto))]
 pub struct _RowsDto {
     pub total: u64,
+    pub tracks: u64,
+    pub releases: u64,
     pub offset: u64,
-    pub rows: Vec<TrackRowDto>,
+    pub items: Vec<ItemDto>,
+}
+
+#[frb(mirror(ItemDto))]
+pub enum _ItemDto {
+    Group(GroupDto),
+    Track { ordinal: u32, row: TrackRowDto },
+}
+
+#[frb(mirror(GroupDto))]
+pub struct _GroupDto {
+    pub release_id: i64,
+    pub title: String,
+    pub album_artist: Option<String>,
+    pub album_artist_id: Option<i64>,
+    pub year: Option<u16>,
+    pub idiom: Option<String>,
+    pub tracks: u32,
+    pub length_ms: u64,
+    pub format: String,
+    pub cover: Option<String>,
+}
+
+#[frb(mirror(FacetsDto))]
+pub struct _FacetsDto {
+    pub idioms: FacetColumnDto,
+    pub people: FacetColumnDto,
+    pub releases: FacetColumnDto,
+}
+
+#[frb(mirror(FacetColumnDto))]
+pub struct _FacetColumnDto {
+    pub all_query: String,
+    pub tracks: u32,
+    pub entries: Vec<FacetDto>,
+}
+
+#[frb(mirror(FacetDto))]
+pub struct _FacetDto {
+    pub id: i64,
+    pub name: String,
+    pub tracks: u32,
+    pub selected: bool,
+    pub query: String,
 }
 
 #[frb(mirror(FrontDto))]
@@ -273,6 +349,7 @@ pub struct _ThreadDto {
 pub struct _ReleaseDto {
     pub id: i64,
     pub title: String,
+    pub cover: Option<String>,
     pub artist: Option<String>,
     pub year: Option<u16>,
     pub idiom: Option<String>,

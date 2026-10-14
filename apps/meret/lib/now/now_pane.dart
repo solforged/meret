@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../draw/body_painter.dart';
+import '../theme/light.dart';
 import '../theme/tokens.dart';
 
 /// Now: the playing body, the signal path and, later, the queue.
@@ -30,6 +32,10 @@ class NowPane extends StatelessWidget {
         Text(n?.title ?? 'Nothing playing', style: Tok.title.copyWith(fontSize: 17)),
         Text(n?.subtitle ?? '', style: Tok.body.copyWith(color: Tok.muted, fontSize: 12)),
         const SizedBox(height: 8),
+        if (n?.cover case final cover?) ...[
+          Image.file(File(cover), width: 128, height: 128, fit: BoxFit.contain, cacheWidth: 256),
+          const SizedBox(height: 8),
+        ],
         // Rebuilt per tick, but only this one Text.
         ListenableBuilder(
           listenable: clock,
@@ -41,7 +47,7 @@ class NowPane extends StatelessWidget {
             child: RepaintBoundary(
               child: CustomPaint(
                 size: Size.infinite,
-                painter: BodyPainter(clock: clock, lengthMs: length, loudness: _demoBody(0), bands: [_demoBody(1), _demoBody(2), _demoBody(3)]),
+                painter: BodyPainter(clock: clock, lengthMs: length, loudness: _demoBody(0), bands: [_demoBody(1), _demoBody(2), _demoBody(3)], light: Light.of(context).accent),
               ),
             ),
           ),

@@ -35,6 +35,89 @@ class AnchorDto {
 
 enum ColumnDto { year, length, plays, lastPlayed, added, dr }
 
+class FacetColumnDto {
+  final String allQuery;
+  final int tracks;
+  final List<FacetDto> entries;
+
+  const FacetColumnDto({
+    required this.allQuery,
+    required this.tracks,
+    required this.entries,
+  });
+
+  @override
+  int get hashCode => allQuery.hashCode ^ tracks.hashCode ^ entries.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FacetColumnDto &&
+          runtimeType == other.runtimeType &&
+          allQuery == other.allQuery &&
+          tracks == other.tracks &&
+          entries == other.entries;
+}
+
+class FacetDto {
+  final PlatformInt64 id;
+  final String name;
+  final int tracks;
+  final bool selected;
+  final String query;
+
+  const FacetDto({
+    required this.id,
+    required this.name,
+    required this.tracks,
+    required this.selected,
+    required this.query,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      tracks.hashCode ^
+      selected.hashCode ^
+      query.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FacetDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          tracks == other.tracks &&
+          selected == other.selected &&
+          query == other.query;
+}
+
+class FacetsDto {
+  final FacetColumnDto idioms;
+  final FacetColumnDto people;
+  final FacetColumnDto releases;
+
+  const FacetsDto({
+    required this.idioms,
+    required this.people,
+    required this.releases,
+  });
+
+  @override
+  int get hashCode => idioms.hashCode ^ people.hashCode ^ releases.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FacetsDto &&
+          runtimeType == other.runtimeType &&
+          idioms == other.idioms &&
+          people == other.people &&
+          releases == other.releases;
+}
+
 enum FidelityDto { bitPerfect, altered, lossy }
 
 class FrontDto {
@@ -106,6 +189,61 @@ class FrontLineDto {
           count == other.count &&
           note == other.note &&
           query == other.query;
+}
+
+class GroupDto {
+  final PlatformInt64 releaseId;
+  final String title;
+  final String? albumArtist;
+  final PlatformInt64? albumArtistId;
+  final int? year;
+  final String? idiom;
+  final int tracks;
+  final BigInt lengthMs;
+  final String format;
+  final String? cover;
+
+  const GroupDto({
+    required this.releaseId,
+    required this.title,
+    this.albumArtist,
+    this.albumArtistId,
+    this.year,
+    this.idiom,
+    required this.tracks,
+    required this.lengthMs,
+    required this.format,
+    this.cover,
+  });
+
+  @override
+  int get hashCode =>
+      releaseId.hashCode ^
+      title.hashCode ^
+      albumArtist.hashCode ^
+      albumArtistId.hashCode ^
+      year.hashCode ^
+      idiom.hashCode ^
+      tracks.hashCode ^
+      lengthMs.hashCode ^
+      format.hashCode ^
+      cover.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GroupDto &&
+          runtimeType == other.runtimeType &&
+          releaseId == other.releaseId &&
+          title == other.title &&
+          albumArtist == other.albumArtist &&
+          albumArtistId == other.albumArtistId &&
+          year == other.year &&
+          idiom == other.idiom &&
+          tracks == other.tracks &&
+          lengthMs == other.lengthMs &&
+          format == other.format &&
+          cover == other.cover;
 }
 
 class HistogramDto {
@@ -205,6 +343,17 @@ class IdiomLineDto {
           query == other.query;
 }
 
+@freezed
+sealed class ItemDto with _$ItemDto {
+  const ItemDto._();
+
+  const factory ItemDto.group(GroupDto field0) = ItemDto_Group;
+  const factory ItemDto.track({
+    required int ordinal,
+    required TrackRowDto row,
+  }) = ItemDto_Track;
+}
+
 class JobDto {
   final String verb;
   final BigInt done;
@@ -225,7 +374,31 @@ class JobDto {
           total == other.total;
 }
 
+class LightDto {
+  final int light;
+  final int wash;
+  final int dim;
+
+  const LightDto({required this.light, required this.wash, required this.dim});
+
+  @override
+  int get hashCode => light.hashCode ^ wash.hashCode ^ dim.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LightDto &&
+          runtimeType == other.runtimeType &&
+          light == other.light &&
+          wash == other.wash &&
+          dim == other.dim;
+}
+
 class NowDto {
+  final PlatformInt64? trackId;
+  final PlatformInt64? releaseId;
+  final String? cover;
+  final LightDto? light;
   final String title;
   final String subtitle;
   final AnchorDto? anchor;
@@ -235,6 +408,10 @@ class NowDto {
   final String? error;
 
   const NowDto({
+    this.trackId,
+    this.releaseId,
+    this.cover,
+    this.light,
     required this.title,
     required this.subtitle,
     this.anchor,
@@ -246,6 +423,10 @@ class NowDto {
 
   @override
   int get hashCode =>
+      trackId.hashCode ^
+      releaseId.hashCode ^
+      cover.hashCode ^
+      light.hashCode ^
       title.hashCode ^
       subtitle.hashCode ^
       anchor.hashCode ^
@@ -259,6 +440,10 @@ class NowDto {
       identical(this, other) ||
       other is NowDto &&
           runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          releaseId == other.releaseId &&
+          cover == other.cover &&
+          light == other.light &&
           title == other.title &&
           subtitle == other.subtitle &&
           anchor == other.anchor &&
@@ -375,6 +560,7 @@ class RecentDto {
 class ReleaseDto {
   final PlatformInt64 id;
   final String title;
+  final String? cover;
   final String? artist;
   final int? year;
   final String? idiom;
@@ -388,6 +574,7 @@ class ReleaseDto {
   const ReleaseDto({
     required this.id,
     required this.title,
+    this.cover,
     this.artist,
     this.year,
     this.idiom,
@@ -403,6 +590,7 @@ class ReleaseDto {
   int get hashCode =>
       id.hashCode ^
       title.hashCode ^
+      cover.hashCode ^
       artist.hashCode ^
       year.hashCode ^
       idiom.hashCode ^
@@ -420,6 +608,7 @@ class ReleaseDto {
           runtimeType == other.runtimeType &&
           id == other.id &&
           title == other.title &&
+          cover == other.cover &&
           artist == other.artist &&
           year == other.year &&
           idiom == other.idiom &&
@@ -453,17 +642,26 @@ class RootDto {
 
 class RowsDto {
   final BigInt total;
+  final BigInt tracks;
+  final BigInt releases;
   final BigInt offset;
-  final List<TrackRowDto> rows;
+  final List<ItemDto> items;
 
   const RowsDto({
     required this.total,
+    required this.tracks,
+    required this.releases,
     required this.offset,
-    required this.rows,
+    required this.items,
   });
 
   @override
-  int get hashCode => total.hashCode ^ offset.hashCode ^ rows.hashCode;
+  int get hashCode =>
+      total.hashCode ^
+      tracks.hashCode ^
+      releases.hashCode ^
+      offset.hashCode ^
+      items.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -471,8 +669,10 @@ class RowsDto {
       other is RowsDto &&
           runtimeType == other.runtimeType &&
           total == other.total &&
+          tracks == other.tracks &&
+          releases == other.releases &&
           offset == other.offset &&
-          rows == other.rows;
+          items == other.items;
 }
 
 class SearchDto {
@@ -521,6 +721,8 @@ class SearchDto {
           trackHits == other.trackHits &&
           trackHitsTotal == other.trackHitsTotal;
 }
+
+enum SortKeyDto { library_, title, artist, album, year, length, format }
 
 class SourceDto {
   final String name;
@@ -845,4 +1047,28 @@ sealed class TransportDto with _$TransportDto {
   const factory TransportDto.resume() = TransportDto_Resume;
   const factory TransportDto.seek({required BigInt ms}) = TransportDto_Seek;
   const factory TransportDto.stop() = TransportDto_Stop;
+}
+
+class ViewDto {
+  final SortKeyDto sort;
+  final bool descending;
+  final bool group;
+
+  const ViewDto({
+    required this.sort,
+    required this.descending,
+    required this.group,
+  });
+
+  @override
+  int get hashCode => sort.hashCode ^ descending.hashCode ^ group.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ViewDto &&
+          runtimeType == other.runtimeType &&
+          sort == other.sort &&
+          descending == other.descending &&
+          group == other.group;
 }
