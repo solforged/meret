@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 import '../core/bridge.dart';
 import '../theme/tokens.dart';
@@ -80,12 +81,30 @@ class ConstellationPainter extends CustomPainter {
           ..style = PaintingStyle.stroke);
       }
       if (s.onPath) {
-        final name = s.entity.split(':').last;
+        final name = _name(s.entity);
         final t = _text(name, Tok.body.copyWith(fontSize: 11.5, color: current ? Tok.ink : Tok.muted));
         t.paint(canvas, p + Offset(-t.width / 2, -22));
       }
     }
   }
+
+  static String _name(String entity) {
+    final separator = entity.indexOf(':');
+    return separator < 0 ? entity : entity.substring(separator + 1);
+  }
+
+  @override
+  SemanticsBuilderCallback get semanticsBuilder => (size) {
+    final path = trail.stops.where((s) => s.onPath && !s.isPeek).toList();
+    final step = size.width / (path.length + 0.5);
+    return [for (var i = 0; i < path.length; i++) CustomPainterSemantics(
+      rect: Rect.fromLTWH(step * i, 0, step, size.height),
+      properties: SemanticsProperties(label: _name(path[i].entity), textDirection: TextDirection.ltr),
+    )];
+  };
+
+  @override
+  bool shouldRebuildSemantics(ConstellationPainter oldDelegate) => oldDelegate.trail != trail;
 
   @override
   bool shouldRepaint(ConstellationPainter old) => old.trail != trail;

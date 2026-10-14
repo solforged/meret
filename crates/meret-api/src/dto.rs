@@ -1,7 +1,7 @@
 //! Plain data for the UI. Flat structs and simple enums, so flutter_rust_bridge
 //! (and later a websocket) can carry them without custom codecs.
 
-use meret_core::{Front, NowState, StatusState};
+use meret_core::{Front, NowState, Search, StatusState};
 use meret_graph::Trail;
 use meret_model::Idiom;
 use meret_model::signal::Fidelity;
@@ -198,6 +198,95 @@ pub struct RowsDto {
     pub rows: Vec<TrackRowDto>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum HitKind {
+    Person,
+    Release,
+    Track,
+}
+
+/// One line of the query line's hits.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HitDto {
+    pub kind: HitKind,
+    /// The agent, release or track.
+    pub id: i64,
+    pub title: String,
+    /// "34 tracks"; "Iona · 1993 · 11 tracks"; "Iona · Open Sky".
+    pub detail: String,
+    /// What opening it shows as a table: `by:"Iona"`, `release:"Open Sky"`,
+    /// or for a track the search it came from.
+    pub query: String,
+    /// For a track, its row in `query`'s result, to play from.
+    pub index: Option<u64>,
+}
+
+/// What the query line shows as you type a search.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SearchDto {
+    /// The search in canonical form; opening it as a table uses this.
+    pub query: String,
+    /// How many tracks the whole search matches.
+    pub tracks: u64,
+    pub people: Vec<HitDto>,
+    pub people_total: u64,
+    pub releases: Vec<HitDto>,
+    pub releases_total: u64,
+    /// Tracks in the result whose title has the typed words, in library
+    /// order; the result's first rows when nothing was typed but clauses.
+    pub track_hits: Vec<HitDto>,
+    pub track_hits_total: u64,
+}
+
+impl From<Search> for SearchDto {
+    fn from(s: Search) -> Self {
+        let n = |n: u32| format!("{n} {}", if n == 1 { "track" } else { "tracks" });
+        SearchDto {
+            people: s
+                .people
+                .into_iter()
+                .map(|p| HitDto {
+                    kind: HitKind::Person,
+                    id: p.agent.0,
+                    detail: n(p.tracks),
+                    query: Term::Person { role: None, name: p.name.clone() }.to_string(),
+                    title: p.name,
+                    index: None,
+                })
+                .collect(),
+            releases: s
+                .releases
+                .into_iter()
+                .map(|r| HitDto {
+                    kind: HitKind::Release,
+                    id: r.release.0,
+                    detail: [r.artist, r.year.map(|y| y.to_string()), Some(n(r.tracks))].into_iter().flatten().collect::<Vec<_>>().join(" · "),
+                    query: Term::Named { field: NameField::Release, value: r.title.clone() }.to_string(),
+                    title: r.title,
+                    index: None,
+                })
+                .collect(),
+            track_hits: s
+                .track_hits
+                .into_iter()
+                .map(|(i, r)| HitDto {
+                    kind: HitKind::Track,
+                    id: r.track.0,
+                    detail: [r.artist, Some(r.album)].into_iter().flatten().collect::<Vec<_>>().join(" · "),
+                    query: s.query.clone(),
+                    title: r.title,
+                    index: Some(i as u64),
+                })
+                .collect(),
+            query: s.query,
+            tracks: s.tracks as u64,
+            track_hits_total: s.track_hits_total as u64,
+            people_total: s.people_total,
+            releases_total: s.releases_total,
+        }
+    }
+}
+
 /// The Front: one flat page of doors into the library (plate 02). Only
 /// what the library can answer; leads, crates and trails join it as they
 /// exist. A line with a `query` opens it as a table.
@@ -367,10 +456,13 @@ impl TrailDto {
             .filter(|&i| !t.stop(i).pruned)
             .map(|i| {
                 let s = t.stop(i);
-                let entity = serde_json::to_value(s.entity)
-                    .ok()
-                    .map(|v| format!("{}:{}", v["kind"].as_str().unwrap_or(""), v["id"]))
-                    .unwrap_or_default();
+                let entity = match s.entity {
+                    meret_model::EntityRef::Search => format!("search:{}", t.root_query.as_deref().unwrap_or("")),
+                    e => serde_json::to_value(e)
+                        .ok()
+                        .map(|v| format!("{}:{}", v["kind"].as_str().unwrap_or(""), v["id"]))
+                        .unwrap_or_default(),
+                };
                 StopDto {
                     index: i as u32,
                     parent: s.parent.map(|p| p as u32),

@@ -205,6 +205,14 @@ mod tests {
     }
 
     #[test]
+    fn searches_keep_their_meaning_through_their_canonical_form() {
+        for s in [r#""play" it"#, r#""ac:dc""#, r#""-live" bootleg"#, r#"by:"Iona Brown" -wisdom"#, r#""corridors of time" year:1990s"#] {
+            let Input::Search(q) = parse(s).unwrap() else { panic!("{s} is a search") };
+            assert_eq!(parse(&q.to_string()).unwrap(), Input::Search(q), "{s}");
+        }
+    }
+
+    #[test]
     fn errors_say_what_was_wrong() {
         assert_eq!(parse(r#"sung:"Joanne"#), Err(ParseError::UnclosedQuote(0)));
         assert_eq!(parse("colour:red"), Err(ParseError::UnknownKey("colour".into())));

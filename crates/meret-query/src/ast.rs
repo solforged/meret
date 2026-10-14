@@ -201,13 +201,20 @@ impl fmt::Display for Clause {
 }
 
 fn quoted(s: &str) -> String {
-    if s.contains(char::is_whitespace) { format!("\"{s}\"") } else { s.to_string() }
+    if s.is_empty() || s.contains(char::is_whitespace) { format!("\"{s}\"") } else { s.to_string() }
+}
+
+/// Free text, quoted wherever bare it would read as something else: a
+/// clause (`ac:dc`), a negation (`-live`), or a command (`play`).
+fn quoted_text(s: &str) -> String {
+    let verb = ["play", "queue", "want", "crate"].iter().any(|v| s.eq_ignore_ascii_case(v));
+    if verb || s.contains(':') || s.starts_with('-') { format!("\"{s}\"") } else { quoted(s) }
 }
 
 impl fmt::Display for Term {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Term::Text { text } => f.write_str(&quoted(text)),
+            Term::Text { text } => f.write_str(&quoted_text(text)),
             Term::Flag { flag } => write!(f, "is:{}", flag.as_str()),
             Term::Idiom { idiom } => write!(f, "idiom:{}", idiom.as_str()),
             Term::Person { role: None, name } => write!(f, "by:{}", quoted(name)),

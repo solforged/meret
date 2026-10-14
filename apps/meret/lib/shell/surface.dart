@@ -9,6 +9,7 @@ import '../draw/constellation.dart';
 import '../now/now_pane.dart';
 import '../panes/front_pane.dart';
 import '../panes/pane.dart';
+import '../panes/search_pane.dart';
 import '../panes/table_pane.dart';
 import '../theme/tokens.dart';
 import 'pane_row.dart';
@@ -38,6 +39,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   final _panes = <_PaneSpec>[const _PaneSpec(kind: 'FRONT', title: 'Front')];
   int _visibleEnd = 1;
   int _navigationVersion = 0;
+  int _trailVersion = 0;
 
   @override
   void initState() {
@@ -64,6 +66,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               title: separator < 0 ? stop.entity : stop.entity.substring(separator + 1),
               via: stop.via,
             ));
+            if (prefix == 'search') {
+              final index = _panes.length - 1;
+              final query = stop.entity.substring(separator + 1);
+              _panes[index] = _PaneSpec(kind: 'SEARCH', title: query, query: query);
+              widget.core.search(query).then((search) {
+                if (!mounted || version != _navigationVersion) return;
+                setState(() => _panes[index] = _PaneSpec(kind: 'SEARCH', title: query, query: query, search: search));
+              }).catchError((Object _) {});
+            }
           }
           _visibleEnd = _panes.length;
         }
@@ -98,6 +109,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   void _openTable(String query, int from) {
     _navigationVersion++;
+    if (from == 0) _trailVersion++;
     setState(() {
       _panes.removeRange(from + 1, _panes.length);
       _panes.add(_PaneSpec(kind: 'TABLE', title: query.isEmpty ? 'Everything' : query, query: query));
@@ -114,8 +126,31 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     } else if (query.kind == QueryKind.search) {
       _openTable(query.canonical, 0);
     }
-    if (mounted) _queryFocus.unfocus();
   }
+
+  Future<void> _search(SearchDto search, HitDto? hit) async {
+    if (hit?.kind == HitKind.track) {
+      final index = hit!.index;
+      if (index == null) throw 'This track has no result index';
+      await widget.core.playResults(hit.query, index.toInt());
+    } else {
+      _navigationVersion++;
+      final version = ++_trailVersion;
+      setState(() {
+        _panes.removeRange(1, _panes.length);
+        _panes.add(_PaneSpec(kind: 'SEARCH', title: search.query, query: search.query, search: search));
+        if (hit != null) _panes.add(_PaneSpec(kind: 'TABLE', title: hit.title, query: hit.query));
+        _visibleEnd = _panes.length;
+        _trail = null;
+      });
+      _slide.value = 1;
+      _slide.animateTo(0, curve: Curves.easeOutCubic);
+      final trail = await widget.core.startSearchTrail(search.query);
+      if (mounted && version == _trailVersion) setState(() => _trail = trail);
+    }
+  }
+
+  void _hit(HitDto hit, int from) => _openTable(hit.query, from);
 
   Widget _pane(_PaneSpec spec, int index) {
     if (index == 0) {
@@ -127,18 +162,31 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         onQuery: (query) => _openTable(query, 0),
       );
     }
+    final scanning = _status?.jobs.any((job) => job.verb == 'scanning' || job.verb == 'reading tags') ?? false;
+    void filter(String query) => setState(() => _panes[index] = _PaneSpec(
+      kind: spec.kind, title: query.isEmpty ? 'Everything' : query, query: query, search: spec.search));
+    final search = spec.search;
     return Pane(
       key: ValueKey('pane-$index'),
       kind: spec.kind,
       title: spec.title,
       via: spec.via,
-      body: spec.query == null ? null : TablePane(
+      body: search != null ? SearchPane(
+        core: widget.core,
+        search: search,
+        query: spec.query!,
+        libraryVersion: _status?.libraryVersion,
+        tracks: _status?.tracks,
+        scanning: scanning,
+        onQuery: filter,
+        onHit: (hit) => _hit(hit, index),
+      ) : spec.query == null ? null : TablePane(
         core: widget.core,
         query: spec.query!,
         libraryVersion: _status?.libraryVersion,
         tracks: _status?.tracks,
-        scanning: _status?.jobs.any((job) => job.verb == 'scanning' || job.verb == 'reading tags') ?? false,
-        onQuery: (query) => setState(() => _panes[index] = _PaneSpec(kind: 'TABLE', title: query.isEmpty ? 'Everything' : query, query: query)),
+        scanning: scanning,
+        onQuery: filter,
       ),
     );
   }
@@ -171,7 +219,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               final panes = [for (var i = 0; i < _visibleEnd; i++) _pane(_panes[i], i)];
               final row = PaneRow(slide: _slide, visible: wc.panes.clamp(1, panes.length), children: panes);
               return Column(children: [
-                QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit),
+                QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
                 SizedBox(
                   height: wc == WidthClass.phone ? 44 : 64,
                   child: _trail == null
@@ -198,11 +246,12 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 }
 
 class _PaneSpec {
-  const _PaneSpec({required this.kind, required this.title, this.via, this.query});
+  const _PaneSpec({required this.kind, required this.title, this.via, this.query, this.search});
   final String kind;
   final String title;
   final String? via;
   final String? query;
+  final SearchDto? search;
 }
 
 class _Front extends Intent {

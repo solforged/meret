@@ -7,6 +7,7 @@ mod now;
 mod scan;
 mod status;
 
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
@@ -20,8 +21,8 @@ use meret_jobs::Scheduler;
 use meret_model::{Idiom, RootId, TrackId};
 use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError};
 use meret_provider::Registry;
-use meret_query::{Input, parse};
-use meret_store::{HotColumns, LibraryFacts, Store, TrackRow, plan};
+use meret_query::{Input, Term, parse};
+use meret_store::{HotColumns, LibraryFacts, PersonHit, ReleaseHit, Store, TrackRow, plan};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, watch};
 
@@ -93,6 +94,27 @@ pub struct List {
 /// How long a list stays fresh when the library hasn't changed.
 const LIST_TTL_S: i64 = 60;
 
+/// How many lists are kept: the open tables plus the search being typed,
+/// so typing doesn't throw away the list a table is paging through.
+const LISTS: usize = 6;
+
+/// See `Core::search`.
+#[derive(Clone, Debug)]
+pub struct Search {
+    /// The search in canonical form; its result is `list(query)`.
+    pub query: String,
+    pub tracks: usize,
+    pub people_total: u64,
+    pub people: Vec<PersonHit>,
+    pub releases_total: u64,
+    pub releases: Vec<ReleaseHit>,
+    /// Rows of the result whose own title has every free-text word, with
+    /// their index in it; the first rows when there are no words.
+    pub track_hits: Vec<(usize, TrackRow)>,
+    /// How many rows of the result `track_hits` is the start of.
+    pub track_hits_total: usize,
+}
+
 pub struct Core {
     pub config: CoreConfig,
     pub store: Store,
@@ -108,7 +130,7 @@ pub struct Core {
     status: watch::Sender<StatusState>,
     events: broadcast::Sender<EngineEvent>,
     scans: Sender<ScanRequest>,
-    list: Mutex<Option<Arc<List>>>,
+    lists: Mutex<VecDeque<Arc<List>>>,
 }
 
 static CORE: OnceLock<Arc<Core>> = OnceLock::new();
@@ -184,7 +206,7 @@ impl Core {
             status: watch::channel(status).0,
             events: broadcast::channel(256).0,
             scans,
-            list: Mutex::new(None),
+            lists: Mutex::new(VecDeque::with_capacity(LISTS)),
         })
     }
 
@@ -225,23 +247,26 @@ impl Core {
         self.player.lock().queue().items.clone()
     }
 
-    /// The tracks matching `query`, in library order. The latest list is
-    /// kept until the query or the library changes, or for a minute, so
-    /// paging is cheap and relative times still move.
+    /// The tracks matching `query`, in library order. The latest few lists
+    /// are kept until the library changes, or for a minute, so paging is
+    /// cheap and relative times still move.
     ///
-    /// Clauses the hot columns answer filter, and so do release names;
-    /// text, people and the other names wait for FTS5 and the edge table.
+    /// The hot columns answer what they can; text, people and release names
+    /// go to full-text search.
     pub fn list(&self, query: &str) -> Result<Arc<List>> {
         let version = self.status.borrow().library_version;
         let now = now_s();
-        let mut cached = self.list.lock();
-        if let Some(l) = cached.as_ref()
-            && l.query == query
-            && l.version == version
-            && now - l.made_s < LIST_TTL_S
         {
-            return Ok(l.clone());
+            let mut cached = self.lists.lock();
+            cached.retain(|l| l.version == version && now - l.made_s < LIST_TTL_S);
+            if let Some(i) = cached.iter().position(|l| l.query == query) {
+                let l = cached.remove(i).expect("found");
+                cached.push_front(l.clone());
+                return Ok(l);
+            }
         }
+        // Planned without the cache locked, so a slow search being typed
+        // doesn't hold up a table paging through another list.
         let cols = self.columns.read();
         let rows = if query.trim().is_empty() {
             None
@@ -257,8 +282,69 @@ impl Core {
             None => cols.track.clone(),
         };
         let list = Arc::new(List { query: query.into(), version, made_s: now, tracks });
-        *cached = Some(list.clone());
+        let mut cached = self.lists.lock();
+        cached.retain(|l| l.query != query);
+        cached.truncate(LISTS - 1);
+        cached.push_front(list.clone());
         Ok(list)
+    }
+
+    /// What the query line shows as you type a search: the people and
+    /// releases whose names have the typed words, and the result's tracks
+    /// whose titles do: up to `names` people and releases, `tracks` tracks.
+    pub fn search(&self, input: &str, names: usize, tracks: usize) -> Result<Search> {
+        let q = match parse(input) {
+            Ok(Input::Search(q)) => q,
+            Ok(Input::Command(_)) => return Err(CoreError::Query("a command, not a search".into())),
+            Err(e) => return Err(CoreError::Query(e.to_string())),
+        };
+        let query = q.to_string();
+        let list = self.list(&query)?;
+
+        let mut words = vec![];
+        let mut people = vec![];
+        let mut releases = vec![];
+        for c in q.clauses.iter().filter(|c| !c.negated) {
+            match &c.term {
+                Term::Text { text } => words.push(text.clone()),
+                Term::Person { name, .. } => people.push(name.clone()),
+                Term::Named { field: meret_query::NameField::Release, value } => releases.push(value.clone()),
+                _ => {}
+            }
+        }
+        people.splice(0..0, words.iter().cloned());
+        releases.splice(0..0, words.iter().cloned());
+        let (people_total, people) =
+            if people.is_empty() { (0, vec![]) } else { self.store.people_hits(&people, names)? };
+        let (releases_total, releases) =
+            if releases.is_empty() { (0, vec![]) } else { self.store.release_hits(&releases, names)? };
+
+        let titled = if words.is_empty() { None } else { Some(self.store.tracks_titled(&words)?) };
+        let mut track_hits_total = 0;
+        let mut picks: Vec<(usize, TrackId)> = vec![];
+        for (i, &t) in list.tracks.iter().enumerate() {
+            if titled.as_ref().is_none_or(|s| s.contains(&t)) {
+                track_hits_total += 1;
+                if picks.len() < tracks {
+                    picks.push((i, t));
+                }
+            }
+        }
+        let ids: Vec<TrackId> = picks.iter().map(|&(_, t)| t).collect();
+        let mut rows: std::collections::HashMap<TrackId, TrackRow> =
+            self.store.track_rows(&ids)?.into_iter().map(|r| (r.track, r)).collect();
+        let track_hits = picks.into_iter().filter_map(|(i, t)| Some((i, rows.remove(&t)?))).collect();
+
+        Ok(Search {
+            query,
+            tracks: list.tracks.len(),
+            people_total,
+            people,
+            releases_total,
+            releases,
+            track_hits,
+            track_hits_total,
+        })
     }
 
     /// Rows `offset..offset + limit` of `query`'s result, and its total.

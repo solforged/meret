@@ -80,6 +80,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   HistogramDto dco_decode_histogram_dto(dynamic raw);
 
   @protected
+  HitDto dco_decode_hit_dto(dynamic raw);
+
+  @protected
+  HitKind dco_decode_hit_kind(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
@@ -93,6 +99,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<FrontLineDto> dco_decode_list_front_line_dto(dynamic raw);
+
+  @protected
+  List<HitDto> dco_decode_list_hit_dto(dynamic raw);
 
   @protected
   List<IdiomLineDto> dco_decode_list_idiom_line_dto(dynamic raw);
@@ -168,6 +177,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RowsDto dco_decode_rows_dto(dynamic raw);
+
+  @protected
+  SearchDto dco_decode_search_dto(dynamic raw);
 
   @protected
   SourceDto dco_decode_source_dto(dynamic raw);
@@ -269,6 +281,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   HistogramDto sse_decode_histogram_dto(SseDeserializer deserializer);
 
   @protected
+  HitDto sse_decode_hit_dto(SseDeserializer deserializer);
+
+  @protected
+  HitKind sse_decode_hit_kind(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
@@ -284,6 +302,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<FrontLineDto> sse_decode_list_front_line_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<HitDto> sse_decode_list_hit_dto(SseDeserializer deserializer);
 
   @protected
   List<IdiomLineDto> sse_decode_list_idiom_line_dto(
@@ -367,6 +388,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RowsDto sse_decode_rows_dto(SseDeserializer deserializer);
+
+  @protected
+  SearchDto sse_decode_search_dto(SseDeserializer deserializer);
 
   @protected
   SourceDto sse_decode_source_dto(SseDeserializer deserializer);
@@ -483,6 +507,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_histogram_dto(HistogramDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_hit_dto(HitDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_hit_kind(HitKind self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
@@ -499,6 +529,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<FrontLineDto> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_hit_dto(List<HitDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_idiom_line_dto(
@@ -604,6 +637,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_rows_dto(RowsDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_search_dto(SearchDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_source_dto(SourceDto self, SseSerializer serializer);

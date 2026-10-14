@@ -167,39 +167,54 @@ impl Store {
         })
     }
 
-    /// The rows `plan` matches, once the clauses it left for SQL that the
-    /// store can answer yet (release names) are applied. Text, people and
-    /// the other names don't filter until FTS5 and the edge table do.
+    /// The rows `plan` matches, once the clauses it left for SQL are
+    /// applied: free text, people and release names through full-text
+    /// search. Nothing in the library answers the other clauses yet
+    /// (games, films, labels, works, wants, BPM), so they match nothing.
     pub fn answer_residual(&self, plan: Plan, cols: &HotColumns) -> Result<Option<RoaringBitmap>> {
+        // Free-text words that aren't negated are one search, so a short word
+        // only scans what the longer ones found.
+        let words: Vec<String> = plan
+            .residual
+            .iter()
+            .filter_map(|c| match &c.term {
+                Term::Text { text } if !c.negated => Some(text.clone()),
+                _ => None,
+            })
+            .collect();
         let mut rows = plan.rows;
-        for clause in &plan.residual {
-            let Term::Named { field: NameField::Release, value } = &clause.term else { continue };
-            let ids: HashSet<TrackId> = self.tracks_on_release_named(value)?.into_iter().collect();
+        let and = |rows: &mut Option<RoaringBitmap>, negated: bool, tracks: Vec<TrackId>| {
+            let ids: HashSet<TrackId> = tracks.into_iter().collect();
             let mut set = RoaringBitmap::from_sorted_iter((0u32..).zip(&cols.track).filter(|(_, t)| ids.contains(t)).map(|(i, _)| i))
                 .expect("indices are sorted");
-            if clause.negated {
+            if negated {
                 let mut all = cols.all();
                 all -= &set;
                 set = all;
             }
-            rows = Some(match rows {
+            *rows = Some(match rows.take() {
                 Some(acc) => acc & set,
                 None => set,
             });
+        };
+        if !words.is_empty() {
+            and(&mut rows, false, self.tracks_with_text(&words)?);
+        }
+        for clause in &plan.residual {
+            // Once nothing is left, the rest can't add anything back.
+            if rows.as_ref().is_some_and(RoaringBitmap::is_empty) {
+                break;
+            }
+            let tracks = match &clause.term {
+                Term::Text { .. } if !clause.negated => continue,
+                Term::Text { text } => self.tracks_with_text(std::slice::from_ref(text))?,
+                Term::Person { role, name } => self.tracks_by_person(name, *role)?,
+                Term::Named { field: NameField::Release, value } => self.tracks_on_release_named(value)?,
+                _ => vec![],
+            };
+            and(&mut rows, clause.negated, tracks);
         }
         Ok(rows)
-    }
-
-    /// Every track on a release called `title`, ignoring case.
-    pub fn tracks_on_release_named(&self, title: &str) -> Result<Vec<TrackId>> {
-        self.read(|c| {
-            c.prepare(
-                "SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
-                 JOIN release rl ON rl.id = e.release_id WHERE rl.title = ?1 COLLATE NOCASE",
-            )?
-            .query_map([title], |r| Ok(TrackId(r.get(0)?)))?
-            .collect()
-        })
     }
 }
 

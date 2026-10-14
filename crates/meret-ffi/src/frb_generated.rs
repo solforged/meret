@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1184028671;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1157380497;
 
 // Section: executor
 
@@ -317,6 +317,39 @@ fn wire__crate__api__core__run_command_impl(
         },
     )
 }
+fn wire__crate__api__core__search_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "search",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_input = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::search(api_input)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__start_core_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -345,6 +378,39 @@ fn wire__crate__api__core__start_core_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::start_core(api_data_dir, api_null_output)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__start_search_trail_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "start_search_trail",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_query = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::start_search_trail(api_query)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -530,6 +596,15 @@ const _: fn() = || {
         let _: u64 = HistogramDto.matched;
     }
     {
+        let HitDto = None::<crate::api::types::HitDto>.unwrap();
+        let _: crate::api::types::HitKind = HitDto.kind;
+        let _: i64 = HitDto.id;
+        let _: String = HitDto.title;
+        let _: String = HitDto.detail;
+        let _: String = HitDto.query;
+        let _: Option<u64> = HitDto.index;
+    }
+    {
         let IdiomLineDto = None::<crate::api::types::IdiomLineDto>.unwrap();
         let _: String = IdiomLineDto.label;
         let _: u64 = IdiomLineDto.releases;
@@ -578,6 +653,17 @@ const _: fn() = || {
         let _: u64 = RowsDto.total;
         let _: u64 = RowsDto.offset;
         let _: Vec<crate::api::types::TrackRowDto> = RowsDto.rows;
+    }
+    {
+        let SearchDto = None::<crate::api::types::SearchDto>.unwrap();
+        let _: String = SearchDto.query;
+        let _: u64 = SearchDto.tracks;
+        let _: Vec<crate::api::types::HitDto> = SearchDto.people;
+        let _: u64 = SearchDto.people_total;
+        let _: Vec<crate::api::types::HitDto> = SearchDto.releases;
+        let _: u64 = SearchDto.releases_total;
+        let _: Vec<crate::api::types::HitDto> = SearchDto.track_hits;
+        let _: u64 = SearchDto.track_hits_total;
     }
     {
         let SourceDto = None::<crate::api::types::SourceDto>.unwrap();
@@ -793,6 +879,39 @@ impl SseDecode for crate::api::types::HistogramDto {
     }
 }
 
+impl SseDecode for crate::api::types::HitDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_kind = <crate::api::types::HitKind>::sse_decode(deserializer);
+        let mut var_id = <i64>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_detail = <String>::sse_decode(deserializer);
+        let mut var_query = <String>::sse_decode(deserializer);
+        let mut var_index = <Option<u64>>::sse_decode(deserializer);
+        return crate::api::types::HitDto {
+            kind: var_kind,
+            id: var_id,
+            title: var_title,
+            detail: var_detail,
+            query: var_query,
+            index: var_index,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::HitKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::HitKind::Person,
+            1 => crate::api::types::HitKind::Release,
+            2 => crate::api::types::HitKind::Track,
+            _ => unreachable!("Invalid variant for HitKind: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -844,6 +963,18 @@ impl SseDecode for Vec<crate::api::types::FrontLineDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::types::FrontLineDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::HitDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::HitDto>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -1164,6 +1295,30 @@ impl SseDecode for crate::api::types::RowsDto {
     }
 }
 
+impl SseDecode for crate::api::types::SearchDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_query = <String>::sse_decode(deserializer);
+        let mut var_tracks = <u64>::sse_decode(deserializer);
+        let mut var_people = <Vec<crate::api::types::HitDto>>::sse_decode(deserializer);
+        let mut var_peopleTotal = <u64>::sse_decode(deserializer);
+        let mut var_releases = <Vec<crate::api::types::HitDto>>::sse_decode(deserializer);
+        let mut var_releasesTotal = <u64>::sse_decode(deserializer);
+        let mut var_trackHits = <Vec<crate::api::types::HitDto>>::sse_decode(deserializer);
+        let mut var_trackHitsTotal = <u64>::sse_decode(deserializer);
+        return crate::api::types::SearchDto {
+            query: var_query,
+            tracks: var_tracks,
+            people: var_people,
+            people_total: var_peopleTotal,
+            releases: var_releases,
+            releases_total: var_releasesTotal,
+            track_hits: var_trackHits,
+            track_hits_total: var_trackHitsTotal,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::SourceDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1358,11 +1513,13 @@ fn pde_ffi_dispatcher_primary_impl(
         6 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
         7 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
         8 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__start_search_trail_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1520,6 +1677,53 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::HistogramDt
     for crate::api::types::HistogramDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::HistogramDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::HitDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.kind.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.detail.into_into_dart().into_dart(),
+            self.0.query.into_into_dart().into_dart(),
+            self.0.index.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::HitDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::HitDto>>
+    for crate::api::types::HitDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::HitDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::HitKind> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self.0 {
+            crate::api::types::HitKind::Person => 0.into_dart(),
+            crate::api::types::HitKind::Release => 1.into_dart(),
+            crate::api::types::HitKind::Track => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::HitKind>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::HitKind>>
+    for crate::api::types::HitKind
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::HitKind> {
         self.into()
     }
 }
@@ -1704,6 +1908,33 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::RowsDto>>
     for crate::api::types::RowsDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::RowsDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::SearchDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.query.into_into_dart().into_dart(),
+            self.0.tracks.into_into_dart().into_dart(),
+            self.0.people.into_into_dart().into_dart(),
+            self.0.people_total.into_into_dart().into_dart(),
+            self.0.releases.into_into_dart().into_dart(),
+            self.0.releases_total.into_into_dart().into_dart(),
+            self.0.track_hits.into_into_dart().into_dart(),
+            self.0.track_hits_total.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::SearchDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::SearchDto>>
+    for crate::api::types::SearchDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::SearchDto> {
         self.into()
     }
 }
@@ -2011,6 +2242,35 @@ impl SseEncode for crate::api::types::HistogramDto {
     }
 }
 
+impl SseEncode for crate::api::types::HitDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::types::HitKind>::sse_encode(self.kind, serializer);
+        <i64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <String>::sse_encode(self.detail, serializer);
+        <String>::sse_encode(self.query, serializer);
+        <Option<u64>>::sse_encode(self.index, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::HitKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::HitKind::Person => 0,
+                crate::api::types::HitKind::Release => 1,
+                crate::api::types::HitKind::Track => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2050,6 +2310,16 @@ impl SseEncode for Vec<crate::api::types::FrontLineDto> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::types::FrontLineDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::types::HitDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::HitDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -2308,6 +2578,20 @@ impl SseEncode for crate::api::types::RowsDto {
         <u64>::sse_encode(self.total, serializer);
         <u64>::sse_encode(self.offset, serializer);
         <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::SearchDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.query, serializer);
+        <u64>::sse_encode(self.tracks, serializer);
+        <Vec<crate::api::types::HitDto>>::sse_encode(self.people, serializer);
+        <u64>::sse_encode(self.people_total, serializer);
+        <Vec<crate::api::types::HitDto>>::sse_encode(self.releases, serializer);
+        <u64>::sse_encode(self.releases_total, serializer);
+        <Vec<crate::api::types::HitDto>>::sse_encode(self.track_hits, serializer);
+        <u64>::sse_encode(self.track_hits_total, serializer);
     }
 }
 

@@ -17,6 +17,9 @@ pub enum EntityRef {
     Episode(EpisodeId),
     Crate(CrateUid),
     Trail(TrailUid),
+    /// The search a trail starts from. Only a root is one; the trail's
+    /// `root_query` says what was searched.
+    Search,
 }
 
 /// The kind alone, for columns and indexes that store `(kind, id)` pairs.
@@ -35,6 +38,7 @@ pub enum EntityKind {
     Episode = 9,
     Crate = 10,
     Trail = 11,
+    Search = 12,
 }
 
 impl EntityRef {
@@ -51,6 +55,7 @@ impl EntityRef {
             Self::Episode(_) => EntityKind::Episode,
             Self::Crate(_) => EntityKind::Crate,
             Self::Trail(_) => EntityKind::Trail,
+            Self::Search => EntityKind::Search,
         }
     }
 }

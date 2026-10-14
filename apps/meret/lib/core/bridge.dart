@@ -19,6 +19,8 @@ abstract interface class CoreBridge {
   Stream<StatusDto> status();
   Future<TrailDto?> trail();
   Future<FrontDto> front();
+  Future<SearchDto> search(String input);
+  Future<TrailDto> startSearchTrail(String query);
   Future<void> runCommand(String input);
   QueryDto parse(String input);
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
@@ -37,6 +39,10 @@ class RustCore implements CoreBridge {
   Future<TrailDto?> trail() => rust.trail();
   @override
   Future<FrontDto> front() => rust.front();
+  @override
+  Future<SearchDto> search(String input) => rust.search(input: input);
+  @override
+  Future<TrailDto> startSearchTrail(String query) => rust.startSearchTrail(query: query);
   @override
   Future<void> runCommand(String input) => rust.runCommand(input: input);
   @override
@@ -67,6 +73,9 @@ class FakeCore implements CoreBridge {
   bool _empty = false;
   String _root = '/Music';
   BigInt _libraryVersion = BigInt.one;
+  TrailDto? _searchTrail;
+  final _results = <String, List<int>>{};
+  late final _sampleRows = List.generate(_releases.length * 12 * 7, _row);
   final _statuses = StreamController<StatusDto>.broadcast();
   final _now = StreamController<NowDto>.broadcast();
   NowDto _state = NowDto(
@@ -166,7 +175,7 @@ class FakeCore implements CoreBridge {
   }
 
   @override
-  Future<TrailDto?> trail() async => _empty ? null : const TrailDto(
+  Future<TrailDto?> trail() async => _searchTrail ?? (_empty ? null : const TrailDto(
         current: 4,
         stops: [
           StopDto(index: 0, entity: 'recording:Corridors of Time', onPath: true, isFork: false, isPeek: false),
@@ -178,13 +187,212 @@ class FakeCore implements CoreBridge {
           StopDto(index: 6, parent: 1, entity: 'agent:Nobuo Uematsu', via: 'worked with', onPath: false, isFork: false, isPeek: false),
         ],
         meetings: [],
-      );
+      ));
 
   @override
   QueryDto parse(String input) {
-    final canonical = input.trim();
-    final verb = canonical.split(RegExp(r'\s+')).first.toLowerCase();
-    return QueryDto(kind: const ['play', 'queue', 'want', 'crate'].contains(verb) ? QueryKind.command : QueryKind.search, canonical: canonical);
+    try {
+      final tokens = _tokens(input);
+      final canonical = tokens.join(' ');
+      final verb = tokens.isEmpty ? '' : tokens.first.toLowerCase();
+      final command = const ['play', 'queue', 'want', 'crate'].contains(verb);
+      _clauses(command ? tokens.skip(1).join(' ') : canonical);
+      return QueryDto(kind: command ? QueryKind.command : QueryKind.search, canonical: canonical);
+    } catch (error) {
+      return QueryDto(kind: QueryKind.invalid, canonical: input.trim(), error: error.toString());
+    }
+  }
+
+  @override
+  Future<SearchDto> search(String input) async {
+    final parsed = parse(input);
+    if (parsed.kind != QueryKind.search) throw parsed.error ?? 'Type a search, not a command';
+    final clauses = _clauses(parsed.canonical);
+    final indices = _matching(parsed.canonical);
+    final words = clauses.where((c) => c.$1.isEmpty && !c.$3).map((c) => _fold(c.$2)).toList();
+    final personWords = [...words, ...clauses.where((c) => c.$1 == 'by' && !c.$3).map((c) => _fold(c.$2))];
+    final releaseWords = [...words, ...clauses.where((c) => c.$1 == 'release' && !c.$3).map((c) => _fold(c.$2))];
+    final people = <String, (int, int)>{};
+    final releases = <String, (int, int, TrackRowDto)>{};
+    final tracks = <HitDto>[];
+    final counts = List.filled(_sampleRows.length, 0);
+    for (final index in indices) {
+      counts[index % counts.length]++;
+    }
+    for (var index = 0; index < counts.length; index++) {
+      final count = counts[index];
+      if (count == 0) continue;
+      final row = _sampleRows[index];
+      for (final name in {row.artist, row.albumArtist}.whereType<String>()) {
+        final old = people[name];
+        people[name] = (old?.$1 ?? index + 1, (old?.$2 ?? 0) + count);
+      }
+      final old = releases[row.album];
+      releases[row.album] = (old?.$1 ?? index + 1, (old?.$2 ?? 0) + count, row);
+    }
+    final titles = [for (final row in _sampleRows) words.every((word) => _contains(row.title, word))];
+    final trackTotal = [for (var i = 0; i < titles.length; i++) if (titles[i]) counts[i]].fold(0, (a, b) => a + b);
+    for (var i = 0; i < indices.length && tracks.length < 8; i++) {
+      final index = indices[i];
+      final row = _sampleRows[index % _sampleRows.length];
+      if (titles[index % titles.length]) {
+        tracks.add(HitDto(kind: HitKind.track, id: PlatformInt64Util.from(index + 1), title: row.title,
+          detail: '${row.artist} · ${row.album}', query: parsed.canonical, index: BigInt.from(i)));
+      }
+    }
+    final personNames = people.keys.where((name) => personWords.isNotEmpty && personWords.every((word) => _contains(name, word))).toList()
+      ..sort((a, b) => _rank(a, personWords).compareTo(_rank(b, personWords)));
+    final releaseNames = releases.keys.where((name) => releaseWords.isNotEmpty && releaseWords.every((word) => _contains(name, word))).toList()
+      ..sort((a, b) => _rank(a, releaseWords).compareTo(_rank(b, releaseWords)));
+    return SearchDto(
+      query: parsed.canonical,
+      tracks: BigInt.from(indices.length),
+      people: [for (final name in personNames.take(5))
+        HitDto(kind: HitKind.person, id: PlatformInt64Util.from(people[name]!.$1), title: name,
+          detail: '${people[name]!.$2} tracks', query: 'by:${_quote(name)}')],
+      peopleTotal: BigInt.from(personNames.length),
+      releases: [for (final name in releaseNames.take(5))
+        HitDto(kind: HitKind.release, id: PlatformInt64Util.from(releases[name]!.$1), title: name,
+          detail: '${releases[name]!.$3.albumArtist} · ${releases[name]!.$3.year} · ${releases[name]!.$2} tracks', query: 'release:${_quote(name)}')],
+      releasesTotal: BigInt.from(releaseNames.length),
+      trackHits: tracks,
+      trackHitsTotal: BigInt.from(trackTotal),
+    );
+  }
+
+  @override
+  Future<TrailDto> startSearchTrail(String query) async {
+    final parsed = parse(query);
+    if (parsed.kind != QueryKind.search) throw parsed.error ?? 'Type a search, not a command';
+    return _searchTrail = TrailDto(current: 0, stops: [
+      StopDto(index: 0, entity: 'search:${parsed.canonical}', onPath: true, isFork: false, isPeek: false),
+    ], meetings: const []);
+  }
+
+  static int _rank(String name, List<String> words) {
+    final folded = _fold(name), text = words.join(' ');
+    return folded == text ? 0 : folded.startsWith(text) ? 1 : 2;
+  }
+
+  static String _quote(String name) => '"${name.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"';
+
+  static String _fold(String text) {
+    const accents = 'àáâãäåāèéêëēìíîïīòóôõöøōùúûüūýÿçñ';
+    const plain = 'aaaaaaaeeeeeiiiiiooooooouuuuuyycn';
+    return text.toLowerCase().split('').map((letter) {
+      final i = accents.indexOf(letter);
+      return i < 0 ? letter : plain[i];
+    }).join('');
+  }
+
+  static List<String> _tokens(String input) {
+    final tokens = <String>[];
+    var start = -1, quoted = false, escaped = false;
+    for (var i = 0; i < input.length; i++) {
+      final char = input[i];
+      if (!quoted && char.trim().isEmpty) {
+        if (start >= 0) tokens.add(input.substring(start, i));
+        start = -1;
+        continue;
+      }
+      if (start < 0) start = i;
+      if (char == '"' && !escaped) quoted = !quoted;
+      escaped = quoted && char == r'\' && !escaped;
+    }
+    if (quoted) throw 'Unclosed quote';
+    if (start >= 0) tokens.add(input.substring(start));
+    return tokens;
+  }
+
+  static List<(String, String, bool)> _clauses(String input) {
+    return [for (var token in _tokens(input)) (() {
+      final negated = token.startsWith('-');
+      if (negated) token = token.substring(1);
+      final colon = token.startsWith('"') ? -1 : token.indexOf(':');
+      final key = colon < 0 ? '' : token.substring(0, colon).toLowerCase();
+      if (!const ['', 'by', 'sung', 'composer', 'composed', 'release', 'album', 'idiom', 'format',
+        'year', 'length', 'plays', 'dr', 'last', 'added', 'not', 'is', 'game', 'film', 'label', 'crate', 'work'].contains(key)) {
+        throw 'Unknown key `$key:`';
+      }
+      var value = colon < 0 ? token : token.substring(colon + 1);
+      if (value.startsWith('"') && value.endsWith('"')) value = value.substring(1, value.length - 1).replaceAll(r'\"', '"').replaceAll(r'\\', r'\');
+      if (value.isEmpty) throw 'A search value is missing';
+      final valid = switch (key) {
+        'idiom' => const ['album', 'song', 'work', 'session', 'score', 'set', 'spoken'].contains(value.toLowerCase()),
+        'format' => const ['flac', 'hires', 'hi-res', '24bit', 'dsd', 'chiptune', 'native', 'lossy'].contains(value.toLowerCase()),
+        'is' || 'not' => const ['owned', 'own', 'lossless', 'streamable', 'stream', 'wanted', 'want', 'guessed', 'unmatched', 'dormant', 'lead'].contains(value.toLowerCase()),
+        'year' || 'plays' || 'dr' || 'length' => RegExp(r'^[<>]?\d+(?:\.\d+)?(?:s|m|h|:\d+)?(?:\.\.\d+(?:\.\d+)?(?:s|m|h|:\d+)?)?$').hasMatch(value),
+        'last' || 'added' => RegExp(r'^\d+[dwmy]$').hasMatch(value),
+        _ => true,
+      };
+      if (!valid) throw 'Invalid $key value: $value';
+      return (key == 'album' ? 'release' : key, value, negated);
+    })()];
+  }
+
+  static final _letter = RegExp(r'[a-z0-9]');
+
+  static bool _contains(String text, String word) {
+    final haystack = _fold(text), needle = _fold(word);
+    var start = 0;
+    while (start <= haystack.length) {
+      final index = haystack.indexOf(needle, start);
+      if (index < 0) return false;
+      if (index == 0 || !_letter.hasMatch(haystack[index - 1])) return true;
+      start = index + 1;
+    }
+    return false;
+  }
+
+  List<int> _matching(String query) {
+    if (_empty) return const [];
+    final cached = _results.remove(query);
+    if (cached != null) {
+      _results[query] = cached;
+      return cached;
+    }
+    final clauses = _clauses(query);
+    final matches = [
+      for (var i = 0; i < _sampleRows.length; i++) clauses.every((c) => _matches(_sampleRows[i], c)),
+    ];
+    final indices = [for (var i = 0; i < _total; i++) if (matches[i % matches.length]) i];
+    _results[query] = indices;
+    if (_results.length > 8) _results.remove(_results.keys.first);
+    return indices;
+  }
+
+  static bool _matches(TrackRowDto row, (String, String, bool) clause) {
+    final (key, value, negated) = clause;
+    final word = _fold(value);
+    final matched = switch (key) {
+      '' => [row.title, row.artist ?? '', row.album, row.albumArtist ?? ''].any((s) => _contains(s, word)),
+      'by' || 'sung' || 'composer' || 'composed' => [row.artist ?? '', row.albumArtist ?? ''].any((s) => _contains(s, word)),
+      'release' => _contains(row.album, word),
+      'idiom' => word == (row.artist == 'Yasunori Mitsuda' || row.artist == 'Joanne Hogg' ? 'score' : row.artist == 'Bill Evans Trio' ? 'session' : 'album'),
+      'format' => word == 'lossy' ? row.format == 'AAC' : word == 'flac' ? row.format.startsWith('FLAC') : false,
+      'year' => _number(row.year?.toDouble() ?? 0, value),
+      'plays' || 'dr' => _number(0, value),
+      'length' => _number((row.lengthMs?.toDouble() ?? 0) / 1000, value),
+      'is' => word == 'owned' || word == 'own' || (word == 'lossless' && row.format != 'AAC'),
+      'not' => !(word == 'owned' || word == 'own' || (word == 'lossless' && row.format != 'AAC')),
+      'last' || 'added' => true,
+      _ => false,
+    };
+    return negated ? !matched : matched;
+  }
+
+  static bool _number(double number, String input) {
+    if (input.endsWith('s')) {
+      final start = double.tryParse(input.substring(0, input.length - 1));
+      return start != null && number >= start && number < start + 10;
+    }
+    final range = input.split('..');
+    if (range.length == 2) {
+      final lo = double.tryParse(range.first), hi = double.tryParse(range.last);
+      return lo != null && hi != null && number >= lo && number <= hi;
+    }
+    final bound = double.tryParse(input.startsWith('<') || input.startsWith('>') ? input.substring(1) : input);
+    return bound != null && (input.startsWith('<') ? number < bound : input.startsWith('>') ? number > bound : number == bound);
   }
 
   @override
@@ -205,29 +413,34 @@ class FakeCore implements CoreBridge {
 
   @override
   Future<RowsDto> rows(String query, int offset, int limit) async {
-    final start = offset.clamp(0, _total);
-    final count = limit.clamp(0, _total - start);
+    final indices = _matching(query);
+    final start = offset.clamp(0, indices.length);
+    final count = limit.clamp(0, indices.length - start);
     return RowsDto(
-      total: BigInt.from(_total),
+      total: BigInt.from(indices.length),
       offset: BigInt.from(start),
-      rows: List.generate(count, (i) => _row(start + i)),
+      rows: List.generate(count, (i) => _row(indices[start + i])),
     );
   }
 
-  TrackRowDto _row(int index) {
-    const releases = [
+  static const _releases = [
       ('Xenogears Original Soundtrack', 'Yasunori Mitsuda', 1998, ['The Beginning and the End', 'Stars of Tears', 'Small Two of Pieces ~Broken Pieces~']),
       ('Beyond These Shores', 'Iona', 1993, ['Prayer on the Mountain', 'Treasure', 'Beyond These Shores']),
       ('Waltz for Debby', 'Bill Evans Trio', 1961, ['My Foolish Heart', 'Waltz for Debby', 'Some Other Time']),
       ('Chrono Trigger', 'Yasunori Mitsuda', 1995, ['Corridors of Time', 'Wind Scene', 'To Far Away Times']),
       ('The Book of Kells', 'Iona', 1992, ['Kells', 'Revelation', 'Eternity']),
+      ('Open Sky', 'Iona', 2000, ['Woven Cord', 'Wave After Wave', 'Woman Of Wisdom']),
+      ('Journey into the Morn', 'Iona', 1995, ['Irish Day', 'Today', 'Inside My Heart']),
+      ('Creid', 'Yasunori Mitsuda', 1998, ['Creid', 'Melkaba', 'Lahan']),
     ];
-    final release = releases[(index ~/ 12) % releases.length];
+
+  TrackRowDto _row(int index) {
+    final release = _releases[(index ~/ 12) % _releases.length];
     final number = index % 12 + 1;
     return TrackRowDto(
       trackId: PlatformInt64Util.from(index + 1),
       title: release.$4[index % release.$4.length],
-      artist: index % 60 == 2 ? 'Joanne Hogg' : release.$2,
+      artist: index % (_releases.length * 12) == 2 ? 'Joanne Hogg' : release.$2,
       album: release.$1,
       albumArtist: release.$2,
       disc: 1,
@@ -241,12 +454,13 @@ class FakeCore implements CoreBridge {
 
   @override
   Future<void> playResults(String query, int index) async {
-    if (index < 0 || index >= _total) throw RangeError.index(index, null, 'index', null, _total);
-    final row = _row(index);
+    final indices = _matching(query);
+    if (index < 0 || index >= indices.length) throw RangeError.index(index, null, 'index', null, indices.length);
+    final row = _row(indices[index]);
     _state = NowDto(
       title: row.title,
       subtitle: '${row.artist} · ${row.album}',
-      anchor: AnchorDto(item: BigInt.from(index + 1), positionMs: 0, rate: 1),
+      anchor: AnchorDto(item: BigInt.from(indices[index] + 1), positionMs: 0, rate: 1),
       lengthMs: row.lengthMs,
       path: [
         StageDto(name: 'File', detail: row.format, alters: false),

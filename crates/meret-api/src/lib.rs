@@ -155,17 +155,28 @@ impl Api {
         TrailDto::from_trail(trail, now)
     }
 
+    /// What the query line shows as you type a search: people, releases
+    /// and tracks, grouped. Ask again as the text changes; a slow answer for
+    /// old text is the caller's to drop.
+    pub fn search(&self, input: &str) -> Result<SearchDto, String> {
+        self.core.search(input, NAME_HITS, TRACK_HITS).map(SearchDto::from).map_err(|e| e.to_string())
+    }
+
     /// A search from the query line ends the trail and roots a new one at
     /// the search (decided 2026-10-13).
-    pub fn start_trail_from_search(&self, query: &str, root: EntityRef) -> TrailDto {
+    pub fn start_search_trail(&self, query: &str) -> TrailDto {
         let now = now_ms();
-        let t = meret_graph::Trail::start(root, Some(query.into()), now);
+        let t = meret_graph::Trail::start(EntityRef::Search, Some(query.into()), now);
         // TODO(core): persist the old trail before replacing it.
         let dto = TrailDto::from_trail(&t, now);
         *self.core.trail.lock() = Some(t);
         dto
     }
 }
+
+/// How many people and releases the query line shows, and how many tracks.
+const NAME_HITS: usize = 5;
+const TRACK_HITS: usize = 8;
 
 impl From<ColumnDto> for ColumnId {
     fn from(c: ColumnDto) -> Self {

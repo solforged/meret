@@ -100,4 +100,35 @@ void main() {
       await core.transport(const TransportDto.stop());
     }
   });
+
+  test('search groups the fixture and starts a trail rooted at its canonical query', () async {
+    final core = RustCore();
+    await _scanFixture(core);
+    final row = (await core.rows('', 0, 1)).rows.single;
+    final hits = await core.search(row.title);
+    expect(hits.query, isNotEmpty);
+    expect(hits.tracks, BigInt.one);
+    expect(hits.trackHitsTotal, BigInt.one);
+    expect(hits.trackHits, hasLength(1));
+    expect(hits.trackHits.single.kind, HitKind.track);
+    expect(hits.trackHits.single.title, row.title);
+    expect(hits.trackHits.single.id, row.trackId);
+    expect(hits.trackHits.single.index, BigInt.zero);
+    expect(hits.people.every((hit) => hit.kind == HitKind.person), isTrue);
+    expect(hits.releases.every((hit) => hit.kind == HitKind.release), isTrue);
+
+    final album = row.album.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+    final releases = await core.search('release:"$album"');
+    expect(releases.releasesTotal, BigInt.one);
+    expect(releases.releases.single.kind, HitKind.release);
+    expect(releases.releases.single.title, row.album);
+
+    final trail = await core.startSearchTrail(hits.query);
+    expect(trail.stops, hasLength(1));
+    expect(trail.stops.single.entity, startsWith('search:'));
+    expect(trail.stops.single.entity, 'search:${hits.query}');
+    expect(trail.current, trail.stops.single.index);
+    expect((await core.trail())!.stops.single.entity, trail.stops.single.entity);
+    await expectLater(core.search('queue ${hits.query}'), throwsA(isA<String>()));
+  });
 }
