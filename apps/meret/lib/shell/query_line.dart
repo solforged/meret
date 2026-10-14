@@ -15,7 +15,7 @@ class QueryLine extends StatefulWidget {
 
   final CoreBridge core;
   final FocusNode focus;
-  final ValueChanged<QueryDto>? onSubmit;
+  final Future<void> Function(QueryDto)? onSubmit;
 
   @override
   State<QueryLine> createState() => _QueryLineState();
@@ -24,6 +24,7 @@ class QueryLine extends StatefulWidget {
 class _QueryLineState extends State<QueryLine> {
   final _text = TextEditingController();
   QueryDto? _parsed;
+  String? _submitError;
 
   @override
   void dispose() {
@@ -34,11 +35,11 @@ class _QueryLineState extends State<QueryLine> {
   @override
   Widget build(BuildContext context) {
     final p = _parsed;
-    final hint = switch (p?.kind) {
+    final hint = _submitError ?? switch (p?.kind) {
       null => 'Search everything, or type a command',
       QueryKind.invalid => p!.error ?? '',
       QueryKind.command => '↵ to run',
-      QueryKind.search => '↵ as a table · ⌘↵ as a sky',
+      QueryKind.search => '↵ as a table',
     };
     return ValueListenableBuilder(
       valueListenable: WindowChrome.instance.fullScreen,
@@ -62,10 +63,19 @@ class _QueryLineState extends State<QueryLine> {
                 style: Tok.monoSmall.copyWith(color: Tok.ink, fontSize: 12.5),
                 cursorColor: Tok.gold,
                 decoration: const InputDecoration.collapsed(hintText: ''),
-                onChanged: (s) => setState(() => _parsed = s.isEmpty ? null : widget.core.parse(s)),
-                onSubmitted: (_) {
-                  final p = _parsed;
-                  if (p != null && p.kind != QueryKind.invalid) widget.onSubmit?.call(p);
+                onChanged: (s) => setState(() {
+                  _parsed = s.isEmpty ? null : widget.core.parse(s);
+                  _submitError = null;
+                }),
+                onSubmitted: (_) async {
+                  final input = _text.text;
+                  final parsed = _parsed ?? widget.core.parse(input);
+                  if (parsed.kind == QueryKind.invalid) return;
+                  try {
+                    await widget.onSubmit?.call(parsed);
+                  } catch (error) {
+                    if (mounted && _text.text == input) setState(() => _submitError = error.toString());
+                  }
                 },
               ),
             ),
@@ -79,7 +89,7 @@ class _QueryLineState extends State<QueryLine> {
                   hint,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Tok.label.copyWith(color: p?.kind == QueryKind.invalid ? Tok.ox : Tok.faint),
+                  style: Tok.label.copyWith(color: _submitError != null || p?.kind == QueryKind.invalid ? Tok.ox : Tok.faint),
                 ),
               ),
             ),

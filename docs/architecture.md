@@ -202,19 +202,19 @@ These are what a spike or a regression test should hold the build to.
 
 ## State of the scaffold
 
-As of 2026-10-13. `cargo test --workspace` runs 67 tests (plus two ignored: a benchmark and a device listing that needs hardware); `flutter test` in `apps/meret` runs 13, four of them through the real Rust core (scan to play included).
+As of 2026-10-13. `cargo test --workspace` runs 70 tests (plus two ignored: a benchmark and a device listing that needs hardware); `flutter test` in `apps/meret` runs 20, five of them through the real Rust core (scan to play included).
 
 | Works | Stubbed or missing |
 |---|---|
-| Query language: parse, canonical form, errors; the planner answers column clauses from bitmaps | Text, people and names (FTS5 and the edge table); the table ignores those clauses for now |
+| Query language: parse, canonical form for searches and commands, errors; the planner answers column clauses from bitmaps, and the store answers release names; `play <query>` runs from the query line | Text, people and the other names (FTS5 and the edge table); the table ignores those clauses for now. `queue`, `want` and `crate` say they aren't built yet |
 | Store: schema v2, migrations, the single writer (a write returns once its batch has committed), readers, hot columns loaded from SQLite at start-up and after every scan, in library order (album artist, album, disc, track), with histograms and facets; lists held by the core and paged | A hot-column snapshot file for a faster cold start; live-query invalidation |
 | Engine: Symphonia decode, the ring, gapless joins, reopening on a format change, seeks that flush, anchors, the signal path. CoreAudio HAL output: device list, hog mode, rate switching, integer physical formats, restoring the device on close, latency-corrected anchors | Device unplug and default-device changes (an unplugged DAC stalls); a resampler for rates the device can't do; releasing hog mode during a long pause; loops; DSD, libgme, vgmstream; dither |
-| Library: parallel stat walk, diff with move detection confirmed by a head hash, tags through lofty. Scans run on a background worker and write roots, files, sources, recordings, tracks, releases, the artist and the album artist through the writer in batches of 256. Missing files and unplugged roots are marked, never deleted; unreadable files are retried on the next scan | FSEvents; CUE sheets; artwork and light tokens; composers, MBIDs and the other tags; idiom detection (releases play as albums until then) |
+| Library: parallel stat walk, diff with move detection confirmed by a head hash, tags through lofty. Scans run on a background worker and write roots, files, sources, recordings, tracks, releases, the artist and the album artist through the writer in batches of 256. Missing files and unplugged roots are marked, never deleted; unreadable files are retried on the next scan. Each release gets a first idiom from cheap signals (chiptune formats and `.m4b`, genre tags, tracks over 40 minutes), or Album with `idiom_source = 'default'`, which any signal replaces | FSEvents; CUE sheets; artwork and light tokens; composers, MBIDs and the other tags; MusicBrainz genres and local audio classification for idioms; one track per recording when a release is ripped twice (the Tyranny soundtrack's FLAC and MP3 copies are two tracks each) |
 | Trails as trees: follow, branch, peek, meet, prune, depth-first play; leads converge | Persistence; the sky's "close neighbours" for meetings |
 | Player: per-idiom resume (plate 09), shuffle that never splits a work; the queue driving any `Zone`, one item loaded ahead for gapless joins; `LocalZone` over the engine; Now with title and artist | Recording listens (plays and last played stay at zero); previous and next; up next in Now; queues longer than 10,000 rows |
 | Matching, DR, the body summary, sky placement and lasso, job scheduling and rate limits | AcoustID, R128, embeddings, LOD tiles, the persistent job runner |
 | Providers: capability traits, claims, rate-limited HTTP; MusicBrainz recording and artist threads | Every other provider; Music Assistant is a shell |
-| Flutter: the surface, width classes, the `Flow` pane row with spines, the trail strip, the query line (on macOS also the window's title bar), status line with scan progress, Now with the body and signal path, brushable histogram headers; the table pane with paged rows from the core, Enter or a double-click to play, and adding a music folder | Other panes from the core; the sky; fonts; menu bar and Media3 glue |
+| Flutter: the surface, width classes, the `Flow` pane row with spines, the trail strip (with only the Front until slice 3), the query line (on macOS also the window's title bar; a search opens a table, a command runs), status line with scan progress, Now with the body and signal path, brushable histogram headers. The Front from real data: the collection by idiom and by format, added lately, needs you, folders, and an add-folder door when the library is empty; every line with a query opens a table. The table pane with paged rows from the core, Enter or a double-click to play, and adding a music folder. `⌘L` opens the table, `⌘1` brings back the Front | Release and person panes, and other panes from the core; leads, crates and kept trails on the Front; the sky; fonts; menu bar and Media3 glue |
 
 Measured so far: through the MacBook Pro speakers, 16/44.1 and 24/96 FLAC play bit-perfect (the speakers switch to 96 kHz and back to 48 afterwards), 8 s of audio takes 8.3 s of wall clock including the device open, and sends 2–5 anchors; the null output sends **one** for a 6-second file; decoding runs at 1,200–2,600× real time; the core cross-compiles for `aarch64-linux-android`. Scanning 928 files (3.7 GB, mostly AAC and Vorbis) into an empty store takes 0.1 s, and rescanning them unchanged takes 9 ms. A page of 50 rows comes back in about 0.1 ms. Through the Studio Display speakers, six tracks of a 16/44.1 FLAC album played through the queue, bit-perfect in hog mode. Every join came as Ended then Started, and the device started each track within 0.02 ms of the previous one's last frame (−0.24 ms after a full 82-second track, inside the anchors' 2 ms tolerance). There was no reopen and no gap.
 
@@ -231,6 +231,7 @@ cargo run -p meret-cli --release -- scan ~/Music --stat-only
 # (~/Library/Application Support/io.sowilo.meret), so the CLI and the app share one library.
 cargo run -p meret-cli --release -- library add ~/Music            # scan a root into the store, with progress
 cargo run -p meret-cli --release -- library ls 'year:1990s' --limit 20
+cargo run -p meret-cli --release -- library front                 # the Front as text: idioms, formats, added lately, needs you
 cargo run -p meret-cli --release -- library play 'format:flac' --from 3 --count 5 --tail 6   # times every join
 
 cd apps/meret
@@ -260,6 +261,15 @@ Fine for personal use; they matter before distributing anything.
 
 1. **Spikes, to test the decisions.** (a) Flutter: a million-row virtual table, 100,000 stars and the body painter, measured in DevTools on a ProMotion Mac and a 120 Hz Android phone. (b) The engine: gapless FLAC through the CoreAudio HAL with hog mode and rate switching. The engine side is done, including a gapless album through the queue on a real device; a USB DAC still has to prove integer formats. These two gate the stack.
 2. **The iTunes core.** Library, store, hot columns, the table pane and local playback on the Mac work end to end. Left: listens, previous and next, FSEvents, the menu bar.
+
+   Getting from an empty window to the music you want comes next, in four slices (decided 2026-10-13). Each ends with something usable and adds one way in:
+
+   1. **A shell with only real content.** Done. The real core shows no placeholder panes. With nothing to resume, Meret opens to the Front, and the Front shows only what the library can answer: the collection by idiom and by format, added lately, needs you (unreadable and untagged files), and a door to add a folder. Idioms come from cheap signals at scan time: chiptune formats, genre tags, and tracks over 40 minutes. The trail strip starts at "Front · no trail yet", and the query line runs searches.
+   2. **Search.** The scan fills the FTS5 `search` table. The planner answers text clauses from it and intersects them with the column bitmaps. Typing shows people, releases and tracks as you type, grouped by kind, and `↵` opens a search pane that starts a trail.
+   3. **Release and person panes.** A row or a hit opens a release (tracklist, edition, format, play) or a person (releases by role) to the right, and the trail records it. Threads come from local credits only for now: *by*, *album artist*, *on*.
+   4. **Browsing like iTunes.** Rows grouped by release, sorting by column, and an artist → album column browser over facet counts. Cover art is read during the scan, and it also feeds the light.
+
+   Then listens, resume and kept trails, so Meret opens to Now paused where you left it, and the Front gains most played, dormant and pick up where you left off.
 3. **Trails.** Panes, threads from MusicBrainz and VGMdb, trees, the Front.
 4. **Analysis and the sky.** Loudness, DR, the body, embeddings, placement, leads.
 5. **Android.** AAudio, the Media3 service, the satellite sync, hand-off.

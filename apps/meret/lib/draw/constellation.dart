@@ -3,6 +3,22 @@ import 'package:flutter/material.dart';
 import '../core/bridge.dart';
 import '../theme/tokens.dart';
 
+class NoTrailStrip extends StatelessWidget {
+  const NoTrailStrip({super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    child: Row(children: [
+      Container(width: 9, height: 9, decoration: const BoxDecoration(shape: BoxShape.circle, color: Tok.gold)),
+      const SizedBox(width: 8),
+      Text('Front', style: Tok.body.copyWith(color: Tok.gold)),
+      const SizedBox(width: 20),
+      const Expanded(child: Text('no trail yet · open anything to start one', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+    ]),
+  );
+}
+
 /// The trail strip: a star per stop, a line per thread. The current branch
 /// runs along the main line in gold; other branches sit above and below in
 /// grey; forks are ringed; peeks are left out (plates 01, 06).

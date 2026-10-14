@@ -7,6 +7,7 @@ import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../draw/constellation.dart';
 import '../now/now_pane.dart';
+import '../panes/front_pane.dart';
 import '../panes/pane.dart';
 import '../panes/table_pane.dart';
 import '../theme/tokens.dart';
@@ -34,18 +35,40 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   NowDto? _now;
   StatusDto? _status;
   TrailDto? _trail;
-  String _tableQuery = '';
-  int _visibleEnd = 5;
+  final _panes = <_PaneSpec>[const _PaneSpec(kind: 'FRONT', title: 'Front')];
+  int _visibleEnd = 1;
+  int _navigationVersion = 0;
 
   @override
   void initState() {
     super.initState();
     _nowSub = widget.core.now().listen((n) {
+      if (!mounted) return;
       _clock.anchor(n.anchor);
       setState(() => _now = n);
     });
-    _statusSub = widget.core.status().listen((s) => setState(() => _status = s));
-    widget.core.trail().then((t) => setState(() => _trail = t));
+    _statusSub = widget.core.status().listen((s) {
+      if (mounted) setState(() => _status = s);
+    });
+    final version = _navigationVersion;
+    widget.core.trail().then((trail) {
+      if (!mounted || version != _navigationVersion) return;
+      setState(() {
+        _trail = trail;
+        if (trail != null) {
+          for (final stop in trail.stops.where((stop) => stop.onPath)) {
+            final separator = stop.entity.indexOf(':');
+            final prefix = separator < 0 ? '' : stop.entity.substring(0, separator);
+            _panes.add(_PaneSpec(
+              kind: switch (prefix) { 'recording' => 'RECORDING', 'agent' => 'PERSON', 'release' => 'RELEASE', _ => prefix.toUpperCase() },
+              title: separator < 0 ? stop.entity : stop.entity.substring(separator + 1),
+              via: stop.via,
+            ));
+          }
+          _visibleEnd = _panes.length;
+        }
+      });
+    });
   }
 
   @override
@@ -61,30 +84,64 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   void _toggle() => widget.core.transport(_clock.playing ? const TransportDto.pause() : const TransportDto.resume());
 
   void _move(int by) {
-    setState(() => _visibleEnd = (_visibleEnd + by).clamp(1, _panes().length));
+    setState(() => _visibleEnd = (_visibleEnd + by).clamp(1, _panes.length));
     _slide.value = by > 0 ? 1 : -1;
     _slide.animateTo(0, curve: Curves.easeOutCubic);
   }
 
-  List<Widget> _panes() => [
-        const Pane(kind: 'CUE · CHRONO TRIGGER', title: 'Corridors of Time'),
-        const Pane(kind: 'PERSON · COMPOSER, ARRANGER', title: 'Yasunori Mitsuda', via: 'composed by', source: 'MusicBrainz · VGMdb'),
-        const Pane(kind: 'SCORE · XENOGEARS · 1998', title: 'Xenogears Original Soundtrack', via: 'scored', source: 'MusicBrainz'),
-        const Pane(kind: 'PERSON · VOCALIST', title: 'Joanne Hogg', via: 'sung by', source: 'VGMdb · Discogs'),
-        const Pane(kind: 'GROUP · NOT OWNED', title: 'Iona', via: 'member of', source: 'MusicBrainz · Discogs'),
-        Pane(
-          kind: 'TABLE · EVERYTHING YOU OWN, STREAM OR WANT',
-          title: _tableQuery.isEmpty ? 'Everything' : _tableQuery,
-          body: TablePane(
-            core: widget.core,
-            query: _tableQuery,
-            libraryVersion: _status?.libraryVersion,
-            tracks: _status?.tracks,
-            scanning: _status?.jobs.any((job) => job.verb == 'scanning' || job.verb == 'reading tags') ?? false,
-            onQuery: (q) => setState(() => _tableQuery = q),
-          ),
-        ),
-      ];
+  void _showFront() {
+    _navigationVersion++;
+    _slide.stop();
+    _slide.value = 0;
+    setState(() => _visibleEnd = 1);
+  }
+
+  void _openTable(String query, int from) {
+    _navigationVersion++;
+    setState(() {
+      _panes.removeRange(from + 1, _panes.length);
+      _panes.add(_PaneSpec(kind: 'TABLE', title: query.isEmpty ? 'Everything' : query, query: query));
+      _visibleEnd = _panes.length;
+      if (from == 0) _trail = null;
+    });
+    _slide.value = 1;
+    _slide.animateTo(0, curve: Curves.easeOutCubic);
+  }
+
+  Future<void> _submit(QueryDto query) async {
+    if (query.kind == QueryKind.command) {
+      await widget.core.runCommand(query.canonical);
+    } else if (query.kind == QueryKind.search) {
+      _openTable(query.canonical, 0);
+    }
+    if (mounted) _queryFocus.unfocus();
+  }
+
+  Widget _pane(_PaneSpec spec, int index) {
+    if (index == 0) {
+      return FrontPane(
+        key: const ValueKey('front'),
+        core: widget.core,
+        libraryVersion: _status?.libraryVersion,
+        jobs: _status?.jobs ?? const [],
+        onQuery: (query) => _openTable(query, 0),
+      );
+    }
+    return Pane(
+      key: ValueKey('pane-$index'),
+      kind: spec.kind,
+      title: spec.title,
+      via: spec.via,
+      body: spec.query == null ? null : TablePane(
+        core: widget.core,
+        query: spec.query!,
+        libraryVersion: _status?.libraryVersion,
+        tracks: _status?.tracks,
+        scanning: _status?.jobs.any((job) => job.verb == 'scanning' || job.verb == 'reading tags') ?? false,
+        onQuery: (query) => setState(() => _panes[index] = _PaneSpec(kind: 'TABLE', title: query.isEmpty ? 'Everything' : query, query: query)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,12 +151,16 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         SingleActivator(LogicalKeyboardKey.space): _Toggle(),
         SingleActivator(LogicalKeyboardKey.bracketLeft): _Move(-1),
         SingleActivator(LogicalKeyboardKey.bracketRight): _Move(1),
+        SingleActivator(LogicalKeyboardKey.digit1, meta: true): _Front(),
+        SingleActivator(LogicalKeyboardKey.keyL, meta: true): _Table(),
       },
       child: Actions(
         actions: {
           _Focus: CallbackAction<_Focus>(onInvoke: (_) => _queryFocus.requestFocus()),
           _Toggle: CallbackAction<_Toggle>(onInvoke: (_) => _toggle()),
           _Move: CallbackAction<_Move>(onInvoke: (i) => _move(i.by)),
+          _Front: CallbackAction<_Front>(onInvoke: (_) => _showFront()),
+          _Table: CallbackAction<_Table>(onInvoke: (_) => _openTable('', _visibleEnd - 1)),
         },
         child: Focus(
           autofocus: true,
@@ -107,15 +168,16 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
             color: Tok.void_,
             child: LayoutBuilder(builder: (context, box) {
               final wc = WidthClass.of(box.maxWidth);
-              final panes = _panes().take(_visibleEnd).toList();
+              final panes = [for (var i = 0; i < _visibleEnd; i++) _pane(_panes[i], i)];
               final row = PaneRow(slide: _slide, visible: wc.panes.clamp(1, panes.length), children: panes);
               return Column(children: [
-                QueryLine(core: widget.core, focus: _queryFocus),
-                if (_trail case final t?)
-                  SizedBox(
-                    height: wc == WidthClass.phone ? 44 : 64,
-                    child: CustomPaint(painter: ConstellationPainter(t), size: Size.infinite),
-                  ),
+                QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit),
+                SizedBox(
+                  height: wc == WidthClass.phone ? 44 : 64,
+                  child: _trail == null
+                      ? const NoTrailStrip()
+                      : CustomPaint(painter: ConstellationPainter(_trail!), size: Size.infinite),
+                ),
                 Expanded(
                   child: Row(children: [
                     Expanded(child: row),
@@ -125,7 +187,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 ),
                 if (!wc.pinnedNow) _NowBar(now: _now, clock: _clock, onToggle: _toggle),
                 if (wc != WidthClass.phone)
-                  StatusLine(status: _status, keys: const [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play')]),
+                  StatusLine(status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
               ]);
             }),
           ),
@@ -133,6 +195,22 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       ),
     );
   }
+}
+
+class _PaneSpec {
+  const _PaneSpec({required this.kind, required this.title, this.via, this.query});
+  final String kind;
+  final String title;
+  final String? via;
+  final String? query;
+}
+
+class _Front extends Intent {
+  const _Front();
+}
+
+class _Table extends Intent {
+  const _Table();
 }
 
 class _Focus extends Intent {

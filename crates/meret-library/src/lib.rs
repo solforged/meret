@@ -14,6 +14,7 @@
 //! A root that isn't mounted is marked offline. Nothing on it is deleted.
 
 pub mod diff;
+pub mod idiom;
 pub mod ingest;
 pub mod tags;
 pub mod walk;

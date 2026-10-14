@@ -18,6 +18,8 @@ abstract interface class CoreBridge {
   Stream<NowDto> now();
   Stream<StatusDto> status();
   Future<TrailDto?> trail();
+  Future<FrontDto> front();
+  Future<void> runCommand(String input);
   QueryDto parse(String input);
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
   Future<void> transport(TransportDto cmd);
@@ -33,6 +35,10 @@ class RustCore implements CoreBridge {
   Stream<StatusDto> status() => rust.watchStatus();
   @override
   Future<TrailDto?> trail() => rust.trail();
+  @override
+  Future<FrontDto> front() => rust.front();
+  @override
+  Future<void> runCommand(String input) => rust.runCommand(input: input);
   @override
   QueryDto parse(String input) => rust.parseQuery(input: input);
   @override
@@ -52,6 +58,16 @@ class RustCore implements CoreBridge {
 
 /// The plates' Tuesday evening, as data.
 class FakeCore implements CoreBridge {
+  FakeCore();
+
+  FakeCore.empty() : _empty = true {
+    _state = const NowDto(title: '', subtitle: '', path: []);
+  }
+
+  bool _empty = false;
+  String _root = '/Music';
+  BigInt _libraryVersion = BigInt.one;
+  final _statuses = StreamController<StatusDto>.broadcast();
   final _now = StreamController<NowDto>.broadcast();
   NowDto _state = NowDto(
     title: 'Small Two of Pieces ~Broken Pieces~',
@@ -73,22 +89,84 @@ class FakeCore implements CoreBridge {
   }
 
   @override
-  Stream<StatusDto> status() => Stream.value(StatusDto(
-        sources: const [
+  Stream<StatusDto> status() async* {
+    yield _status;
+    yield* _statuses.stream;
+  }
+
+  StatusDto get _status => StatusDto(
+        sources: _empty ? const [SourceDto(name: 'This Mac', detail: '0', ok: true)] : const [
           SourceDto(name: 'This Mac', detail: '48,210', ok: true),
           SourceDto(name: 'Music Assistant', detail: '6 providers', ok: true),
           SourceDto(name: 'Spotify', detail: 'Connect', ok: true),
           SourceDto(name: 'Roon', detail: '1 of 2 zones', ok: false),
         ],
-        jobs: [JobDto(verb: 'analysing', done: BigInt.from(1204), total: BigInt.from(3880))],
-        guessed: BigInt.from(312),
-        newLeads: BigInt.from(14),
-        tracks: BigInt.from(48210),
-        libraryVersion: BigInt.one,
-      ));
+        jobs: _empty ? [] : [JobDto(verb: 'analysing', done: BigInt.from(1204), total: BigInt.from(3880))],
+        guessed: _empty ? BigInt.zero : BigInt.from(312),
+        newLeads: _empty ? BigInt.zero : BigInt.from(14),
+        tracks: BigInt.from(_total),
+        libraryVersion: _libraryVersion,
+      );
+
+  int get _total => _empty ? 0 : 48210;
 
   @override
-  Future<TrailDto?> trail() async => const TrailDto(
+  Future<FrontDto> front() async {
+    if (_empty) {
+      return FrontDto(tracks: BigInt.zero, releases: BigInt.zero, idioms: const [], formats: const [], addedLately: const [], needsYou: const [], roots: const []);
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return FrontDto(
+      tracks: BigInt.from(48210),
+      releases: BigInt.from(8142),
+      idioms: [
+        for (final (label, releases, tracks, idiom) in const [
+          ('Albums', 2104, 25210, 'album'),
+          ('Songs', 3880, 3880, 'song'),
+          ('Works', 1204, 9310, 'work'),
+          ('Sessions', 412, 4110, 'session'),
+          ('Scores', 212, 1840, 'score'),
+          ('Sets', 318, 2420, 'set'),
+          ('Spoken', 12, 1440, 'spoken'),
+        ])
+          IdiomLineDto(label: label, releases: BigInt.from(releases), tracks: BigInt.from(tracks), query: 'idiom:$idiom'),
+      ],
+      formats: [
+        for (final (label, count, note, query) in const [
+          ('FLAC 16/44.1', 31020, '', 'format:flac -format:hires'),
+          ('Lossy', 8128, 'MP3, AAC, Ogg', 'format:lossy'),
+          ('Hi-res, 24 bit', 6812, '', 'format:hires'),
+          ('Native chiptune', 1840, 'SPC, NSF, VGM', 'format:chiptune'),
+          ('DSD', 410, '', 'format:dsd'),
+        ])
+          FrontLineDto(label: label, count: BigInt.from(count), note: note, query: query),
+      ],
+      addedLately: [
+        RecentDto(title: 'Celeste', artist: 'Lena Raine', year: 2018, tracks: 21, addedMs: PlatformInt64Util.from(now - 2 * 86400000), query: 'release:"Celeste"'),
+        RecentDto(title: 'Beethoven 5 & 7', artist: 'Kleiber', year: 1976, tracks: 8, addedMs: PlatformInt64Util.from(now - 86400000), query: 'release:"Beethoven 5 & 7"'),
+        RecentDto(title: 'Night Signals · 41', tracks: 1, addedMs: PlatformInt64Util.from(now - 3 * 86400000), query: 'release:"Night Signals · 41"'),
+      ],
+      needsYou: [
+        FrontLineDto(label: 'Tracks with a guessed identity', count: BigInt.from(312), note: 'Mostly game rips; 41 could go to MusicBrainz with your tags and VGMdb’s list'),
+        FrontLineDto(label: 'Albums with two editions', count: BigInt.from(18), note: 'Pick which one plays by default'),
+      ],
+      roots: [RootDto(id: PlatformInt64Util.from(1), path: _root, online: true)],
+    );
+  }
+
+  @override
+  Future<void> runCommand(String input) async {
+    final command = input.trim();
+    final verb = command.split(RegExp(r'\s+')).first.toLowerCase();
+    if (verb == 'play') {
+      await playResults(command.substring(4).trim(), 0);
+      return;
+    }
+    throw "$verb isn't built yet";
+  }
+
+  @override
+  Future<TrailDto?> trail() async => _empty ? null : const TrailDto(
         current: 4,
         stops: [
           StopDto(index: 0, entity: 'recording:Corridors of Time', onPath: true, isFork: false, isPeek: false),
@@ -103,7 +181,11 @@ class FakeCore implements CoreBridge {
       );
 
   @override
-  QueryDto parse(String input) => QueryDto(kind: QueryKind.search, canonical: input.trim());
+  QueryDto parse(String input) {
+    final canonical = input.trim();
+    final verb = canonical.split(RegExp(r'\s+')).first.toLowerCase();
+    return QueryDto(kind: const ['play', 'queue', 'want', 'crate'].contains(verb) ? QueryKind.command : QueryKind.search, canonical: canonical);
+  }
 
   @override
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins) async {
@@ -113,14 +195,20 @@ class FakeCore implements CoreBridge {
   }
 
   @override
-  Future<int> addRoot(String path) async => 1;
+  Future<int> addRoot(String path) async {
+    _empty = false;
+    _root = path;
+    _libraryVersion += BigInt.one;
+    _statuses.add(_status);
+    return 1;
+  }
 
   @override
   Future<RowsDto> rows(String query, int offset, int limit) async {
-    final start = offset.clamp(0, 48210);
-    final count = limit.clamp(0, 48210 - start);
+    final start = offset.clamp(0, _total);
+    final count = limit.clamp(0, _total - start);
     return RowsDto(
-      total: BigInt.from(48210),
+      total: BigInt.from(_total),
       offset: BigInt.from(start),
       rows: List.generate(count, (i) => _row(start + i)),
     );
@@ -153,7 +241,7 @@ class FakeCore implements CoreBridge {
 
   @override
   Future<void> playResults(String query, int index) async {
-    if (index < 0 || index >= 48210) throw RangeError.index(index, null, 'index', null, 48210);
+    if (index < 0 || index >= _total) throw RangeError.index(index, null, 'index', null, _total);
     final row = _row(index);
     _state = NowDto(
       title: row.title,
@@ -172,7 +260,8 @@ class FakeCore implements CoreBridge {
 
   @override
   Future<void> transport(TransportDto cmd) async {
-    final a = _state.anchor!;
+    final a = _state.anchor;
+    if (a == null) return;
     final pos = a.positionMs;
     _state = switch (cmd) {
       TransportDto_Pause() => _with(AnchorDto(item: a.item, positionMs: pos, rate: 0)),
