@@ -2,10 +2,39 @@
 
 use flutter_rust_bridge::frb;
 pub use meret_api::{
-    AnchorDto, ColumnDto, FidelityDto, FrontDto, FrontLineDto, HistogramDto, IdiomLineDto, JobDto, NowDto, QueryDto,
-    QueryKind, RecentDto, RootDto, RowsDto, SourceDto, StageDto, StatusDto, StopDto, TrackRowDto, TrailDto,
-    TransportDto,
+    AnchorDto, ColumnDto, FidelityDto, FrontDto, FrontLineDto, HistogramDto, HitDto, HitKind, IdiomLineDto, JobDto,
+    NowDto, QueryDto, QueryKind, RecentDto, RootDto, RowsDto, SearchDto, SourceDto, StageDto, StatusDto, StopDto,
+    TrackRowDto, TrailDto, TransportDto,
 };
+
+#[frb(mirror(HitKind))]
+pub enum _HitKind {
+    Person,
+    Release,
+    Track,
+}
+
+#[frb(mirror(HitDto))]
+pub struct _HitDto {
+    pub kind: HitKind,
+    pub id: i64,
+    pub title: String,
+    pub detail: String,
+    pub query: String,
+    pub index: Option<u64>,
+}
+
+#[frb(mirror(SearchDto))]
+pub struct _SearchDto {
+    pub query: String,
+    pub tracks: u64,
+    pub people: Vec<HitDto>,
+    pub people_total: u64,
+    pub releases: Vec<HitDto>,
+    pub releases_total: u64,
+    pub track_hits: Vec<HitDto>,
+    pub track_hits_total: u64,
+}
 
 #[frb(mirror(QueryKind))]
 pub enum _QueryKind {

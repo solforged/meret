@@ -78,6 +78,17 @@ pub fn play_results(query: String, index: u64) -> Result<(), String> {
     api()?.play_results(&query, index)
 }
 
+/// The query line's hits as you type a search: people, releases and tracks.
+/// Errors when the input isn't a search.
+pub fn search(input: String) -> Result<SearchDto, String> {
+    api()?.search(&input)
+}
+
+/// Ends the current trail and roots a new one at the search `query`.
+pub fn start_search_trail(query: String) -> Result<TrailDto, String> {
+    Ok(api()?.start_search_trail(&query))
+}
+
 pub fn trail() -> Result<Option<TrailDto>, String> {
     Ok(api()?.trail())
 }

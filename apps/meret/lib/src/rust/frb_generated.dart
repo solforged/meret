@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1184028671;
+  int get rustContentHash => 1157380497;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -111,10 +111,14 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiCoreRunCommand({required String input});
 
+  Future<SearchDto> crateApiCoreSearch({required String input});
+
   Future<void> crateApiCoreStartCore({
     required String dataDir,
     required bool nullOutput,
   });
+
+  Future<TrailDto> crateApiCoreStartSearchTrail({required String query});
 
   Future<TrailDto?> crateApiCoreTrail();
 
@@ -377,6 +381,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "run_command", argNames: ["input"]);
 
   @override
+  Future<SearchDto> crateApiCoreSearch({required String input}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(input, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_search_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiCoreSearchConstMeta,
+        argValues: [input],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreSearchConstMeta =>
+      const TaskConstMeta(debugName: "search", argNames: ["input"]);
+
+  @override
   Future<void> crateApiCoreStartCore({
     required String dataDir,
     required bool nullOutput,
@@ -390,7 +422,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -411,6 +443,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<TrailDto> crateApiCoreStartSearchTrail({required String query}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(query, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_trail_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiCoreStartSearchTrailConstMeta,
+        argValues: [query],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreStartSearchTrailConstMeta =>
+      const TaskConstMeta(debugName: "start_search_trail", argNames: ["query"]);
+
+  @override
   Future<TrailDto?> crateApiCoreTrail() {
     return handler.executeNormal(
       NormalTask(
@@ -419,7 +479,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 12,
             port: port_,
           );
         },
@@ -447,7 +507,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 13,
             port: port_,
           );
         },
@@ -477,7 +537,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 12,
+              funcId: 14,
               port: port_,
             );
           },
@@ -509,7 +569,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 13,
+              funcId: 15,
               port: port_,
             );
           },
@@ -678,6 +738,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HitDto dco_decode_hit_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return HitDto(
+      kind: dco_decode_hit_kind(arr[0]),
+      id: dco_decode_i_64(arr[1]),
+      title: dco_decode_String(arr[2]),
+      detail: dco_decode_String(arr[3]),
+      query: dco_decode_String(arr[4]),
+      index: dco_decode_opt_box_autoadd_u_64(arr[5]),
+    );
+  }
+
+  @protected
+  HitKind dco_decode_hit_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return HitKind.values[raw as int];
+  }
+
+  @protected
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -720,6 +802,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<FrontLineDto> dco_decode_list_front_line_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_front_line_dto).toList();
+  }
+
+  @protected
+  List<HitDto> dco_decode_list_hit_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_hit_dto).toList();
   }
 
   @protected
@@ -915,6 +1003,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       total: dco_decode_u_64(arr[0]),
       offset: dco_decode_u_64(arr[1]),
       rows: dco_decode_list_track_row_dto(arr[2]),
+    );
+  }
+
+  @protected
+  SearchDto dco_decode_search_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return SearchDto(
+      query: dco_decode_String(arr[0]),
+      tracks: dco_decode_u_64(arr[1]),
+      people: dco_decode_list_hit_dto(arr[2]),
+      peopleTotal: dco_decode_u_64(arr[3]),
+      releases: dco_decode_list_hit_dto(arr[4]),
+      releasesTotal: dco_decode_u_64(arr[5]),
+      trackHits: dco_decode_list_hit_dto(arr[6]),
+      trackHitsTotal: dco_decode_u_64(arr[7]),
     );
   }
 
@@ -1228,6 +1334,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HitDto sse_decode_hit_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_kind = sse_decode_hit_kind(deserializer);
+    var var_id = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_detail = sse_decode_String(deserializer);
+    var var_query = sse_decode_String(deserializer);
+    var var_index = sse_decode_opt_box_autoadd_u_64(deserializer);
+    return HitDto(
+      kind: var_kind,
+      id: var_id,
+      title: var_title,
+      detail: var_detail,
+      query: var_query,
+      index: var_index,
+    );
+  }
+
+  @protected
+  HitKind sse_decode_hit_kind(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return HitKind.values[inner];
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
@@ -1273,6 +1405,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <FrontLineDto>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_front_line_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<HitDto> sse_decode_list_hit_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <HitDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_hit_dto(deserializer));
     }
     return ans_;
   }
@@ -1566,6 +1710,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_offset = sse_decode_u_64(deserializer);
     var var_rows = sse_decode_list_track_row_dto(deserializer);
     return RowsDto(total: var_total, offset: var_offset, rows: var_rows);
+  }
+
+  @protected
+  SearchDto sse_decode_search_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_query = sse_decode_String(deserializer);
+    var var_tracks = sse_decode_u_64(deserializer);
+    var var_people = sse_decode_list_hit_dto(deserializer);
+    var var_peopleTotal = sse_decode_u_64(deserializer);
+    var var_releases = sse_decode_list_hit_dto(deserializer);
+    var var_releasesTotal = sse_decode_u_64(deserializer);
+    var var_trackHits = sse_decode_list_hit_dto(deserializer);
+    var var_trackHitsTotal = sse_decode_u_64(deserializer);
+    return SearchDto(
+      query: var_query,
+      tracks: var_tracks,
+      people: var_people,
+      peopleTotal: var_peopleTotal,
+      releases: var_releases,
+      releasesTotal: var_releasesTotal,
+      trackHits: var_trackHits,
+      trackHitsTotal: var_trackHitsTotal,
+    );
   }
 
   @protected
@@ -1888,6 +2055,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_hit_dto(HitDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_hit_kind(self.kind, serializer);
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.detail, serializer);
+    sse_encode_String(self.query, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_hit_kind(HitKind self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
@@ -1925,6 +2109,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_front_line_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_hit_dto(List<HitDto> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_hit_dto(item, serializer);
     }
   }
 
@@ -2184,6 +2377,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.total, serializer);
     sse_encode_u_64(self.offset, serializer);
     sse_encode_list_track_row_dto(self.rows, serializer);
+  }
+
+  @protected
+  void sse_encode_search_dto(SearchDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.query, serializer);
+    sse_encode_u_64(self.tracks, serializer);
+    sse_encode_list_hit_dto(self.people, serializer);
+    sse_encode_u_64(self.peopleTotal, serializer);
+    sse_encode_list_hit_dto(self.releases, serializer);
+    sse_encode_u_64(self.releasesTotal, serializer);
+    sse_encode_list_hit_dto(self.trackHits, serializer);
+    sse_encode_u_64(self.trackHitsTotal, serializer);
   }
 
   @protected

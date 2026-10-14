@@ -133,6 +133,41 @@ pub fn front(api: &Api, rt: &tokio::runtime::Runtime) -> Result<()> {
     Ok(())
 }
 
+pub fn search(api: &Api, rt: &tokio::runtime::Runtime, input: &str) -> Result<()> {
+    settle(api, rt);
+    // As typed: every prefix, the way the query line asks.
+    let ends: Vec<usize> = input.char_indices().map(|(i, c)| i + c.len_utf8()).collect();
+    let mut last = None;
+    for end in ends {
+        let typed = &input[..end];
+        let t = Instant::now();
+        let found = api.search(typed);
+        let took = t.elapsed();
+        match &found {
+            Ok(s) => println!(
+                "{typed:<24} {took:>10.2?}  {} people, {} releases, {} tracks",
+                s.people_total, s.releases_total, s.tracks
+            ),
+            Err(e) => println!("{typed:<24} {took:>10.2?}  {e}"),
+        }
+        last = Some(found);
+    }
+    let s = last.ok_or_else(|| anyhow!("nothing to search"))?.map_err(|e| anyhow!(e))?;
+    for (label, total, hits) in [
+        ("People", s.people_total, &s.people),
+        ("Releases", s.releases_total, &s.releases),
+        ("Tracks", s.track_hits_total, &s.track_hits),
+    ] {
+        println!("{label} · {total}");
+        for h in hits {
+            let index = h.index.map(|i| format!(" @{i}")).unwrap_or_default();
+            println!("  {:<40.40} {:<48.48} → {}{index}", h.title, h.detail, h.query);
+        }
+    }
+    println!("All {} tracks → {}", s.tracks, s.query);
+    Ok(())
+}
+
 pub struct PlayOptions {
     pub from: u64,
     /// Stop once this many items have ended.

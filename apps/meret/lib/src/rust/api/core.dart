@@ -68,6 +68,15 @@ Future<RowsDto> rows({
 Future<void> playResults({required String query, required BigInt index}) =>
     RustLib.instance.api.crateApiCorePlayResults(query: query, index: index);
 
+/// The query line's hits as you type a search: people, releases and tracks.
+/// Errors when the input isn't a search.
+Future<SearchDto> search({required String input}) =>
+    RustLib.instance.api.crateApiCoreSearch(input: input);
+
+/// Ends the current trail and roots a new one at the search `query`.
+Future<TrailDto> startSearchTrail({required String query}) =>
+    RustLib.instance.api.crateApiCoreStartSearchTrail(query: query);
+
 Future<TrailDto?> trail() => RustLib.instance.api.crateApiCoreTrail();
 
 /// Now, pushed whenever it changes: a new item, a new anchor, a new path.
