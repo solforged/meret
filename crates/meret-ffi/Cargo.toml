@@ -1,0 +1,20 @@
+[package]
+name = "meret-ffi"
+description = "flutter_rust_bridge bindings over meret-api."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+meret-api.workspace = true
+meret-core.workspace = true
+meret-model.workspace = true
+flutter_rust_bridge.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(frb_expand)"] }

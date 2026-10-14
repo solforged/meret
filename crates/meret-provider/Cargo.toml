@@ -1,0 +1,19 @@
+[package]
+name = "meret-provider"
+description = "Provider capability traits, the registry, claims, the HTTP context."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+meret-model.workspace = true
+meret-player.workspace = true
+meret-jobs.workspace = true
+async-trait.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }

@@ -1,0 +1,25 @@
+[package]
+name = "meret-core"
+description = "Composes the runtime: store, jobs, engine, player, providers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+meret-model.workspace = true
+meret-query.workspace = true
+meret-store.workspace = true
+meret-library.workspace = true
+meret-graph.workspace = true
+meret-jobs.workspace = true
+meret-engine.workspace = true
+meret-player.workspace = true
+meret-provider.workspace = true
+provider-musicbrainz.workspace = true
+provider-music-assistant.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true

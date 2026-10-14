@@ -1,0 +1,82 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "providers/*"]
+# meret-ffi needs flutter_rust_bridge's generated glue, which the Flutter build creates.
+default-members = [
+    "crates/meret-model",
+    "crates/meret-query",
+    "crates/meret-store",
+    "crates/meret-library",
+    "crates/meret-match",
+    "crates/meret-analysis",
+    "crates/meret-graph",
+    "crates/meret-sky",
+    "crates/meret-jobs",
+    "crates/meret-engine",
+    "crates/meret-player",
+    "crates/meret-provider",
+    "crates/meret-core",
+    "crates/meret-api",
+    "crates/meret-cli",
+    "providers/musicbrainz",
+    "providers/music-assistant",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "UNLICENSED"
+publish = false
+
+[workspace.dependencies]
+meret-model = { path = "crates/meret-model" }
+meret-query = { path = "crates/meret-query" }
+meret-store = { path = "crates/meret-store" }
+meret-library = { path = "crates/meret-library" }
+meret-match = { path = "crates/meret-match" }
+meret-analysis = { path = "crates/meret-analysis" }
+meret-graph = { path = "crates/meret-graph" }
+meret-sky = { path = "crates/meret-sky" }
+meret-jobs = { path = "crates/meret-jobs" }
+meret-engine = { path = "crates/meret-engine" }
+meret-player = { path = "crates/meret-player" }
+meret-provider = { path = "crates/meret-provider" }
+meret-core = { path = "crates/meret-core" }
+meret-api = { path = "crates/meret-api" }
+provider-musicbrainz = { path = "providers/musicbrainz" }
+provider-music-assistant = { path = "providers/music-assistant" }
+
+anyhow = "1.0"
+async-trait = "0.1"
+clap = { version = "4.6", features = ["derive"] }
+crossbeam-channel = "0.5"
+ebur128 = "0.1"
+flutter_rust_bridge = "=2.13.0"
+ignore = "0.4"
+lofty = "0.25"
+parking_lot = "0.12"
+rayon = "1.12"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+roaring = "0.11"
+rtrb = "0.4"
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+symphonia = { version = "0.6", features = ["all"] }
+thiserror = "2.0"
+tokio = { version = "1.53", features = ["rt-multi-thread", "sync", "time", "macros"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ulid = { version = "3.0", features = ["serde"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+debug = "line-tables-only"
+
+# The audio path stays fast even in debug builds, so underruns in dev mean something.
+[profile.dev.package.meret-engine]
+opt-level = 2
+[profile.dev.package.symphonia]
+opt-level = 3

@@ -1,0 +1,5 @@
+# Pinned (not "stable"): the Flutter native-assets hook refuses floating
+# channels. crates/meret-ffi/rust-toolchain.toml is a symlink to this file.
+[toolchain]
+channel = "1.99.0"
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"]

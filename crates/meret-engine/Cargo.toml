@@ -1,0 +1,25 @@
+[package]
+name = "meret-engine"
+description = "Realtime audio: decode, gapless joins, loops, DSP, output, the playback clock."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+meret-model.workspace = true
+crossbeam-channel.workspace = true
+rtrb.workspace = true
+symphonia = { workspace = true, optional = true }
+thiserror.workspace = true
+tracing.workspace = true
+
+[features]
+default = ["symphonia"]
+symphonia = ["dep:symphonia"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-audio = { version = "0.3.2", default-features = false, features = ["std", "AudioHardware", "HostTime", "objc2-core-audio-types"] }
+objc2-core-audio-types = { version = "0.3.2", default-features = false, features = ["std", "CoreAudioBaseTypes"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFString"] }
