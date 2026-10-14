@@ -12,3 +12,6 @@ meret-model.workspace = true
 
 serde.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+parking_lot.workspace = true

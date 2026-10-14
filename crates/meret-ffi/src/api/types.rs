@@ -2,8 +2,8 @@
 
 use flutter_rust_bridge::frb;
 pub use meret_api::{
-    AnchorDto, ColumnDto, FidelityDto, HistogramDto, JobDto, NowDto, QueryDto, QueryKind, SourceDto, StageDto,
-    StatusDto, StopDto, TrailDto, TransportDto,
+    AnchorDto, ColumnDto, FidelityDto, HistogramDto, JobDto, NowDto, QueryDto, QueryKind, RowsDto, SourceDto,
+    StageDto, StatusDto, StopDto, TrackRowDto, TrailDto, TransportDto,
 };
 
 #[frb(mirror(QueryKind))]
@@ -99,6 +99,30 @@ pub struct _StatusDto {
     pub jobs: Vec<JobDto>,
     pub guessed: u64,
     pub new_leads: u64,
+    pub tracks: u64,
+    pub library_version: u64,
+}
+
+#[frb(mirror(TrackRowDto))]
+pub struct _TrackRowDto {
+    pub track_id: i64,
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: String,
+    pub album_artist: Option<String>,
+    pub disc: u32,
+    pub number: u32,
+    pub year: Option<u16>,
+    pub length_ms: Option<u64>,
+    pub format: String,
+    pub path: Option<String>,
+}
+
+#[frb(mirror(RowsDto))]
+pub struct _RowsDto {
+    pub total: u64,
+    pub offset: u64,
+    pub rows: Vec<TrackRowDto>,
 }
 
 #[frb(mirror(StopDto))]

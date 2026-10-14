@@ -150,6 +150,30 @@ class QueryDto {
 
 enum QueryKind { search, command, invalid }
 
+class RowsDto {
+  final BigInt total;
+  final BigInt offset;
+  final List<TrackRowDto> rows;
+
+  const RowsDto({
+    required this.total,
+    required this.offset,
+    required this.rows,
+  });
+
+  @override
+  int get hashCode => total.hashCode ^ offset.hashCode ^ rows.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RowsDto &&
+          runtimeType == other.runtimeType &&
+          total == other.total &&
+          offset == other.offset &&
+          rows == other.rows;
+}
+
 class SourceDto {
   final String name;
   final String detail;
@@ -199,17 +223,26 @@ class StatusDto {
   final List<JobDto> jobs;
   final BigInt guessed;
   final BigInt newLeads;
+  final BigInt tracks;
+  final BigInt libraryVersion;
 
   const StatusDto({
     required this.sources,
     required this.jobs,
     required this.guessed,
     required this.newLeads,
+    required this.tracks,
+    required this.libraryVersion,
   });
 
   @override
   int get hashCode =>
-      sources.hashCode ^ jobs.hashCode ^ guessed.hashCode ^ newLeads.hashCode;
+      sources.hashCode ^
+      jobs.hashCode ^
+      guessed.hashCode ^
+      newLeads.hashCode ^
+      tracks.hashCode ^
+      libraryVersion.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -219,7 +252,9 @@ class StatusDto {
           sources == other.sources &&
           jobs == other.jobs &&
           guessed == other.guessed &&
-          newLeads == other.newLeads;
+          newLeads == other.newLeads &&
+          tracks == other.tracks &&
+          libraryVersion == other.libraryVersion;
 }
 
 class StopDto {
@@ -263,6 +298,65 @@ class StopDto {
           onPath == other.onPath &&
           isFork == other.isFork &&
           isPeek == other.isPeek;
+}
+
+class TrackRowDto {
+  final PlatformInt64 trackId;
+  final String title;
+  final String? artist;
+  final String album;
+  final String? albumArtist;
+  final int disc;
+  final int number;
+  final int? year;
+  final BigInt? lengthMs;
+  final String format;
+  final String? path;
+
+  const TrackRowDto({
+    required this.trackId,
+    required this.title,
+    this.artist,
+    required this.album,
+    this.albumArtist,
+    required this.disc,
+    required this.number,
+    this.year,
+    this.lengthMs,
+    required this.format,
+    this.path,
+  });
+
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      title.hashCode ^
+      artist.hashCode ^
+      album.hashCode ^
+      albumArtist.hashCode ^
+      disc.hashCode ^
+      number.hashCode ^
+      year.hashCode ^
+      lengthMs.hashCode ^
+      format.hashCode ^
+      path.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TrackRowDto &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          title == other.title &&
+          artist == other.artist &&
+          album == other.album &&
+          albumArtist == other.albumArtist &&
+          disc == other.disc &&
+          number == other.number &&
+          year == other.year &&
+          lengthMs == other.lengthMs &&
+          format == other.format &&
+          path == other.path;
 }
 
 class TrailDto {

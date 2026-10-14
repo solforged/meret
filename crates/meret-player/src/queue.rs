@@ -2,14 +2,19 @@
 //! albums and sessions shuffle as whole releases.
 
 use meret_model::idiom::{Idiom, ShufflePolicy};
-use meret_model::{RecordingId, ReleaseId, StopUid, WorkId};
+use meret_model::{RecordingId, ReleaseId, StopUid, TrackId, WorkId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct QueueItem {
     /// Unique within this queue; the engine's `ItemToken`.
     pub token: u64,
-    pub recording: RecordingId,
+    /// What the zone plays: `file:///…` for a local file, a provider's URI
+    /// otherwise.
+    pub uri: String,
+    /// None for a file played from outside the library.
+    pub track: Option<TrackId>,
+    pub recording: Option<RecordingId>,
     pub release: Option<ReleaseId>,
     /// For works: the parent work, so movements stay together.
     pub work: Option<WorkId>,
@@ -35,12 +40,33 @@ impl Queue {
         self.next_token
     }
 
+    /// Builds a replacement without changing the current items or cursor.
+    /// Reserves its tokens even if the replacement is never played.
+    pub fn successor(&mut self, mut items: Vec<QueueItem>) -> Self {
+        for item in &mut items {
+            self.next_token += 1;
+            item.token = self.next_token;
+        }
+        Self { items, cursor: 0, next_token: self.next_token }
+    }
+
+    /// Empties the queue. Tokens keep counting, so an engine event about an
+    /// item from before can never be mistaken for one queued after.
+    pub fn clear(&mut self) {
+        self.items.clear();
+        self.cursor = 0;
+    }
+
     pub fn current(&self) -> Option<&QueueItem> {
         self.items.get(self.cursor)
     }
 
     pub fn up_next(&self) -> &[QueueItem] {
         self.items.get(self.cursor + 1..).unwrap_or(&[])
+    }
+
+    pub fn position_of(&self, token: u64) -> Option<usize> {
+        self.items.iter().position(|i| i.token == token)
     }
 
     pub fn advance(&mut self) -> Option<&QueueItem> {
@@ -94,7 +120,9 @@ mod tests {
     fn item(rec: i64, release: i64, work: Option<i64>, idiom: Idiom) -> QueueItem {
         QueueItem {
             token: 0,
-            recording: RecordingId(rec),
+            uri: String::new(),
+            track: None,
+            recording: Some(RecordingId(rec)),
             release: Some(ReleaseId(release)),
             work: work.map(WorkId),
             idiom,
@@ -117,7 +145,7 @@ mod tests {
             let mut s = q.clone();
             s.shuffle(seed);
             let pos: Vec<usize> =
-                (1..=4).map(|m| s.items.iter().position(|i| i.recording == RecordingId(m)).unwrap()).collect();
+                (1..=4).map(|m| s.items.iter().position(|i| i.recording == Some(RecordingId(m))).unwrap()).collect();
             assert_eq!(pos, vec![pos[0], pos[0] + 1, pos[0] + 2, pos[0] + 3], "seed {seed}");
         }
     }

@@ -49,6 +49,7 @@ provider-music-assistant = { path = "providers/music-assistant" }
 
 anyhow = "1.0"
 async-trait = "0.1"
+blake3 = "1.8"
 clap = { version = "4.6", features = ["derive"] }
 crossbeam-channel = "0.5"
 ebur128 = "0.1"

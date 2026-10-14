@@ -62,6 +62,45 @@ impl Api {
         Ok(())
     }
 
+    /// Adds a music folder and scans it in the background. Progress and the
+    /// new track count arrive on the status stream.
+    pub fn add_root(&self, path: &str) -> Result<i64, String> {
+        self.core.add_root(Path::new(path)).map(|r| r.0).map_err(|e| e.to_string())
+    }
+
+    pub fn rescan(&self) {
+        self.core.rescan();
+    }
+
+    /// Rows `offset..offset + limit` of the table for `query`, in library
+    /// order. An empty query is everything.
+    pub fn rows(&self, query: &str, offset: u64, limit: u32) -> Result<RowsDto, String> {
+        let (total, rows) = self.core.rows(query, offset as usize, limit as usize).map_err(|e| e.to_string())?;
+        Ok(RowsDto { total: total as u64, offset, rows: rows.into_iter().map(TrackRowDto::from).collect() })
+    }
+
+    /// Replaces the queue with `query`'s result and plays from row `index`.
+    pub fn play_results(&self, query: &str, index: u64) -> Result<(), String> {
+        self.core.play_results(query, index as usize).map_err(|e| e.to_string())
+    }
+
+    /// Every engine event in order, for tools that check playback itself
+    /// (gapless joins, Started and Ended order). The UI uses Now instead.
+    pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<meret_engine::EngineEvent> {
+        self.core.events()
+    }
+
+    /// Resolves once every scan queued so far has finished and the table
+    /// shows its result.
+    pub fn scans_settled(&self) -> tokio::sync::oneshot::Receiver<()> {
+        self.core.scans_settled()
+    }
+
+    /// Each queued item's token and URI, in order.
+    pub fn queue(&self) -> Vec<(u64, String)> {
+        self.core.queue().into_iter().map(|i| (i.token, i.uri)).collect()
+    }
+
     pub fn now(&self) -> NowDto {
         NowDto::from(&*self.core.now().borrow())
     }

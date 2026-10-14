@@ -34,7 +34,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   NowDto? _now;
   StatusDto? _status;
   TrailDto? _trail;
-  String _tableQuery = 'last:30d';
+  String _tableQuery = '';
   int _visibleEnd = 5;
 
   @override
@@ -74,8 +74,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         const Pane(kind: 'GROUP · NOT OWNED', title: 'Iona', via: 'member of', source: 'MusicBrainz · Discogs'),
         Pane(
           kind: 'TABLE · EVERYTHING YOU OWN, STREAM OR WANT',
-          title: 'Played in the last 30 days',
-          body: TablePane(core: widget.core, query: _tableQuery, onQuery: (q) => setState(() => _tableQuery = q)),
+          title: _tableQuery.isEmpty ? 'Everything' : _tableQuery,
+          body: TablePane(
+            core: widget.core,
+            query: _tableQuery,
+            libraryVersion: _status?.libraryVersion,
+            tracks: _status?.tracks,
+            scanning: _status?.jobs.any((job) => job.verb == 'scanning' || job.verb == 'reading tags') ?? false,
+            onQuery: (q) => setState(() => _tableQuery = q),
+          ),
         ),
       ];
 

@@ -9,7 +9,11 @@ publish.workspace = true
 
 [dependencies]
 meret-model.workspace = true
+meret-store.workspace = true
+blake3.workspace = true
 ignore.workspace = true
 lofty.workspace = true
+rayon.workspace = true
+rusqlite.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

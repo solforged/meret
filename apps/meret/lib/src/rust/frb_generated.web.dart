@@ -55,6 +55,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TransportDto dco_decode_box_autoadd_transport_dto(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_u_16(dynamic raw);
+
+  @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
@@ -74,6 +77,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int dco_decode_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
   JobDto dco_decode_job_dto(dynamic raw);
@@ -100,6 +106,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<StopDto> dco_decode_list_stop_dto(dynamic raw);
 
   @protected
+  List<TrackRowDto> dco_decode_list_track_row_dto(dynamic raw);
+
+  @protected
   NowDto dco_decode_now_dto(dynamic raw);
 
   @protected
@@ -113,6 +122,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TrailDto? dco_decode_opt_box_autoadd_trail_dto(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_16(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
@@ -130,6 +142,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, int) dco_decode_record_u_32_u_32(dynamic raw);
 
   @protected
+  RowsDto dco_decode_rows_dto(dynamic raw);
+
+  @protected
   SourceDto dco_decode_source_dto(dynamic raw);
 
   @protected
@@ -142,10 +157,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StopDto dco_decode_stop_dto(dynamic raw);
 
   @protected
+  TrackRowDto dco_decode_track_row_dto(dynamic raw);
+
+  @protected
   TrailDto dco_decode_trail_dto(dynamic raw);
 
   @protected
   TransportDto dco_decode_transport_dto(dynamic raw);
+
+  @protected
+  int dco_decode_u_16(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -196,6 +217,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  int sse_decode_box_autoadd_u_16(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
@@ -215,6 +239,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
   JobDto sse_decode_job_dto(SseDeserializer deserializer);
@@ -243,6 +270,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<StopDto> sse_decode_list_stop_dto(SseDeserializer deserializer);
 
   @protected
+  List<TrackRowDto> sse_decode_list_track_row_dto(SseDeserializer deserializer);
+
+  @protected
   NowDto sse_decode_now_dto(SseDeserializer deserializer);
 
   @protected
@@ -262,6 +292,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TrailDto? sse_decode_opt_box_autoadd_trail_dto(SseDeserializer deserializer);
 
   @protected
+  int? sse_decode_opt_box_autoadd_u_16(SseDeserializer deserializer);
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
@@ -277,6 +310,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, int) sse_decode_record_u_32_u_32(SseDeserializer deserializer);
 
   @protected
+  RowsDto sse_decode_rows_dto(SseDeserializer deserializer);
+
+  @protected
   SourceDto sse_decode_source_dto(SseDeserializer deserializer);
 
   @protected
@@ -289,10 +325,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StopDto sse_decode_stop_dto(SseDeserializer deserializer);
 
   @protected
+  TrackRowDto sse_decode_track_row_dto(SseDeserializer deserializer);
+
+  @protected
   TrailDto sse_decode_trail_dto(SseDeserializer deserializer);
 
   @protected
   TransportDto sse_decode_transport_dto(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -358,6 +400,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_u_16(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
@@ -377,6 +422,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
   void sse_encode_job_dto(JobDto self, SseSerializer serializer);
@@ -415,6 +463,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_stop_dto(List<StopDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_track_row_dto(
+    List<TrackRowDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_now_dto(NowDto self, SseSerializer serializer);
 
   @protected
@@ -439,6 +493,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_u_16(int? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
@@ -454,6 +511,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_record_u_32_u_32((int, int) self, SseSerializer serializer);
 
   @protected
+  void sse_encode_rows_dto(RowsDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_source_dto(SourceDto self, SseSerializer serializer);
 
   @protected
@@ -466,10 +526,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_stop_dto(StopDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_track_row_dto(TrackRowDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_trail_dto(TrailDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_transport_dto(TransportDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
