@@ -9,8 +9,9 @@ import '../draw/constellation.dart';
 import '../now/now_pane.dart';
 import '../panes/front_pane.dart';
 import '../panes/pane.dart';
+import '../panes/person_pane.dart';
+import '../panes/release_pane.dart';
 import '../panes/search_pane.dart';
-import '../panes/table_pane.dart';
 import '../theme/tokens.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
@@ -36,10 +37,9 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   NowDto? _now;
   StatusDto? _status;
   TrailDto? _trail;
-  final _panes = <_PaneSpec>[const _PaneSpec(kind: 'FRONT', title: 'Front')];
-  int _visibleEnd = 1;
+  bool _frontOnly = true;
   int _navigationVersion = 0;
-  int _trailVersion = 0;
+  String? _navigationError;
 
   @override
   void initState() {
@@ -57,27 +57,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       if (!mounted || version != _navigationVersion) return;
       setState(() {
         _trail = trail;
-        if (trail != null) {
-          for (final stop in trail.stops.where((stop) => stop.onPath)) {
-            final separator = stop.entity.indexOf(':');
-            final prefix = separator < 0 ? '' : stop.entity.substring(0, separator);
-            _panes.add(_PaneSpec(
-              kind: switch (prefix) { 'recording' => 'RECORDING', 'agent' => 'PERSON', 'release' => 'RELEASE', _ => prefix.toUpperCase() },
-              title: separator < 0 ? stop.entity : stop.entity.substring(separator + 1),
-              via: stop.via,
-            ));
-            if (prefix == 'search') {
-              final index = _panes.length - 1;
-              final query = stop.entity.substring(separator + 1);
-              _panes[index] = _PaneSpec(kind: 'SEARCH', title: query, query: query);
-              widget.core.search(query).then((search) {
-                if (!mounted || version != _navigationVersion) return;
-                setState(() => _panes[index] = _PaneSpec(kind: 'SEARCH', title: query, query: query, search: search));
-              }).catchError((Object _) {});
-            }
-          }
-          _visibleEnd = _panes.length;
-        }
+        _frontOnly = trail == null;
       });
     });
   }
@@ -94,100 +74,119 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   void _toggle() => widget.core.transport(_clock.playing ? const TransportDto.pause() : const TransportDto.resume());
 
-  void _move(int by) {
-    setState(() => _visibleEnd = (_visibleEnd + by).clamp(1, _panes.length));
-    _slide.value = by > 0 ? 1 : -1;
+  void _animate(int direction) {
+    _slide.value = direction.toDouble();
     _slide.animateTo(0, curve: Curves.easeOutCubic);
+  }
+
+  Future<void> _navigate(Future<TrailDto?> Function() call, {bool frontOnNull = false, int direction = 1}) async {
+    final version = ++_navigationVersion;
+    final trail = await call();
+    if (!mounted || version != _navigationVersion) return;
+    setState(() {
+      _navigationError = null;
+      if (trail != null) {
+        _trail = trail;
+        _frontOnly = false;
+      } else if (frontOnNull) {
+        _frontOnly = true;
+      }
+    });
+    _animate(direction);
+  }
+
+  Future<void> _report(Future<void> call) async {
+    try {
+      await call;
+    } catch (error) {
+      if (mounted) setState(() => _navigationError = error.toString());
+    }
+  }
+
+  Future<void> _move(int by) async {
+    if (by > 0 && _frontOnly) return;
+    await _navigate(by < 0 ? widget.core.trailBack : widget.core.trailForward, frontOnNull: by < 0, direction: by);
   }
 
   void _showFront() {
     _navigationVersion++;
     _slide.stop();
     _slide.value = 0;
-    setState(() => _visibleEnd = 1);
+    setState(() {
+      _frontOnly = true;
+      _navigationError = null;
+    });
   }
 
-  void _openTable(String query, int from) {
-    _navigationVersion++;
-    if (from == 0) _trailVersion++;
-    setState(() {
-      _panes.removeRange(from + 1, _panes.length);
-      _panes.add(_PaneSpec(kind: 'TABLE', title: query.isEmpty ? 'Everything' : query, query: query));
-      _visibleEnd = _panes.length;
-      if (from == 0) _trail = null;
-    });
-    _slide.value = 1;
-    _slide.animateTo(0, curve: Curves.easeOutCubic);
-  }
+  Future<void> _start(TargetDto to) => _navigate(() => widget.core.startTrail(to));
 
   Future<void> _submit(QueryDto query) async {
     if (query.kind == QueryKind.command) {
       await widget.core.runCommand(query.canonical);
     } else if (query.kind == QueryKind.search) {
-      _openTable(query.canonical, 0);
+      await _start(TargetDto.search(query: query.canonical));
     }
   }
+
+  TargetDto _hitTarget(HitDto hit) => switch (hit.kind) {
+    HitKind.release => TargetDto.release(id: hit.id),
+    HitKind.person => TargetDto.person(id: hit.id),
+    HitKind.track => throw 'A track plays without opening a pane',
+  };
 
   Future<void> _search(SearchDto search, HitDto? hit) async {
     if (hit?.kind == HitKind.track) {
       final index = hit!.index;
       if (index == null) throw 'This track has no result index';
       await widget.core.playResults(hit.query, index.toInt());
-    } else {
-      _navigationVersion++;
-      final version = ++_trailVersion;
-      setState(() {
-        _panes.removeRange(1, _panes.length);
-        _panes.add(_PaneSpec(kind: 'SEARCH', title: search.query, query: search.query, search: search));
-        if (hit != null) _panes.add(_PaneSpec(kind: 'TABLE', title: hit.title, query: hit.query));
-        _visibleEnd = _panes.length;
-        _trail = null;
-      });
-      _slide.value = 1;
-      _slide.animateTo(0, curve: Curves.easeOutCubic);
-      final trail = await widget.core.startSearchTrail(search.query);
-      if (mounted && version == _trailVersion) setState(() => _trail = trail);
+      return;
     }
+    final version = ++_navigationVersion;
+    var trail = await widget.core.startTrail(TargetDto.search(query: search.query));
+    if (!mounted || version != _navigationVersion) return;
+    setState(() {
+      _trail = trail;
+      _frontOnly = false;
+      _navigationError = null;
+    });
+    if (hit != null) {
+      trail = await widget.core.follow(trail.current, _hitTarget(hit), ThreadKind.matched);
+      if (!mounted || version != _navigationVersion) return;
+      setState(() => _trail = trail);
+    }
+    _animate(1);
   }
 
-  void _hit(HitDto hit, int from) => _openTable(hit.query, from);
+  Future<void> _follow(int from, TargetDto to, ThreadKind via) =>
+      _navigate(() => widget.core.follow(from, to, via));
 
-  Widget _pane(_PaneSpec spec, int index) {
-    if (index == 0) {
-      return FrontPane(
-        key: const ValueKey('front'),
-        core: widget.core,
-        libraryVersion: _status?.libraryVersion,
-        jobs: _status?.jobs ?? const [],
-        onQuery: (query) => _openTable(query, 0),
-      );
-    }
+  Widget _pane(StopDto stop) {
     final scanning = _status?.jobs.any((job) => job.verb == 'scanning' || job.verb == 'reading tags') ?? false;
-    void filter(String query) => setState(() => _panes[index] = _PaneSpec(
-      kind: spec.kind, title: query.isEmpty ? 'Everything' : query, query: query, search: spec.search));
-    final search = spec.search;
-    return Pane(
-      key: ValueKey('pane-$index'),
-      kind: spec.kind,
-      title: spec.title,
-      via: spec.via,
-      body: search != null ? SearchPane(
+    Future<void> follow(TargetDto to, ThreadKind via) => _follow(stop.index, to, via);
+    final body = switch (stop.target) {
+      TargetDto_Search(:final query) => SearchPane(
         core: widget.core,
-        search: search,
-        query: spec.query!,
+        query: query,
         libraryVersion: _status?.libraryVersion,
         tracks: _status?.tracks,
         scanning: scanning,
-        onQuery: filter,
-        onHit: (hit) => _hit(hit, index),
-      ) : spec.query == null ? null : TablePane(
-        core: widget.core,
-        query: spec.query!,
-        libraryVersion: _status?.libraryVersion,
-        tracks: _status?.tracks,
-        scanning: scanning,
-        onQuery: filter,
+        onFollow: follow,
+        onHit: (hit) => _report(follow(_hitTarget(hit), ThreadKind.matched)),
       ),
+      TargetDto_Release(:final id) => ReleasePane(core: widget.core, id: id, fromStop: stop.index, onFollow: follow),
+      TargetDto_Person(:final id) => PersonPane(core: widget.core, id: id, onFollow: follow),
+    };
+    return Pane(
+      key: ValueKey('stop-${stop.index}-${stop.target}'),
+      kind: switch (stop.target) {
+        TargetDto_Search() => 'Search',
+        TargetDto_Release() => 'Release',
+        TargetDto_Person() => 'Person',
+      },
+      title: stop.title,
+      via: stop.via,
+      source: stop.viaSource,
+      body: body,
     );
   }
 
@@ -206,9 +205,9 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         actions: {
           _Focus: CallbackAction<_Focus>(onInvoke: (_) => _queryFocus.requestFocus()),
           _Toggle: CallbackAction<_Toggle>(onInvoke: (_) => _toggle()),
-          _Move: CallbackAction<_Move>(onInvoke: (i) => _move(i.by)),
+          _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
           _Front: CallbackAction<_Front>(onInvoke: (_) => _showFront()),
-          _Table: CallbackAction<_Table>(onInvoke: (_) => _openTable('', _visibleEnd - 1)),
+          _Table: CallbackAction<_Table>(onInvoke: (_) => _report(_start(const TargetDto.search(query: '')))),
         },
         child: Focus(
           autofocus: true,
@@ -216,7 +215,18 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
             color: Tok.void_,
             child: LayoutBuilder(builder: (context, box) {
               final wc = WidthClass.of(box.maxWidth);
-              final panes = [for (var i = 0; i < _visibleEnd; i++) _pane(_panes[i], i)];
+              final panes = <Widget>[
+                FrontPane(
+                  key: const ValueKey('front'),
+                  core: widget.core,
+                  libraryVersion: _status?.libraryVersion,
+                  jobs: _status?.jobs ?? const [],
+                  onQuery: (query) => _report(_start(TargetDto.search(query: query))),
+                  onRelease: (id) => _report(_start(TargetDto.release(id: id))),
+                ),
+                if (!_frontOnly && _trail != null)
+                  for (final stop in _path(_trail!)) _pane(stop),
+              ];
               final row = PaneRow(slide: _slide, visible: wc.panes.clamp(1, panes.length), children: panes);
               return Column(children: [
                 QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
@@ -224,8 +234,10 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   height: wc == WidthClass.phone ? 44 : 64,
                   child: _trail == null
                       ? const NoTrailStrip()
-                      : CustomPaint(painter: ConstellationPainter(_trail!), size: Size.infinite),
+                      : TrailStrip(trail: _trail!, onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop)))),
                 ),
+                if (_navigationError != null)
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
                 Expanded(
                   child: Row(children: [
                     Expanded(child: row),
@@ -245,13 +257,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   }
 }
 
-class _PaneSpec {
-  const _PaneSpec({required this.kind, required this.title, this.via, this.query, this.search});
-  final String kind;
-  final String title;
-  final String? via;
-  final String? query;
-  final SearchDto? search;
+List<StopDto> _path(TrailDto trail) {
+  final stops = {for (final stop in trail.stops.where((stop) => stop.onPath)) stop.index: stop};
+  final path = <StopDto>[];
+  StopDto? stop = stops[trail.current];
+  while (stop != null) {
+    path.add(stop);
+    stop = stops[stop.parent];
+  }
+  return path.reversed.toList();
 }
 
 class _Front extends Intent {

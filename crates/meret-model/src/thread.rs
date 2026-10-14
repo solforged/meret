@@ -25,6 +25,14 @@ pub enum ThreadKind {
     Cites,
     SoundsLike,
     ListenedAfter,
+    /// A track or release to its artist, from the artist tag.
+    By,
+    /// A release to its album artist.
+    AlbumArtist,
+    /// A person or a track to a release they're on.
+    AppearsOn,
+    /// A search to one of its hits.
+    Matched,
 }
 
 impl ThreadKind {
@@ -51,6 +59,10 @@ impl ThreadKind {
             Self::Cites => "cites",
             Self::SoundsLike => "sounds like",
             Self::ListenedAfter => "listened after",
+            Self::By => "by",
+            Self::AlbumArtist => "album artist",
+            Self::AppearsOn => "on",
+            Self::Matched => "matched",
         }
     }
 
@@ -80,15 +92,21 @@ impl Provenance {
 
     /// The short code shown on rows: MB, VGMdb, Discogs, audio.
     pub fn short(&self) -> &str {
-        match self.source.as_str() {
-            "musicbrainz" => "MB",
-            "vgmdb" => "VGMdb",
-            "discogs" => "Discogs",
-            "listenbrainz" => "ListenBrainz",
-            "wikipedia" => "Wikipedia",
-            "local_audio" => "audio",
-            "library" => "your library",
-            other => other,
-        }
+        source_label(&self.source)
+    }
+}
+
+/// A provider key's short code: "musicbrainz" is "MB", "local_tags" is "tags".
+pub fn source_label(source: &str) -> &str {
+    match source {
+        "musicbrainz" => "MB",
+        "vgmdb" => "VGMdb",
+        "discogs" => "Discogs",
+        "listenbrainz" => "ListenBrainz",
+        "wikipedia" => "Wikipedia",
+        "local_audio" => "audio",
+        "local_tags" => "tags",
+        "library" => "your library",
+        other => other,
     }
 }

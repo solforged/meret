@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64Util;
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64, PlatformInt64Util;
 
 import '../src/rust/api/core.dart' as rust;
 import '../src/rust/api/types.dart';
@@ -20,7 +20,14 @@ abstract interface class CoreBridge {
   Future<TrailDto?> trail();
   Future<FrontDto> front();
   Future<SearchDto> search(String input);
-  Future<TrailDto> startSearchTrail(String query);
+  Future<ReleaseDto> release(PlatformInt64 id);
+  Future<PersonDto> person(PlatformInt64 id);
+  Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop});
+  Future<TrailDto> startTrail(TargetDto to);
+  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via);
+  Future<TrailDto?> trailBack();
+  Future<TrailDto?> trailForward();
+  Future<TrailDto> trailGo(int stop);
   Future<void> runCommand(String input);
   QueryDto parse(String input);
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
@@ -42,7 +49,22 @@ class RustCore implements CoreBridge {
   @override
   Future<SearchDto> search(String input) => rust.search(input: input);
   @override
-  Future<TrailDto> startSearchTrail(String query) => rust.startSearchTrail(query: query);
+  Future<ReleaseDto> release(PlatformInt64 id) => rust.release(id: id);
+  @override
+  Future<PersonDto> person(PlatformInt64 id) => rust.person(id: id);
+  @override
+  Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop}) =>
+      rust.playRelease(id: id, index: index, fromStop: fromStop);
+  @override
+  Future<TrailDto> startTrail(TargetDto to) => rust.startTrail(to: to);
+  @override
+  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via) => rust.follow(fromStop: fromStop, to: to, via: via);
+  @override
+  Future<TrailDto?> trailBack() => rust.trailBack();
+  @override
+  Future<TrailDto?> trailForward() => rust.trailForward();
+  @override
+  Future<TrailDto> trailGo(int stop) => rust.trailGo(stop: stop);
   @override
   Future<void> runCommand(String input) => rust.runCommand(input: input);
   @override
@@ -73,7 +95,8 @@ class FakeCore implements CoreBridge {
   bool _empty = false;
   String _root = '/Music';
   BigInt _libraryVersion = BigInt.one;
-  TrailDto? _searchTrail;
+  TrailDto? _trail;
+  final _forward = <int, int>{};
   final _results = <String, List<int>>{};
   late final _sampleRows = List.generate(_releases.length * 12 * 7, _row);
   final _statuses = StreamController<StatusDto>.broadcast();
@@ -151,9 +174,11 @@ class FakeCore implements CoreBridge {
           FrontLineDto(label: label, count: BigInt.from(count), note: note, query: query),
       ],
       addedLately: [
-        RecentDto(title: 'Celeste', artist: 'Lena Raine', year: 2018, tracks: 21, addedMs: PlatformInt64Util.from(now - 2 * 86400000), query: 'release:"Celeste"'),
-        RecentDto(title: 'Beethoven 5 & 7', artist: 'Kleiber', year: 1976, tracks: 8, addedMs: PlatformInt64Util.from(now - 86400000), query: 'release:"Beethoven 5 & 7"'),
-        RecentDto(title: 'Night Signals · 41', tracks: 1, addedMs: PlatformInt64Util.from(now - 3 * 86400000), query: 'release:"Night Signals · 41"'),
+        for (final id in [6, 4, 3])
+          RecentDto(releaseId: PlatformInt64Util.from(id), title: _releases[id - 1].$1,
+            artist: _releases[id - 1].$2, year: _releases[id - 1].$3,
+            tracks: _releaseIndices(PlatformInt64Util.from(id)).length,
+            addedMs: PlatformInt64Util.from(now - id * 86400000), query: 'release:${_quote(_releases[id - 1].$1)}'),
       ],
       needsYou: [
         FrontLineDto(label: 'Tracks with a guessed identity', count: BigInt.from(312), note: 'Mostly game rips; 41 could go to MusicBrainz with your tags and VGMdb’s list'),
@@ -175,19 +200,7 @@ class FakeCore implements CoreBridge {
   }
 
   @override
-  Future<TrailDto?> trail() async => _searchTrail ?? (_empty ? null : const TrailDto(
-        current: 4,
-        stops: [
-          StopDto(index: 0, entity: 'recording:Corridors of Time', onPath: true, isFork: false, isPeek: false),
-          StopDto(index: 1, parent: 0, entity: 'agent:Yasunori Mitsuda', via: 'composed by', onPath: true, isFork: true, isPeek: false),
-          StopDto(index: 2, parent: 1, entity: 'release:Xenogears', via: 'scored', onPath: true, isFork: true, isPeek: false),
-          StopDto(index: 3, parent: 2, entity: 'agent:Joanne Hogg', via: 'sung by', onPath: true, isFork: false, isPeek: false),
-          StopDto(index: 4, parent: 3, entity: 'agent:Iona', via: 'member of', onPath: true, isFork: false, isPeek: false),
-          StopDto(index: 5, parent: 2, entity: 'release:Creid', via: 'arranged as', onPath: false, isFork: false, isPeek: false),
-          StopDto(index: 6, parent: 1, entity: 'agent:Nobuo Uematsu', via: 'worked with', onPath: false, isFork: false, isPeek: false),
-        ],
-        meetings: [],
-      ));
+  Future<TrailDto?> trail() async => _trail;
 
   @override
   QueryDto parse(String input) {
@@ -225,10 +238,11 @@ class FakeCore implements CoreBridge {
       final row = _sampleRows[index];
       for (final name in {row.artist, row.albumArtist}.whereType<String>()) {
         final old = people[name];
-        people[name] = (old?.$1 ?? index + 1, (old?.$2 ?? 0) + count);
+        final id = name == row.artist ? row.artistId! : row.albumArtistId!;
+        people[name] = (id.toInt(), (old?.$2 ?? 0) + count);
       }
       final old = releases[row.album];
-      releases[row.album] = (old?.$1 ?? index + 1, (old?.$2 ?? 0) + count, row);
+      releases[row.album] = (row.releaseId.toInt(), (old?.$2 ?? 0) + count, row);
     }
     final titles = [for (final row in _sampleRows) words.every((word) => _contains(row.title, word))];
     final trackTotal = [for (var i = 0; i < titles.length; i++) if (titles[i]) counts[i]].fold(0, (a, b) => a + b);
@@ -261,12 +275,107 @@ class FakeCore implements CoreBridge {
   }
 
   @override
-  Future<TrailDto> startSearchTrail(String query) async {
+  Future<TrailDto> startTrail(TargetDto to) async {
+    final target = switch (to) {
+      TargetDto_Search(:final query) => TargetDto.search(query: _searchQuery(query)),
+      _ => to,
+    };
+    final title = await _title(target);
+    _forward.clear();
+    return _trail = TrailDto(
+      rootQuery: target is TargetDto_Search ? target.query : null,
+      current: 0,
+      stops: [StopDto(index: 0, target: target, title: title, onPath: true, isFork: false, isPeek: false)],
+      meetings: const [],
+    );
+  }
+
+  String _searchQuery(String query) {
     final parsed = parse(query);
     if (parsed.kind != QueryKind.search) throw parsed.error ?? 'Type a search, not a command';
-    return _searchTrail = TrailDto(current: 0, stops: [
-      StopDto(index: 0, entity: 'search:${parsed.canonical}', onPath: true, isFork: false, isPeek: false),
-    ], meetings: const []);
+    return parsed.canonical;
+  }
+
+  Future<String> _title(TargetDto target) async => switch (target) {
+    TargetDto_Search(:final query) => query.isEmpty ? 'Everything' : query,
+    TargetDto_Release(:final id) => (await release(id)).title,
+    TargetDto_Person(:final id) => (await person(id)).name,
+  };
+
+  @override
+  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via) async {
+    final trail = _trail;
+    if (trail == null) throw 'No trail is open';
+    if (to is TargetDto_Search) throw 'A search starts a new trail';
+    if (!const [ThreadKind.by, ThreadKind.albumArtist, ThreadKind.appearsOn, ThreadKind.workedWith, ThreadKind.matched].contains(via)) {
+      throw 'This thread is not followable yet';
+    }
+    if (!trail.stops.any((stop) => stop.index == fromStop)) throw 'Unknown trail stop';
+    final title = await _title(to);
+    final existing = trail.stops.where((stop) => stop.parent == fromStop && stop.target == to);
+    if (existing.isNotEmpty) {
+      _forward[fromStop] = existing.first.index;
+      return trailGo(existing.first.index);
+    }
+    final index = trail.stops.length;
+    _forward[fromStop] = index;
+    _trail = TrailDto(rootQuery: trail.rootQuery, current: index, stops: [
+      ...trail.stops,
+      StopDto(index: index, parent: fromStop, target: to, title: title, via: _threadLabel(via),
+        viaSource: via == ThreadKind.matched ? 'your library' : 'tags',
+        onPath: false, isFork: false, isPeek: false),
+    ], meetings: trail.meetings);
+    return trailGo(index);
+  }
+
+  static String _threadLabel(ThreadKind kind) => switch (kind) {
+    ThreadKind.by => 'by',
+    ThreadKind.albumArtist => 'album artist',
+    ThreadKind.appearsOn => 'on',
+    ThreadKind.workedWith => 'worked with',
+    ThreadKind.matched => 'matched',
+    _ => throw 'This thread is not followable yet',
+  };
+
+  @override
+  Future<TrailDto> trailGo(int stop) async {
+    final trail = _trail;
+    if (trail == null) throw 'No trail is open';
+    final byIndex = {for (final node in trail.stops) node.index: node};
+    if (!byIndex.containsKey(stop)) throw 'Unknown trail stop';
+    final path = <int>{};
+    int? cursor = stop;
+    while (cursor != null) {
+      path.add(cursor);
+      final parent = byIndex[cursor]!.parent;
+      if (parent != null) _forward[parent] = cursor;
+      cursor = parent;
+    }
+    final children = <int, int>{};
+    for (final node in trail.stops) {
+      if (node.parent != null) children.update(node.parent!, (count) => count + 1, ifAbsent: () => 1);
+    }
+    return _trail = TrailDto(rootQuery: trail.rootQuery, current: stop, stops: [
+      for (final node in trail.stops)
+        StopDto(index: node.index, parent: node.parent, target: node.target, title: node.title,
+          via: node.via, viaSource: node.viaSource, onPath: path.contains(node.index),
+          isFork: (children[node.index] ?? 0) > 1, isPeek: node.isPeek),
+    ], meetings: trail.meetings);
+  }
+
+  @override
+  Future<TrailDto?> trailBack() async {
+    final trail = _trail;
+    if (trail == null) return null;
+    final parent = trail.stops.firstWhere((stop) => stop.index == trail.current).parent;
+    return parent == null ? null : trailGo(parent);
+  }
+
+  @override
+  Future<TrailDto?> trailForward() async {
+    final current = _trail?.current;
+    final child = current == null ? null : _forward[current];
+    return child == null ? null : trailGo(child);
   }
 
   static int _rank(String name, List<String> words) {
@@ -433,14 +542,110 @@ class FakeCore implements CoreBridge {
       ('Journey into the Morn', 'Iona', 1995, ['Irish Day', 'Today', 'Inside My Heart']),
       ('Creid', 'Yasunori Mitsuda', 1998, ['Creid', 'Melkaba', 'Lahan']),
     ];
+  static final _personNames = {..._releases.map((release) => release.$2), 'Joanne Hogg'}.toList();
+
+  static PlatformInt64 _personId(String name) => PlatformInt64Util.from(_personNames.indexOf(name) + 1);
+
+  List<int> _releaseIndices(PlatformInt64 id) {
+    final release = id.toInt() - 1;
+    if (_empty || release < 0 || release >= _releases.length) throw 'Release no longer exists';
+    return [for (var i = 0; i < _total; i++) if ((i ~/ 12) % _releases.length == release) i];
+  }
+
+  List<TrackRowDto> _releaseRows(PlatformInt64 id) => _releaseIndices(id).map(_row).toList()
+    ..sort((a, b) {
+      final disc = a.disc.compareTo(b.disc);
+      if (disc != 0) return disc;
+      final track = a.number.compareTo(b.number);
+      return track != 0 ? track : a.trackId.compareTo(b.trackId);
+    });
+
+  @override
+  Future<ReleaseDto> release(PlatformInt64 id) async {
+    final rows = _releaseRows(id);
+    final first = rows.first;
+    final artists = <PlatformInt64, List<TrackRowDto>>{};
+    final formats = <String, int>{};
+    var length = BigInt.zero;
+    for (final row in rows) {
+      if (row.artistId != null) artists.putIfAbsent(row.artistId!, () => []).add(row);
+      formats.update(row.format, (count) => count + 1, ifAbsent: () => 1);
+      length += row.lengthMs ?? BigInt.zero;
+    }
+    final sortedFormats = formats.keys.toList()..sort((a, b) => formats[b]!.compareTo(formats[a]!));
+    return ReleaseDto(
+      id: id, title: first.album, artist: first.albumArtist, year: first.year,
+      idiom: first.albumArtist == 'Yasunori Mitsuda' ? 'Score' : first.albumArtist == 'Bill Evans Trio' ? 'Session' : 'Album',
+      tracks: rows.length, discs: rows.map((row) => row.disc).toSet().length,
+      lengthMs: length, formats: sortedFormats, rows: rows,
+      credits: [
+        if (first.albumArtistId != null)
+          ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags',
+            to: TargetDto.person(id: first.albumArtistId!), title: first.albumArtist!, detail: ''),
+        for (final entry in artists.entries)
+          if (entry.key != first.albumArtistId || entry.value.length != rows.length)
+            ThreadDto(kind: ThreadKind.by, label: 'by', source: 'tags',
+              to: TargetDto.person(id: entry.key), title: entry.value.first.artist!,
+              detail: entry.value.map((row) => '${row.disc}-${row.number.toString().padLeft(2, '0')}').toSet().join(', ')),
+      ],
+    );
+  }
+
+  @override
+  Future<PersonDto> person(PlatformInt64 id) async {
+    final index = id.toInt() - 1;
+    if (_empty || index < 0 || index >= _personNames.length) throw 'Person no longer exists';
+    final name = _personNames[index];
+    final releases = <ThreadDto>[], appearsOn = <ThreadDto>[];
+    final shared = <PlatformInt64, int>{};
+    var tracks = 0;
+    final ids = List.generate(_releases.length, (i) => i + 1)
+      ..sort((a, b) => _releases[a - 1].$3.compareTo(_releases[b - 1].$3));
+    for (final releaseId in ids) {
+      final rows = _releaseRows(PlatformInt64Util.from(releaseId));
+      final credited = rows.where((row) => row.artistId == id || row.albumArtistId == id).length;
+      if (credited == 0) continue;
+      tracks += credited;
+      final first = rows.first;
+      final own = first.albumArtistId == id;
+      final thread = ThreadDto(kind: ThreadKind.appearsOn, label: 'on', source: 'tags',
+        to: TargetDto.release(id: first.releaseId), title: first.album,
+        detail: '${first.year} · ${own ? '${rows.length} tracks' : '$credited of ${rows.length} tracks'}');
+      (own ? releases : appearsOn).add(thread);
+      final people = {for (final row in rows) ...[row.artistId, row.albumArtistId]}..remove(null)..remove(id);
+      for (final person in people) {
+        shared.update(person!, (count) => count + 1, ifAbsent: () => 1);
+      }
+    }
+    final coworkers = shared.keys.toList()..sort((a, b) => shared[b]!.compareTo(shared[a]!));
+    return PersonDto(id: id, name: name, tracks: tracks, releases: releases, appearsOn: appearsOn, workedWith: [
+      for (final person in coworkers.take(12))
+        ThreadDto(kind: ThreadKind.workedWith, label: 'worked with', source: 'tags',
+          to: TargetDto.person(id: person), title: _personNames[person.toInt() - 1],
+          detail: '${shared[person]} ${shared[person] == 1 ? 'release' : 'releases'} together'),
+    ]);
+  }
+
+  @override
+  Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop}) async {
+    final rows = _releaseRows(id);
+    if (index < 0 || index >= rows.length) throw RangeError.index(index, rows);
+    _playRow(rows[index]);
+  }
+
 
   TrackRowDto _row(int index) {
-    final release = _releases[(index ~/ 12) % _releases.length];
+    final releaseIndex = (index ~/ 12) % _releases.length;
+    final release = _releases[releaseIndex];
+    final artist = index % (_releases.length * 12) == 2 ? 'Joanne Hogg' : release.$2;
     final number = index % 12 + 1;
     return TrackRowDto(
       trackId: PlatformInt64Util.from(index + 1),
+      releaseId: PlatformInt64Util.from(releaseIndex + 1),
+      artistId: _personId(artist),
+      albumArtistId: _personId(release.$2),
       title: release.$4[index % release.$4.length],
-      artist: index % (_releases.length * 12) == 2 ? 'Joanne Hogg' : release.$2,
+      artist: artist,
       album: release.$1,
       albumArtist: release.$2,
       disc: 1,
@@ -456,11 +661,14 @@ class FakeCore implements CoreBridge {
   Future<void> playResults(String query, int index) async {
     final indices = _matching(query);
     if (index < 0 || index >= indices.length) throw RangeError.index(index, null, 'index', null, indices.length);
-    final row = _row(indices[index]);
+    _playRow(_row(indices[index]));
+  }
+
+  void _playRow(TrackRowDto row) {
     _state = NowDto(
       title: row.title,
       subtitle: '${row.artist} · ${row.album}',
-      anchor: AnchorDto(item: BigInt.from(indices[index] + 1), positionMs: 0, rate: 1),
+      anchor: AnchorDto(item: BigInt.from(row.trackId.toInt()), positionMs: 0, rate: 1),
       lengthMs: row.lengthMs,
       path: [
         StageDto(name: 'File', detail: row.format, alters: false),

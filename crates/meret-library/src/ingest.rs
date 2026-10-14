@@ -632,6 +632,56 @@ mod tests {
     }
 
     #[test]
+    fn release_and_person_pages_follow_local_credits() {
+        let (dir, store) = library();
+        let music = dir.join("music");
+        let tagged = |rel: &str, title: &str, artist: &str, album: &str, album_artist: &str, disc: u32, n: u32| {
+            put(&music, rel, Some((title, artist, album, n)));
+            let path = music.join(rel);
+            let mut file = lofty::read_from_path(&path).unwrap();
+            let tag = file.primary_tag_mut().unwrap();
+            tag.insert_text(ItemKey::AlbumArtist, album_artist.into());
+            tag.set_disk(disc);
+            tag.save_to_path(&path, WriteOptions::default()).unwrap();
+        };
+        tagged("x/2-17.flac", "Small Two of Pieces", "Joanne Hogg", "Xenogears", "Yasunori Mitsuda", 2, 17);
+        tagged("x/1-01.flac", "Opening", "Yasunori Mitsuda", "Xenogears", "Yasunori Mitsuda", 1, 1);
+        tagged("x/2-16.flac", "Stars of Tears", "Joanne Hogg", "Xenogears", "Yasunori Mitsuda", 2, 16);
+        tagged("h/1.flac", "Looking Into Light", "Joanne Hogg", "Looking Into Light", "Joanne Hogg", 1, 1);
+        tagged("i/1.flac", "Open Sky", "Iona", "Open Sky", "Iona", 1, 1);
+        let root = add_root(&store, &music).unwrap();
+        scan(&store, root, &|_| {}).unwrap();
+
+        let rows = store.track_rows(&store.load_columns().unwrap().track).unwrap();
+        let row = |title: &str| rows.iter().find(|r| r.title == title).unwrap().clone();
+        let (xeno, hogg, mitsuda, iona) =
+            (row("Opening").release, row("Stars of Tears").artist_id.unwrap(), row("Opening").artist_id.unwrap(), row("Open Sky").artist_id.unwrap());
+        assert_eq!(row("Stars of Tears").album_artist_id, Some(mitsuda));
+
+        let page = store.release_page(xeno).unwrap().unwrap();
+        assert_eq!(page.album_artist, Some((mitsuda, "Yasunori Mitsuda".into())));
+        let titles: Vec<_> = page.tracks.iter().map(|t| t.title.as_str()).collect();
+        assert_eq!(titles, ["Opening", "Stars of Tears", "Small Two of Pieces"]);
+        let credits: Vec<_> = page.artists.iter().map(|a| (a.name.as_str(), a.positions.clone())).collect();
+        assert_eq!(credits, [("Yasunori Mitsuda", vec![(1, 1)]), ("Joanne Hogg", vec![(2, 16), (2, 17)])]);
+
+        let hogg = store.person_page(hogg).unwrap().unwrap();
+        assert_eq!(hogg.tracks, 3);
+        let releases: Vec<_> = hogg.releases.iter().map(|r| (r.title.as_str(), r.theirs, r.tracks)).collect();
+        assert_eq!(releases, [("Looking Into Light", 1, 1)]);
+        let on: Vec<_> = hogg.appears_on.iter().map(|r| (r.title.as_str(), r.theirs, r.tracks)).collect();
+        assert_eq!(on, [("Xenogears", 2, 3)]);
+        let with: Vec<_> = hogg.worked_with.iter().map(|c| (c.name.as_str(), c.releases)).collect();
+        assert_eq!(with, [("Yasunori Mitsuda", 1)]);
+
+        let iona = store.person_page(iona).unwrap().unwrap();
+        assert_eq!((iona.releases.len(), iona.appears_on.len(), iona.worked_with.len()), (1, 0, 0));
+        assert_eq!(store.release_page(meret_model::ReleaseId(9_999)).unwrap(), None);
+        assert_eq!(store.agent_name(mitsuda).unwrap().as_deref(), Some("Yasunori Mitsuda"));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn a_moved_file_keeps_its_track_and_a_removed_one_leaves_the_table() {
         let (dir, store) = library();
         let music = dir.join("music");

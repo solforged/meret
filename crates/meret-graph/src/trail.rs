@@ -145,8 +145,12 @@ impl Trail {
         i
     }
 
-    pub fn act(&mut self, action: Action) {
-        self.stops[self.current].actions.push(action);
+    /// Something done in stop `stop`'s pane, which keeps its branch. False
+    /// for a stop that doesn't exist.
+    pub fn act(&mut self, stop: usize, action: Action) -> bool {
+        let Some(s) = self.stops.get_mut(stop) else { return false };
+        s.actions.push(action);
+        true
     }
 
     /// The panes: root to the current stop.
@@ -181,6 +185,16 @@ impl Trail {
             }
             None => false,
         }
+    }
+
+    /// Clicking a star: stop `i` becomes current, and the panes become its
+    /// path. False for a stop that doesn't exist or was pruned.
+    pub fn go(&mut self, i: usize, now: i64) -> bool {
+        if self.stops.get(i).is_none_or(|s| s.pruned) {
+            return false;
+        }
+        self.enter(i, now);
+        true
     }
 
     pub fn is_peek(&self, i: usize, now: i64) -> bool {
@@ -295,10 +309,10 @@ mod tests {
         let mut t = Trail::start(EntityRef::Recording(RecordingId(1)), None, 0);
         let mitsuda = t.follow(0, EntityRef::Agent(AgentId(10)), via(ThreadKind::ComposedBy), MIN);
         let xeno = t.follow(mitsuda, EntityRef::Release(ReleaseId(20)), via(ThreadKind::Scored), 2 * MIN);
-        t.act(Action::Played);
+        t.act(xeno, Action::Played);
         let hogg = t.follow(xeno, EntityRef::Agent(AgentId(11)), via(ThreadKind::SungBy), 9 * MIN);
         let iona = t.follow(hogg, EntityRef::Agent(AgentId(12)), via(ThreadKind::MemberOf), 13 * MIN);
-        t.act(Action::Wanted);
+        t.act(iona, Action::Wanted);
         let open_sky = t.follow(iona, EntityRef::Release(ReleaseId(30)), via(ThreadKind::PerformedBy), 14 * MIN);
         t.back(14 * MIN + 6_000); // a 6-second peek
         let troy = t.follow(iona, EntityRef::Agent(AgentId(13)), via(ThreadKind::MemberOf), 18 * MIN);
@@ -317,6 +331,20 @@ mod tests {
     fn panes_show_root_to_current() {
         let (t, [mitsuda, xeno, .., creid, _]) = tuesday();
         assert_eq!(t.path(), vec![0, mitsuda, xeno, creid]);
+    }
+
+    #[test]
+    fn a_star_click_switches_branch_and_brackets_walk_it() {
+        let (mut t, [mitsuda, xeno, hogg, iona, _, troy, ..]) = tuesday();
+        assert!(t.go(troy, 40 * MIN));
+        assert_eq!(t.path(), vec![0, mitsuda, xeno, hogg, iona, troy]);
+        assert!(t.back(41 * MIN));
+        assert_eq!(t.current(), iona);
+        // `]` returns to the newest child, not the peek opened before it.
+        assert!(t.forward(42 * MIN));
+        assert_eq!(t.current(), troy);
+        assert!(!t.go(99, 43 * MIN));
+        assert_eq!(t.current(), troy);
     }
 
     #[test]
