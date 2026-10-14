@@ -1,0 +1,13 @@
+[package]
+name = "meret-graph"
+description = "Threads, trails as trees, leads."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+meret-model.workspace = true
+serde.workspace = true
+thiserror.workspace = true

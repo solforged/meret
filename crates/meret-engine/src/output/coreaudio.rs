@@ -1,0 +1,702 @@
+//! CoreAudio HAL output for macOS.
+//!
+//! Opening a stream:
+//! 1. Find the device (by UID or name, or the system default) and its first
+//!    output stream.
+//! 2. Exclusive: take hog mode, then set the stream's physical format to
+//!    integer PCM at the source rate, at the source's bit depth or the
+//!    smallest one above it. The HAL's mixer is out of the path. The IOProc
+//!    still sees Float32, but a float holds 24-bit integers exactly, so 16-
+//!    and 24-bit sources reach the DAC unchanged.
+//!    Shared: set only the nominal rate. Other apps' audio mixes in.
+//! 3. If the device can't run at the source rate, refuse. There's no
+//!    resampler yet.
+//! 4. Install an IOProc. It reads the ring (after honouring a pending flush),
+//!    converts to the virtual format, and advances the clock with the time the
+//!    last frame will reach the speaker (`mHostTime` of the output timestamp,
+//!    plus device and stream latency).
+//!
+//! On close it stops the IOProc and puts back the original format and rate,
+//! then releases hog mode.
+//!
+//! Not yet: listening for `kAudioDevicePropertyDeviceIsAlive` and
+//! default-device changes. An unplugged DAC stalls playback rather than
+//! reporting an error.
+
+use std::ffi::c_void;
+use std::ptr::{self, NonNull};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+
+use objc2_core_audio::{
+    AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceIOProcID, AudioDeviceStart, AudioDeviceStop,
+    AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectHasProperty, AudioObjectID,
+    AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioObjectSetPropertyData,
+    AudioStreamRangedDescription, AudioConvertHostTimeToNanos, AudioGetCurrentHostTime,
+    kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyHogMode,
+    kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams,
+    kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices, kAudioObjectPropertyElementMain,
+    kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeOutput,
+    kAudioObjectSystemObject, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyLatency,
+    kAudioStreamPropertyPhysicalFormat, kAudioStreamPropertyVirtualFormat,
+};
+use objc2_core_audio_types::{
+    AudioBuffer, AudioBufferList, AudioStreamBasicDescription, AudioTimeStamp, AudioValueRange,
+    kAudioFormatFlagIsBigEndian, kAudioFormatFlagIsFloat, kAudioFormatFlagIsNonInterleaved,
+    kAudioFormatFlagIsSignedInteger, kAudioFormatLinearPCM,
+};
+use objc2_core_foundation::{CFRetained, CFString};
+
+use super::{DeviceInfo, Opened, OutputBackend, OutputError, OutputRequest, OutputStream};
+use crate::clock::{SharedClock, now_ns};
+use crate::ring::RingReader;
+use crate::Sample;
+
+const SYSTEM: AudioObjectID = kAudioObjectSystemObject as AudioObjectID;
+const GLOBAL: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal;
+const OUTPUT: AudioObjectPropertyScope = kAudioObjectPropertyScopeOutput;
+/// `kAudioTimeStampHostTimeValid`.
+const HOST_TIME_VALID: u32 = 1 << 1;
+/// The largest IOProc buffer handled in one pass; bigger ones loop.
+const SCRATCH_FRAMES: usize = 8192;
+const STANDARD_RATES: [u32; 8] = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000, 352_800, 384_000];
+
+pub struct CoreAudioBackend;
+
+impl OutputBackend for CoreAudioBackend {
+    fn name(&self) -> &'static str {
+        "coreaudio"
+    }
+
+    fn devices(&self) -> Result<Vec<DeviceInfo>, OutputError> {
+        let ids: Vec<AudioObjectID> = get_vec(SYSTEM, kAudioHardwarePropertyDevices, GLOBAL).map_err(platform)?;
+        Ok(ids.into_iter().filter_map(|id| Device(id).info()).collect())
+    }
+
+    fn open(
+        &self,
+        req: &OutputRequest,
+        source: RingReader,
+        clock: Arc<SharedClock>,
+    ) -> Result<Box<dyn OutputStream>, OutputError> {
+        let device = find_device(req.device.as_deref())?;
+        Ok(Box::new(CoreAudioStream::open(device, req, source, clock)?))
+    }
+}
+
+fn find_device(wanted: Option<&str>) -> Result<Device, OutputError> {
+    let Some(wanted) = wanted else {
+        let id: AudioObjectID = get(SYSTEM, kAudioHardwarePropertyDefaultOutputDevice, GLOBAL).map_err(platform)?;
+        return Ok(Device(id));
+    };
+    let ids: Vec<AudioObjectID> = get_vec(SYSTEM, kAudioHardwarePropertyDevices, GLOBAL).map_err(platform)?;
+    ids.into_iter()
+        .map(Device)
+        .find(|d| d.uid().as_deref() == Some(wanted) || d.name().as_deref() == Some(wanted))
+        .ok_or_else(|| OutputError::NoDevice(wanted.into()))
+}
+
+#[derive(Clone, Copy)]
+struct Device(AudioObjectID);
+
+impl Device {
+    fn name(self) -> Option<String> {
+        get_string(self.0, kAudioObjectPropertyName)
+    }
+
+    fn uid(self) -> Option<String> {
+        get_string(self.0, kAudioDevicePropertyDeviceUID)
+    }
+
+    fn output_streams(self) -> Vec<AudioObjectID> {
+        get_vec(self.0, kAudioDevicePropertyStreams, OUTPUT).unwrap_or_default()
+    }
+
+    fn rate_ranges(self) -> Vec<AudioValueRange> {
+        get_vec(self.0, kAudioDevicePropertyAvailableNominalSampleRates, GLOBAL).unwrap_or_default()
+    }
+
+    fn supports_rate(self, rate: u32) -> bool {
+        let r = rate as f64;
+        self.rate_ranges().iter().any(|v| v.mMinimum - 0.5 <= r && r <= v.mMaximum + 0.5)
+    }
+
+    fn nominal_rate(self) -> Result<f64, OutputError> {
+        get(self.0, kAudioDevicePropertyNominalSampleRate, GLOBAL).map_err(platform)
+    }
+
+    fn hog_owner(self) -> Option<i32> {
+        get(self.0, kAudioDevicePropertyHogMode, GLOBAL).ok()
+    }
+
+    fn info(self) -> Option<DeviceInfo> {
+        let streams = self.output_streams();
+        let first = *streams.first()?;
+        let formats: Vec<AudioStreamRangedDescription> =
+            get_vec(first, kAudioStreamPropertyAvailablePhysicalFormats, GLOBAL).unwrap_or_default();
+        let mut sample_rates: Vec<u32> = STANDARD_RATES.into_iter().filter(|&r| self.supports_rate(r)).collect();
+        sample_rates.dedup();
+        Some(DeviceInfo {
+            id: self.uid()?,
+            name: self.name().unwrap_or_else(|| format!("Device {}", self.0)),
+            sample_rates,
+            max_bits: formats
+                .iter()
+                .map(|f| effective_bits(&f.mFormat))
+                .max()
+                .unwrap_or(0),
+            can_be_exclusive: has(self.0, kAudioDevicePropertyHogMode, GLOBAL),
+            dop: false,
+        })
+    }
+}
+
+/// How the IOProc lays out samples.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Encoding {
+    F32,
+    I16,
+    I24Packed,
+    I32,
+}
+
+impl Encoding {
+    fn bytes(self) -> usize {
+        match self {
+            Encoding::I16 => 2,
+            Encoding::I24Packed => 3,
+            Encoding::F32 | Encoding::I32 => 4,
+        }
+    }
+
+    fn of(f: &AudioStreamBasicDescription) -> Option<Self> {
+        if f.mFormatID != kAudioFormatLinearPCM || f.mFormatFlags & kAudioFormatFlagIsBigEndian != 0 {
+            return None;
+        }
+        let per_channel = if f.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0 {
+            f.mBytesPerFrame
+        } else {
+            f.mBytesPerFrame / f.mChannelsPerFrame.max(1)
+        };
+        if f.mFormatFlags & kAudioFormatFlagIsFloat != 0 {
+            return (f.mBitsPerChannel == 32).then_some(Encoding::F32);
+        }
+        if f.mFormatFlags & kAudioFormatFlagIsSignedInteger == 0 {
+            return None;
+        }
+        match per_channel {
+            2 => Some(Encoding::I16),
+            3 => Some(Encoding::I24Packed),
+            // 24-in-32 or 32: either way the top bits are the sample when aligned high.
+            4 => Some(Encoding::I32),
+            _ => None,
+        }
+    }
+
+    /// Writes one left-justified sample at `dst`. Realtime-safe.
+    #[inline]
+    unsafe fn write(self, dst: *mut u8, s: Sample) {
+        unsafe {
+            match self {
+                Encoding::F32 => (dst as *mut f32).write_unaligned(s as f32 * (1.0 / 2_147_483_648.0)),
+                Encoding::I16 => (dst as *mut i16).write_unaligned((s >> 16) as i16),
+                Encoding::I24Packed => {
+                    let b = s.to_le_bytes();
+                    ptr::copy_nonoverlapping(b[1..].as_ptr(), dst, 3);
+                }
+                Encoding::I32 => (dst as *mut i32).write_unaligned(s),
+            }
+        }
+    }
+}
+
+/// Everything the IOProc touches. Owned by the stream and only ever used by
+/// the IOProc while the device runs.
+struct IoState {
+    reader: RingReader,
+    clock: Arc<SharedClock>,
+    scratch: Vec<Sample>,
+    src_channels: usize,
+    encoding: Encoding,
+    interleaved: bool,
+    /// Channels in the device's first output stream.
+    channels: usize,
+    rate: f64,
+    latency_frames: u32,
+}
+
+impl IoState {
+    /// Which source channel feeds device channel `c`. Mono goes to the first two.
+    #[inline]
+    fn source_for(&self, c: usize) -> Option<usize> {
+        if self.src_channels == 1 {
+            (c < 2).then_some(0)
+        } else {
+            (c < self.src_channels).then_some(c)
+        }
+    }
+}
+
+unsafe extern "C-unwind" fn io_proc(
+    _device: AudioObjectID,
+    _now: NonNull<AudioTimeStamp>,
+    _input: NonNull<AudioBufferList>,
+    _input_time: NonNull<AudioTimeStamp>,
+    output: NonNull<AudioBufferList>,
+    output_time: NonNull<AudioTimeStamp>,
+    client: *mut c_void,
+) -> i32 {
+    // SAFETY: `client` is the `IoState` the stream boxed for this IOProc, and
+    // the HAL calls it from one thread at a time.
+    let st = unsafe { &mut *(client as *mut IoState) };
+    let list = output.as_ptr();
+    let buffers: &mut [AudioBuffer] = unsafe {
+        let n = (*list).mNumberBuffers as usize;
+        std::slice::from_raw_parts_mut((&raw mut (*list).mBuffers).cast::<AudioBuffer>(), n)
+    };
+    for b in buffers.iter_mut() {
+        if !b.mData.is_null() {
+            unsafe { ptr::write_bytes(b.mData as *mut u8, 0, b.mDataByteSize as usize) };
+        }
+    }
+    if let Some(generation) = st.clock.flush_pending() {
+        st.reader.clear();
+        st.clock.ack_flush(generation);
+    }
+    let Some(first) = buffers.first() else { return 0 };
+    if first.mData.is_null() {
+        return 0;
+    }
+    let bytes = st.encoding.bytes();
+    let frames = if st.interleaved {
+        first.mDataByteSize as usize / (bytes * st.channels)
+    } else {
+        first.mDataByteSize as usize / bytes
+    };
+    let planes = if st.interleaved { 1 } else { st.channels.min(buffers.len()) };
+
+    let mut done = 0;
+    while done < frames {
+        let chunk = (frames - done).min(SCRATCH_FRAMES);
+        let n = chunk * st.src_channels;
+        let got = st.reader.read(&mut st.scratch[..n]);
+        for f in 0..got {
+            let src = &st.scratch[f * st.src_channels..(f + 1) * st.src_channels];
+            for c in 0..st.channels {
+                let Some(sc) = st.source_for(c) else { continue };
+                let frame = done + f;
+                let dst = if st.interleaved {
+                    unsafe { (buffers[0].mData as *mut u8).add((frame * st.channels + c) * bytes) }
+                } else if c < planes {
+                    unsafe { (buffers[c].mData as *mut u8).add(frame * bytes) }
+                } else {
+                    continue;
+                };
+                unsafe { st.encoding.write(dst, src[sc]) };
+            }
+        }
+        done += got;
+        if got < chunk {
+            st.clock.underrun();
+            break;
+        }
+    }
+
+    // When the last frame handed over reaches the speaker, on now_ns()'s clock.
+    let ts = unsafe { output_time.as_ref() };
+    let mut at = now_ns() as i64;
+    if ts.mFlags.0 & HOST_TIME_VALID != 0 {
+        let (out_ns, host_now) =
+            unsafe { (AudioConvertHostTimeToNanos(ts.mHostTime), AudioConvertHostTimeToNanos(AudioGetCurrentHostTime())) };
+        at += out_ns as i64 - host_now as i64;
+    }
+    at += ((done as u64 + st.latency_frames as u64) as f64 / st.rate * 1e9) as i64;
+    st.clock.advance(done as u64, at.max(0) as u64);
+    0
+}
+
+/// What the device was doing before we changed it.
+struct Restore {
+    stream: AudioObjectID,
+    physical: Option<AudioStreamBasicDescription>,
+    rate: f64,
+    hogged: bool,
+}
+
+pub struct CoreAudioStream {
+    device: Device,
+    proc_id: AudioDeviceIOProcID,
+    state: *mut IoState,
+    opened: Opened,
+    restore: Restore,
+    running: bool,
+}
+
+// SAFETY: `state` is only dereferenced by the IOProc; the stream just owns it
+// and frees it after the IOProc is destroyed.
+unsafe impl Send for CoreAudioStream {}
+
+impl CoreAudioStream {
+    fn open(
+        device: Device,
+        req: &OutputRequest,
+        reader: RingReader,
+        clock: Arc<SharedClock>,
+    ) -> Result<Self, OutputError> {
+        let name = device.name().unwrap_or_else(|| "Output".into());
+        let stream = *device.output_streams().first().ok_or_else(|| OutputError::NoDevice(name.clone()))?;
+        let rate = req.spec.sample_rate;
+        if !device.supports_rate(rate) {
+            return Err(OutputError::Refused(format!("{} kHz on {name} (no resampler yet)", rate as f64 / 1000.0)));
+        }
+        // Make sure the clock's epoch exists before the IOProc reads it.
+        let _ = now_ns();
+
+        let mut restore = Restore {
+            stream,
+            physical: get(stream, kAudioStreamPropertyPhysicalFormat, GLOBAL).ok(),
+            rate: device.nominal_rate()?,
+            hogged: false,
+        };
+
+        let pid = std::process::id() as i32;
+        if req.exclusive && has(device.0, kAudioDevicePropertyHogMode, GLOBAL) {
+            match device.hog_owner() {
+                Some(owner) if owner == pid => restore.hogged = true,
+                Some(-1) => {
+                    // Setting our pid while it's free takes it.
+                    restore.hogged = set(device.0, kAudioDevicePropertyHogMode, GLOBAL, &pid).is_ok()
+                        && device.hog_owner() == Some(pid);
+                }
+                _ => tracing::warn!(device = %name, "another process has the device; playing shared"),
+            }
+        }
+
+        // From here on, failures must undo what was changed.
+        let mut this = Self {
+            device,
+            proc_id: None,
+            state: ptr::null_mut(),
+            opened: Opened {
+                device_name: name,
+                sample_rate: rate,
+                bits: 0,
+                channels: req.spec.channels,
+                exclusive: restore.hogged,
+                latency_frames: 0,
+            },
+            restore,
+            running: false,
+        };
+        this.configure(req)?;
+        this.install(reader, clock)?;
+        Ok(this)
+    }
+
+    /// Sets the rate (and in exclusive mode the physical format) and waits for
+    /// the device to settle on them.
+    fn configure(&mut self, req: &OutputRequest) -> Result<(), OutputError> {
+        let rate = req.spec.sample_rate as f64;
+        let stream = self.restore.stream;
+        if self.restore.hogged {
+            let formats: Vec<AudioStreamRangedDescription> =
+                get_vec(stream, kAudioStreamPropertyAvailablePhysicalFormats, GLOBAL).unwrap_or_default();
+            if let Some(mut f) = pick_physical(&formats, rate, req.spec.bits) {
+                f.mSampleRate = rate;
+                if let Err(s) = set(stream, kAudioStreamPropertyPhysicalFormat, GLOBAL, &f) {
+                    tracing::warn!(status = %fourcc(s), "physical format refused");
+                }
+            }
+        }
+        if (self.device.nominal_rate()? - rate).abs() > 0.5 {
+            set(self.device.0, kAudioDevicePropertyNominalSampleRate, GLOBAL, &rate)
+                .map_err(|s| OutputError::Refused(format!("{rate} Hz ({})", fourcc(s))))?;
+        }
+        // Rate changes land asynchronously.
+        for _ in 0..100 {
+            if (self.device.nominal_rate()? - rate).abs() < 0.5 {
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        if (self.device.nominal_rate()? - rate).abs() > 0.5 {
+            return Err(OutputError::Refused(format!("{rate} Hz: the device didn't switch")));
+        }
+        let physical: Option<AudioStreamBasicDescription> = get(stream, kAudioStreamPropertyPhysicalFormat, GLOBAL).ok();
+        self.opened.bits = physical.as_ref().map(effective_bits).unwrap_or(24);
+        Ok(())
+    }
+
+    fn install(&mut self, reader: RingReader, clock: Arc<SharedClock>) -> Result<(), OutputError> {
+        let stream = self.restore.stream;
+        let virt: AudioStreamBasicDescription = get(stream, kAudioStreamPropertyVirtualFormat, GLOBAL).map_err(platform)?;
+        let encoding = Encoding::of(&virt)
+            .ok_or_else(|| OutputError::Refused(format!("virtual format {:?}", virt)))?;
+        let device_latency: u32 = get(self.device.0, kAudioDevicePropertyLatency, OUTPUT).unwrap_or(0);
+        let stream_latency: u32 = get(stream, kAudioStreamPropertyLatency, GLOBAL).unwrap_or(0);
+        self.opened.latency_frames = device_latency + stream_latency;
+
+        let src_channels = reader.channels();
+        let state = Box::new(IoState {
+            reader,
+            clock,
+            scratch: vec![0; SCRATCH_FRAMES * src_channels],
+            src_channels,
+            encoding,
+            interleaved: virt.mFormatFlags & kAudioFormatFlagIsNonInterleaved == 0,
+            channels: virt.mChannelsPerFrame.max(1) as usize,
+            rate: virt.mSampleRate,
+            latency_frames: self.opened.latency_frames,
+        });
+        self.state = Box::into_raw(state);
+        let mut id: AudioDeviceIOProcID = None;
+        let status = unsafe {
+            AudioDeviceCreateIOProcID(self.device.0, Some(io_proc), self.state.cast(), NonNull::from(&mut id))
+        };
+        if status != 0 {
+            return Err(platform(status));
+        }
+        self.proc_id = id;
+        Ok(())
+    }
+}
+
+/// Bits of integer PCM a format carries unchanged. Built-in Apple Silicon
+/// outputs are Float32 only; a 32-bit float holds a 24-bit integer exactly.
+fn effective_bits(f: &AudioStreamBasicDescription) -> u8 {
+    if f.mFormatID != kAudioFormatLinearPCM {
+        0
+    } else if f.mFormatFlags & kAudioFormatFlagIsFloat != 0 {
+        if f.mBitsPerChannel >= 64 { 32 } else { 24 }
+    } else {
+        f.mBitsPerChannel as u8
+    }
+}
+
+/// The integer format at `rate` closest to `bits` without going under, or the
+/// deepest one if none reach it.
+fn pick_physical(formats: &[AudioStreamRangedDescription], rate: f64, bits: u8) -> Option<AudioStreamBasicDescription> {
+    let usable: Vec<AudioStreamBasicDescription> = formats
+        .iter()
+        .filter(|f| f.mSampleRateRange.mMinimum - 0.5 <= rate && rate <= f.mSampleRateRange.mMaximum + 0.5)
+        .map(|f| f.mFormat)
+        .filter(|f| {
+            f.mFormatID == kAudioFormatLinearPCM
+                && f.mFormatFlags & kAudioFormatFlagIsFloat == 0
+                && f.mFormatFlags & kAudioFormatFlagIsSignedInteger != 0
+        })
+        .collect();
+    let bits = bits as u32;
+    usable
+        .iter()
+        .filter(|f| f.mBitsPerChannel >= bits)
+        .min_by_key(|f| (f.mBitsPerChannel, f.mBytesPerFrame))
+        .or_else(|| usable.iter().max_by_key(|f| f.mBitsPerChannel))
+        .copied()
+}
+
+impl OutputStream for CoreAudioStream {
+    fn opened(&self) -> &Opened {
+        &self.opened
+    }
+
+    fn start(&mut self) -> Result<(), OutputError> {
+        if !self.running {
+            let status = unsafe { AudioDeviceStart(self.device.0, self.proc_id) };
+            if status != 0 {
+                return Err(platform(status));
+            }
+            self.running = true;
+        }
+        Ok(())
+    }
+
+    fn pause(&mut self) -> Result<(), OutputError> {
+        if self.running {
+            // Synchronous: when this returns the IOProc has stopped.
+            let status = unsafe { AudioDeviceStop(self.device.0, self.proc_id) };
+            if status != 0 {
+                return Err(platform(status));
+            }
+            self.running = false;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for CoreAudioStream {
+    fn drop(&mut self) {
+        let _ = self.pause();
+        if self.proc_id.is_some() {
+            unsafe { AudioDeviceDestroyIOProcID(self.device.0, self.proc_id) };
+        }
+        if !self.state.is_null() {
+            drop(unsafe { Box::from_raw(self.state) });
+        }
+        let r = &self.restore;
+        if r.hogged
+            && let Some(p) = &r.physical
+        {
+            let _ = set(r.stream, kAudioStreamPropertyPhysicalFormat, GLOBAL, p);
+        }
+        if self.device.nominal_rate().is_ok_and(|now| (now - r.rate).abs() > 0.5) {
+            let _ = set(self.device.0, kAudioDevicePropertyNominalSampleRate, GLOBAL, &r.rate);
+        }
+        if r.hogged {
+            let free: i32 = -1;
+            let _ = set(self.device.0, kAudioDevicePropertyHogMode, GLOBAL, &free);
+        }
+    }
+}
+
+// Property plumbing.
+
+fn address(selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> AudioObjectPropertyAddress {
+    AudioObjectPropertyAddress { mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain }
+}
+
+fn has(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> bool {
+    let a = address(selector, scope);
+    unsafe { AudioObjectHasProperty(object, NonNull::from(&a)) }
+}
+
+fn get<T: Copy>(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> Result<T, i32> {
+    let a = address(selector, scope);
+    let mut value = std::mem::MaybeUninit::<T>::zeroed();
+    let mut size = size_of::<T>() as u32;
+    let status = unsafe {
+        AudioObjectGetPropertyData(object, NonNull::from(&a), 0, ptr::null(), NonNull::from(&mut size), NonNull::from(&mut value).cast())
+    };
+    if status != 0 {
+        return Err(status);
+    }
+    // SAFETY: the HAL filled `size` bytes of a zeroed plain-data struct.
+    Ok(unsafe { value.assume_init() })
+}
+
+fn get_vec<T: Copy>(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> Result<Vec<T>, i32> {
+    let a = address(selector, scope);
+    let mut size = 0u32;
+    let status = unsafe { AudioObjectGetPropertyDataSize(object, NonNull::from(&a), 0, ptr::null(), NonNull::from(&mut size)) };
+    if status != 0 {
+        return Err(status);
+    }
+    let n = size as usize / size_of::<T>();
+    let mut out: Vec<T> = Vec::with_capacity(n);
+    if n == 0 {
+        return Ok(out);
+    }
+    let status = unsafe {
+        AudioObjectGetPropertyData(object, NonNull::from(&a), 0, ptr::null(), NonNull::from(&mut size), NonNull::new_unchecked(out.as_mut_ptr().cast()))
+    };
+    if status != 0 {
+        return Err(status);
+    }
+    // SAFETY: the HAL wrote `size` bytes of plain data.
+    unsafe { out.set_len((size as usize / size_of::<T>()).min(n)) };
+    Ok(out)
+}
+
+fn set<T>(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope, value: &T) -> Result<(), i32> {
+    let a = address(selector, scope);
+    let status = unsafe {
+        AudioObjectSetPropertyData(object, NonNull::from(&a), 0, ptr::null(), size_of::<T>() as u32, NonNull::from(value).cast())
+    };
+    if status == 0 { Ok(()) } else { Err(status) }
+}
+
+fn get_string(object: AudioObjectID, selector: AudioObjectPropertySelector) -> Option<String> {
+    let raw: *const CFString = get(object, selector, GLOBAL).ok()?;
+    // SAFETY: these properties return a +1 CFString the caller releases.
+    let s = unsafe { CFRetained::from_raw(NonNull::new(raw as *mut CFString)?) };
+    Some(s.to_string())
+}
+
+/// HAL statuses are usually four-character codes ('!dev', 'nope').
+fn fourcc(status: i32) -> String {
+    let b = status.to_be_bytes();
+    if b.iter().all(|c| c.is_ascii_graphic() || *c == b' ') {
+        format!("'{}'", String::from_utf8_lossy(&b))
+    } else {
+        status.to_string()
+    }
+}
+
+fn platform(status: i32) -> OutputError {
+    OutputError::Platform(format!("CoreAudio status {}", fourcc(status)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lpcm(bits: u32, bytes: u32, float: bool, lo: f64, hi: f64) -> AudioStreamRangedDescription {
+        AudioStreamRangedDescription {
+            mFormat: AudioStreamBasicDescription {
+                mSampleRate: 0.0,
+                mFormatID: kAudioFormatLinearPCM,
+                mFormatFlags: if float { kAudioFormatFlagIsFloat } else { kAudioFormatFlagIsSignedInteger },
+                mBytesPerPacket: bytes * 2,
+                mFramesPerPacket: 1,
+                mBytesPerFrame: bytes * 2,
+                mChannelsPerFrame: 2,
+                mBitsPerChannel: bits,
+                mReserved: 0,
+            },
+            mSampleRateRange: AudioValueRange { mMinimum: lo, mMaximum: hi },
+        }
+    }
+
+    #[test]
+    fn picks_the_shallowest_integer_format_that_holds_the_source() {
+        let formats =
+            [lpcm(32, 4, true, 44_100.0, 192_000.0), lpcm(16, 2, false, 44_100.0, 96_000.0), lpcm(24, 4, false, 44_100.0, 192_000.0)];
+        assert_eq!(pick_physical(&formats, 44_100.0, 16).unwrap().mBitsPerChannel, 16);
+        assert_eq!(pick_physical(&formats, 96_000.0, 24).unwrap().mBitsPerChannel, 24);
+        // 16-bit isn't offered at 192k, so a 16-bit source rides in 24.
+        assert_eq!(pick_physical(&formats, 192_000.0, 16).unwrap().mBitsPerChannel, 24);
+        // Nothing integer at 384k.
+        assert!(pick_physical(&formats, 384_000.0, 16).is_none());
+    }
+
+    #[test]
+    fn float_holds_24_bit_samples_exactly() {
+        let mut out = [0f32; 1];
+        for s in [0x7FFF_FF00, i32::MIN, 0x0000_0100, -0x0000_0100, 0x1234_5600] {
+            unsafe { Encoding::F32.write(out.as_mut_ptr().cast(), s) };
+            assert_eq!((out[0] as f64 * 2_147_483_648.0) as i64, s as i64);
+        }
+    }
+
+    #[test]
+    fn packs_24_bit_little_endian() {
+        let mut out = [0u8; 3];
+        unsafe { Encoding::I24Packed.write(out.as_mut_ptr(), 0x1234_5600) };
+        assert_eq!(out, [0x56, 0x34, 0x12]);
+    }
+
+    /// Touches real hardware; run with `cargo test -p meret-engine -- --ignored devices`.
+    #[test]
+    #[ignore]
+    fn lists_devices() {
+        let devices = CoreAudioBackend.devices().unwrap();
+        for d in &devices {
+            println!("{} · {:?} · {} bit · exclusive {}", d.name, d.sample_rates, d.max_bits, d.can_be_exclusive);
+            let dev = find_device(Some(&d.id)).unwrap();
+            for stream in dev.output_streams() {
+                let formats: Vec<AudioStreamRangedDescription> =
+                    get_vec(stream, kAudioStreamPropertyAvailablePhysicalFormats, GLOBAL).unwrap_or_default();
+                for f in formats {
+                    let m = f.mFormat;
+                    println!(
+                        "  physical {}–{} Hz · {} ch · {} bit in {} bytes · flags {:#x}",
+                        f.mSampleRateRange.mMinimum, f.mSampleRateRange.mMaximum, m.mChannelsPerFrame,
+                        m.mBitsPerChannel, m.mBytesPerFrame, m.mFormatFlags
+                    );
+                }
+            }
+        }
+        assert!(!devices.is_empty());
+    }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "meret-model"
+description = "Pure types: IDs, entities, idioms, threads, marks, the signal path. No IO."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+ulid.workspace = true

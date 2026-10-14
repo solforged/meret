@@ -1,0 +1,12 @@
+[package]
+name = "meret-analysis"
+description = "Loudness, dynamic range, the body summary, embeddings."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+meret-model.workspace = true
+serde.workspace = true

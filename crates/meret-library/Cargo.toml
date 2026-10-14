@@ -1,0 +1,15 @@
+[package]
+name = "meret-library"
+description = "Roots, scanning, diffs, move detection, tags, artwork."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+meret-model.workspace = true
+ignore.workspace = true
+lofty.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
