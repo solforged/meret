@@ -10,6 +10,8 @@
 //!
 //! meret library add ~/Music          add a root to the library and scan it into the store
 //! meret library ls 'year:1990s'      page through a query, as the table does
+//! meret library ls '' --group --sort year --desc   newest releases first
+//! meret library facets 'idiom:score'  browse the idiom → person → release columns
 //! meret library front                print the Front: the library by idiom and format, what's new, what needs you
 //! meret library search 'iona'        the query line's hits, timing each prefix as if typed
 //! meret library walk 'xenogears' 1 0  open hit 1, then that pane's thread 0, printing each pane and the trail
@@ -23,7 +25,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use meret_core::OutputChoice;
 use meret_engine::engine::EngineConfig;
 use meret_engine::output::OutputBackend;
@@ -101,6 +103,17 @@ enum LibraryCmd {
         offset: u64,
         #[arg(long, default_value_t = 50)]
         limit: u32,
+        #[arg(long, value_enum, default_value = "library")]
+        sort: Sort,
+        #[arg(long)]
+        desc: bool,
+        #[arg(long)]
+        group: bool,
+    },
+    /// Print the idiom, person and release column browser.
+    Facets {
+        #[arg(default_value = "")]
+        query: String,
     },
     /// Play a query's rows through the queue and time every join.
     Play {
@@ -118,6 +131,31 @@ enum LibraryCmd {
         #[command(flatten)]
         out: OutputArgs,
     },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Sort {
+    Library,
+    Title,
+    Artist,
+    Album,
+    Year,
+    Length,
+    Format,
+}
+
+impl From<Sort> for meret_api::SortKeyDto {
+    fn from(sort: Sort) -> Self {
+        match sort {
+            Sort::Library => Self::Library,
+            Sort::Title => Self::Title,
+            Sort::Artist => Self::Artist,
+            Sort::Album => Self::Album,
+            Sort::Year => Self::Year,
+            Sort::Length => Self::Length,
+            Sort::Format => Self::Format,
+        }
+    }
 }
 
 #[derive(Args)]
@@ -171,7 +209,10 @@ fn main() -> Result<()> {
                 LibraryCmd::Front => library::front(&api, &rt),
                 LibraryCmd::Search { input } => library::search(&api, &rt, &input),
                 LibraryCmd::Walk { search, steps } => library::walk(&api, &rt, &search, &steps),
-                LibraryCmd::Ls { query, offset, limit } => library::ls(&api, &rt, &query, offset, limit),
+                LibraryCmd::Ls { query, offset, limit, sort, desc, group } => {
+                    library::ls(&api, &rt, &query, meret_api::ViewDto { sort: sort.into(), descending: desc, group }, offset, limit)
+                }
+                LibraryCmd::Facets { query } => library::facets(&api, &rt, &query),
                 LibraryCmd::Play { query, from, count, tail, .. } => {
                     library::play(&api, &rt, &query, library::PlayOptions { from, count, tail })
                 }

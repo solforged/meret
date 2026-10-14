@@ -44,6 +44,7 @@ pub enum ScanError {
 pub enum Phase {
     Walking,
     Reading,
+    ReadingCovers,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,6 +279,11 @@ fn ingest(
     let release = release(tx, &album, album_artist, t.year, rev, provenance)?;
     set_idiom(tx, release, crate::idiom::signal(&stat.rel_path, &t), rev)?;
     let medium = medium(tx, release, t.disc.unwrap_or(1), rev)?;
+    tx.execute(
+        "UPDATE release SET art_checked = 0 WHERE id = ?1 AND art_checked = 1
+         AND NOT EXISTS (SELECT 1 FROM entity_artwork WHERE entity_kind = 3 AND entity_id = ?1)",
+        [release],
+    )?;
     let length = t.length_ms as i64;
 
     let existing: Option<(i64, i64, i64)> = tx
@@ -597,7 +603,8 @@ mod tests {
         assert_eq!(rows("of"), Some(2), "a short word scans");
         assert_eq!(rows("iona of"), Some(2));
         assert_eq!(rows("iona -wisdom"), Some(3));
-        assert_eq!(rows("by:iona"), Some(3), "a name matches names containing it");
+        assert_eq!(rows("by:iona"), Some(2), "an exact name excludes Iona Brown");
+        assert_eq!(rows("by:ion"), Some(3), "without an exact name, contains matching remains");
         assert_eq!(rows("performer:hogg"), Some(1));
         assert_eq!(rows("composer:hogg"), Some(0), "no composers are read yet");
         assert_eq!(rows("release:sky"), Some(2));

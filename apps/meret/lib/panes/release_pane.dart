@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
+import '../theme/light.dart';
 import '../theme/tokens.dart';
 
 /// A release's local edition, tracklist and sourced credits.
@@ -103,37 +106,51 @@ class _ReleasePaneState extends State<ReleasePane> {
     ),
   );
 
-  Widget _row(TrackRowDto row, int index, String? albumArtist) => Semantics(
-    key: ValueKey('release-row-$index'),
-    button: true,
-    selected: _selected == index,
-    child: MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _play(index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          decoration: BoxDecoration(
-            color: _selected == index ? Tok.panel2 : Colors.transparent,
-            border: const Border(bottom: BorderSide(color: Tok.line)),
+  Widget _row(TrackRowDto row, int index, String? albumArtist) {
+    final light = Light.of(context);
+    final lit = light.track == row.trackId.toInt();
+    return Semantics(
+      key: ValueKey('release-row-$index'),
+      button: true,
+      selected: _selected == index,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _play(index),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            decoration: BoxDecoration(
+              color: lit ? light.wash : _selected == index ? Tok.panel2 : Colors.transparent,
+              border: Border(
+                bottom: const BorderSide(color: Tok.line),
+                left: BorderSide(color: lit ? light.accent : Colors.transparent, width: 2),
+              ),
+            ),
+            child: Row(children: [
+              SizedBox(width: 42, child: Text(_position(row), style: Tok.monoSmall)),
+              Expanded(child: Text(row.title, style: Tok.body.copyWith(color: lit ? light.accent : Tok.ink), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              // Compilations credit each track; say who when it isn't the album artist.
+              if (row.artist != null && row.artist != albumArtist)
+                Flexible(child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Text(row.artist!, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                )),
+              const SizedBox(width: 8),
+              Text(_time(row.lengthMs), style: Tok.monoSmall),
+            ]),
           ),
-          child: Row(children: [
-            SizedBox(width: 42, child: Text(row.number == 0 ? '' : '${row.disc}-${row.number.toString().padLeft(2, '0')}', style: Tok.monoSmall)),
-            Expanded(child: Text(row.title, style: Tok.body, maxLines: 1, overflow: TextOverflow.ellipsis)),
-            // Compilations credit each track; say who when it isn't the album artist.
-            if (row.artist != null && row.artist != albumArtist)
-              Flexible(child: Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(row.artist!, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-              )),
-            const SizedBox(width: 8),
-            Text(_time(row.lengthMs), style: Tok.monoSmall),
-          ]),
         ),
       ),
-    ),
-  );
+    );
+  }
+
+  /// `07`, or `2-07` when the release has more than one disc.
+  String _position(TrackRowDto row) {
+    if (row.number == 0) return '';
+    final number = row.number.toString().padLeft(2, '0');
+    return (_release?.discs ?? 1) > 1 ? '${row.disc}-$number' : number;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,13 +169,22 @@ class _ReleasePaneState extends State<ReleasePane> {
       onKeyEvent: _key,
       child: CustomScrollView(slivers: [
         SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          if (release.artist != null) Text(release.artist!, style: Tok.body.copyWith(color: Tok.muted)),
-          const SizedBox(height: 8),
-          Text(facts.join(' · '), style: Tok.label),
-          Align(alignment: Alignment.centerLeft, child: TextButton(
-            onPressed: release.rows.isEmpty ? null : () => _play(0),
-            child: Text('Play', style: Tok.body.copyWith(color: Tok.gold)),
-          )),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (release.cover case final cover?) ...[
+              Image.file(File(cover), width: 120, height: 120, fit: BoxFit.contain, cacheWidth: 256),
+              const SizedBox(width: 16),
+            ],
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(release.title, style: Tok.title),
+              if (release.artist != null) Text(release.artist!, style: Tok.body.copyWith(color: Tok.muted)),
+              const SizedBox(height: 8),
+              Text(facts.join(' · '), style: Tok.label),
+              TextButton(
+                onPressed: release.rows.isEmpty ? null : () => _play(0),
+                child: Text('Play', style: Tok.body.copyWith(color: Tok.gold)),
+              ),
+            ])),
+          ]),
           if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
           // Credits before the tracklist, so their threads stay in reach on a long release.
           if (release.credits.isNotEmpty) _heading('Credits'),

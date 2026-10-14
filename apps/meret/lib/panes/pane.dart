@@ -5,7 +5,7 @@ import '../theme/tokens.dart';
 /// What every pane shows at the top: the thread that brought you, the kind
 /// of thing, its name. Folds to a vertical spine when narrow.
 class Pane extends StatelessWidget {
-  const Pane({super.key, required this.kind, required this.title, this.via, this.source, this.body});
+  const Pane({super.key, required this.kind, required this.title, this.via, this.source, this.body, this.showTitle = true});
 
   /// "PERSON · COMPOSER", "SCORE · 1998", "GROUP · NOT OWNED".
   final String kind;
@@ -17,6 +17,7 @@ class Pane extends StatelessWidget {
   /// Who said so: "MusicBrainz · VGMdb".
   final String? source;
   final Widget? body;
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +39,7 @@ class Pane extends StatelessWidget {
           const SizedBox(height: 10),
           Text(kind, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
-          Text(title, style: Tok.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+          if (showTitle) Text(title, style: Tok.title, maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 12),
           Expanded(child: body ?? const SizedBox()),
         ]),

@@ -11,6 +11,7 @@ publish.workspace = true
 meret-model.workspace = true
 meret-query.workspace = true
 meret-core.workspace = true
+meret-library.workspace = true
 meret-graph.workspace = true
 meret-store.workspace = true
 meret-engine.workspace = true

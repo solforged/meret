@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64, PlatformInt64Util;
 import 'package:meret/core/bridge.dart';
 import 'package:meret/core/playhead.dart';
+import 'package:meret/draw/body_painter.dart';
 import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
@@ -17,7 +20,11 @@ import 'package:meret/panes/release_pane.dart';
 import 'package:meret/panes/table_pane.dart';
 import 'package:meret/shell/pane_row.dart';
 import 'package:meret/shell/query_line.dart';
+import 'package:meret/theme/light.dart';
 import 'package:meret/theme/tokens.dart';
+
+const _libraryView = ViewDto(sort: SortKeyDto.library_, descending: false, group: false);
+const _groupedView = ViewDto(sort: SortKeyDto.library_, descending: false, group: true);
 
 void main() {
   testWidgets('the fake library opens at the Front without a trail', (tester) async {
@@ -36,6 +43,99 @@ void main() {
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).visible, 1);
     expect(find.byType(NowPane), findsNothing);
     expect(find.text('Small Two of Pieces ~Broken Pieces~'), findsOneWidget);
+  });
+
+  testWidgets('the body takes the playing release light from Now', (tester) async {
+    final core = FakeCore();
+    final now = await core.now().first;
+    await _surface(tester, core);
+
+    final light = tester.widget<LightScope>(find.byType(LightScope)).light;
+    expect(light.accent, Color(now.light!.light));
+    expect(light.wash, Color(now.light!.wash));
+    expect(light.dim, Color(now.light!.dim));
+    expect(light.track, now.trackId!.toInt());
+    expect(light.release, now.releaseId!.toInt());
+    final body = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((paint) => paint.painter).whereType<BodyPainter>().single;
+    expect(body.light, light.accent);
+    await core.transport(const TransportDto.pause());
+    await tester.pump();
+    expect(tester.widget<LightScope>(find.byType(LightScope)).light, light);
+  });
+
+  testWidgets('a null Now light leaves the body brass and keeps playing identities', (tester) async {
+    final core = _ArtworkCore(NowDto(
+      trackId: PlatformInt64Util.from(3),
+      releaseId: PlatformInt64Util.from(1),
+      title: 'Small Two of Pieces ~Broken Pieces~',
+      subtitle: '',
+      path: const [],
+    ));
+    await _surface(tester, core);
+
+    final light = tester.widget<LightScope>(find.byType(LightScope)).light;
+    expect(light.accent, Light.brass.accent);
+    expect(light.wash, Light.brass.wash);
+    expect(light.dim, Light.brass.dim);
+    expect(light.track, 3);
+    expect(light.release, 1);
+    final body = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((paint) => paint.painter).whereType<BodyPainter>().single;
+    expect(body.light, Tok.gold);
+  });
+
+  testWidgets('the release lights the playing row without inventing a cover', (tester) async {
+    final core = FakeCore();
+    final releaseId = (await core.now().first).releaseId!;
+    await core.playRelease(id: releaseId, index: 2);
+    final now = await core.now().first;
+    await core.startTrail(TargetDto.release(id: now.releaseId!));
+    await _surface(tester, core);
+    await tester.pump();
+
+    final row = find.byKey(const ValueKey('release-row-2'));
+    final box = tester.widgetList<Container>(find.descendant(of: row, matching: find.byType(Container))).single;
+    final decoration = box.decoration! as BoxDecoration;
+    expect(decoration.color, Color(now.light!.wash));
+    expect((decoration.border! as Border).left, BorderSide(color: Color(now.light!.light), width: 2));
+    expect(tester.widget<Text>(find.descendant(of: row, matching: find.text(now.title))).style!.color, Color(now.light!.light));
+    expect(find.descendant(of: find.byType(ReleasePane), matching: find.byType(Image)), findsNothing);
+    expect(find.descendant(of: find.byType(NowPane), matching: find.byType(Image)), findsNothing);
+    expect((await core.release(now.releaseId!)).cover, isNull);
+  });
+
+  testWidgets('release and Now draw their cover with a 256 pixel decode', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('meret-widget-cover-');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/cover.png')..writeAsBytesSync(base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO4P60IAAQ/AejzxrCDAAAAAElFTkSuQmCC',
+    ));
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    // Start disk I/O outside the test's fake clock, before Image.file shares it.
+    await tester.runAsync(() => precacheImage(
+      ResizeImage(FileImage(file), width: 256),
+      tester.element(find.byType(SizedBox)),
+    ));
+    final core = _ArtworkCore(NowDto(
+      trackId: PlatformInt64Util.from(3),
+      releaseId: PlatformInt64Util.from(1),
+      cover: file.path,
+      title: 'Small Two of Pieces ~Broken Pieces~',
+      subtitle: '',
+      path: const [],
+    ));
+    await core.startTrail(TargetDto.release(id: core.state.releaseId!));
+    await _surface(tester, core);
+    await tester.pump();
+
+    for (final pane in [find.byType(ReleasePane), find.byType(NowPane)]) {
+      final image = tester.widget<Image>(find.descendant(of: pane, matching: find.byType(Image)));
+      final resize = image.image as ResizeImage;
+      expect(resize.width, 256);
+      expect((resize.imageProvider as FileImage).file.path, file.path);
+    }
+    expect(tester.widget<Image>(find.descendant(of: find.byType(ReleasePane), matching: find.byType(Image))).width, 120);
+    expect(find.descendant(of: find.byType(ReleasePane), matching: find.text('Xenogears Original Soundtrack')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the Front shows the fake idiom doors and Scores opens its table', (tester) async {
@@ -63,7 +163,7 @@ void main() {
     expect(find.text('Add a music folder'), findsOneWidget);
     expect(find.byType(TablePane), findsNothing);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
-    expect((await core.rows('', 0, 20)).total, BigInt.zero);
+    expect((await core.rows('', _libraryView, 0, 20)).total, BigInt.zero);
 
     await core.addRoot('/New music');
     await tester.pump();
@@ -246,9 +346,9 @@ void main() {
     expect(hits.people, isEmpty);
     expect(hits.releases, isEmpty);
     expect(hits.trackHits, hasLength(8));
-    final rows = await core.rows(hits.query, 0, 8);
+    final rows = await core.rows(hits.query, _libraryView, 0, 8);
     expect(rows.total, hits.tracks);
-    expect(rows.rows.first.title, hits.trackHits.first.title);
+    expect((rows.items.first as ItemDto_Track).row.title, hits.trackHits.first.title);
     expect(hits.trackHits.first.index, BigInt.zero);
     expect(hits.trackHitsTotal, hits.tracks);
     expect((await core.search('ona')).tracks, BigInt.zero);
@@ -335,12 +435,104 @@ void main() {
     expect(clock.positionMs, held);
   });
 
+  testWidgets('the table starts grouped and its headers cycle the view', (tester) async {
+    final core = _RecordingCore();
+    final group = (await FakeCore().rows('', _groupedView, 0, 1)).items.single as ItemDto_Group;
+    await tester.pumpWidget(_table(core));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byKey(const ValueKey('table-row-0')), matching: find.text(group.field0.title)), findsOneWidget);
+    expect(find.byKey(const ValueKey('table-sort-album')), findsNothing);
+    expect(core.views.single, _groupedView);
+
+    await tester.tap(find.byKey(const ValueKey('table-sort-title')));
+    await tester.pumpAndSettle();
+    expect(core.views.last, const ViewDto(sort: SortKeyDto.title, descending: false, group: true));
+    expect(find.text('Title ↑'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('table-sort-title')));
+    await tester.pumpAndSettle();
+    expect(core.views.last, const ViewDto(sort: SortKeyDto.title, descending: true, group: true));
+    expect(find.text('Title ↓'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('table-sort-title')));
+    await tester.pumpAndSettle();
+    expect(core.views.last, _groupedView);
+    expect(core.offsets, [0, 0, 0, 0]);
+
+    await tester.tap(find.byKey(const ValueKey('table-group-false')));
+    await tester.pumpAndSettle();
+    expect(core.views.last, _libraryView);
+    expect(find.byKey(const ValueKey('table-sort-album')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('table-sort-album')));
+    await tester.pumpAndSettle();
+    expect(core.views.last, const ViewDto(sort: SortKeyDto.album, descending: false, group: false));
+    await tester.tap(find.byKey(const ValueKey('table-sort-library_')));
+    await tester.pumpAndSettle();
+    expect(core.views.last, _libraryView);
+  });
+
+  testWidgets('facet entries and All use the queries supplied by the core', (tester) async {
+    final core = FakeCore();
+    const query = 'idiom:score by:"Yasunori Mitsuda"';
+    final facets = await core.facets(query);
+    final selected = facets.people.entries.firstWhere((entry) => entry.selected);
+    final queries = <String>[];
+    await tester.pumpWidget(_table(core, query: query, onQuery: queries.add));
+    await tester.pumpAndSettle();
+    final entry = find.byKey(ValueKey('facet-People-${selected.id}'));
+    expect(tester.widget<Semantics>(entry).properties.selected, isTrue);
+    await tester.tap(entry);
+    expect(queries.last, selected.query);
+    await tester.tap(find.byKey(const ValueKey('facet-People-all')));
+    expect(queries.last, facets.people.allQuery);
+    final idiom = facets.idioms.entries.first;
+    await tester.tap(find.byKey(ValueKey('facet-Idiom-${idiom.id}')));
+    expect(queries.last, idiom.query);
+  });
+
+  testWidgets('Enter on a group uses its first track ordinal, not its item index', (tester) async {
+    final core = _RecordingCore();
+    final page = await FakeCore().rows('', _groupedView, 0, 1);
+    final first = (page.items.single as ItemDto_Group).field0;
+    final index = first.tracks + 1;
+    await tester.pumpWidget(_table(core));
+    await tester.pumpAndSettle();
+    final list = tester.widget<ListView>(find.byKey(const ValueKey('table-rows')));
+    list.controller!.jumpTo(index * 26);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('table-row-$index')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(core.played, [('', first.tracks)]);
+    expect(core.playedViews.single, _groupedView);
+    final header = find.byKey(ValueKey('table-row-$index'));
+    await tester.tap(header);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(header);
+    await tester.pumpAndSettle();
+    expect(core.played, [('', first.tracks), ('', first.tracks)]);
+    expect(core.playedViews.last, _groupedView);
+  });
+
+  testWidgets('the playing track row uses the scoped light', (tester) async {
+    final core = FakeCore();
+    final page = await core.rows('', _groupedView, 1, 1);
+    final row = (page.items.single as ItemDto_Track).row;
+    final light = Light(accent: const Color(0xFF90AACC), wash: const Color(0x1490AACC), track: row.trackId.toInt());
+    await tester.pumpWidget(_table(core, light: light));
+    await tester.pumpAndSettle();
+    final playing = find.byKey(const ValueKey('table-row-1'));
+    final box = tester.widget<Container>(find.descendant(of: playing, matching: find.byType(Container)).first);
+    expect((box.decoration as BoxDecoration).color, light.wash);
+    expect(((box.decoration as BoxDecoration).border as Border).left.color, light.accent);
+    final title = tester.widget<Text>(find.descendant(of: playing, matching: find.text(row.title)));
+    expect(title.style!.color, light.accent);
+  });
+
   testWidgets('the table fetches only pages near the viewport', (tester) async {
     final core = _RecordingCore();
     await tester.pumpWidget(_table(core));
     await tester.pumpAndSettle();
 
-    expect(find.text('48210 rows'), findsOneWidget);
+    expect(find.text('8 releases · 48210 tracks · sorted by library order'), findsOneWidget);
     expect(core.offsets, [0]);
     final list = tester.widget<ListView>(find.byKey(const ValueKey('table-rows')));
     list.controller!.jumpTo(30000 * 26);
@@ -362,7 +554,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(core.played, [('', 3)]);
+    expect(core.played, [('', 2)]);
   });
 
   testWidgets('a double-tap plays its table row', (tester) async {
@@ -375,16 +567,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tap(row);
     await tester.pumpAndSettle();
-    expect(core.played, [('', 4)]);
+    expect(core.played, [('', 3)]);
   });
 
   testWidgets('the table refetches when query or library version changes', (tester) async {
     final core = _RecordingCore();
     await tester.pumpWidget(_table(core, libraryVersion: BigInt.one));
     await tester.pumpAndSettle();
-    await tester.pumpWidget(_table(core, query: 'year:1990s', libraryVersion: BigInt.one));
+    await tester.pumpWidget(_table(core, query: 'year:1990..1999', libraryVersion: BigInt.one));
     await tester.pumpAndSettle();
-    await tester.pumpWidget(_table(core, query: 'year:1990s', libraryVersion: BigInt.two));
+    await tester.pumpWidget(_table(core, query: 'year:1990..1999', libraryVersion: BigInt.two));
     await tester.pumpAndSettle();
     expect(core.offsets, [0, 0, 0]);
   });
@@ -398,10 +590,10 @@ void main() {
 
   testWidgets('album and artist cells open typed panes and their titles stay on the strip', (tester) async {
     final core = FakeCore();
-    final row = (await core.rows('', 0, 1)).rows.single;
+    final row = await _firstTrack(core);
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
-    await tester.tap(find.byKey(ValueKey('table-album-${row.trackId}')));
+    await tester.tap(find.byKey(ValueKey('table-release-${row.releaseId}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['Everything', row.album]);
@@ -410,7 +602,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.byKey(ValueKey('table-artist-${row.trackId}')));
+    await tester.tap(find.byKey(ValueKey('table-group-artist-${row.releaseId}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['Everything', row.artist]);
@@ -423,10 +615,10 @@ void main() {
 
   testWidgets('following from an earlier pane branches and replaces its later panes', (tester) async {
     final core = FakeCore();
-    final row = (await core.rows('', 0, 1)).rows.single;
+    final row = await _firstTrack(core);
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
-    await tester.tap(find.byKey(ValueKey('table-album-${row.trackId}')));
+    await tester.tap(find.byKey(ValueKey('table-release-${row.releaseId}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
@@ -437,7 +629,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['Everything', row.album, credit.title]);
 
-    await tester.tap(find.byKey(ValueKey('table-artist-${row.trackId}')));
+    await tester.tap(find.byKey(ValueKey('table-group-artist-${row.releaseId}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['Everything', row.artist]);
@@ -449,10 +641,10 @@ void main() {
 
   testWidgets('back and forward round trip, then back at the root shows only Front', (tester) async {
     final core = FakeCore();
-    final row = (await core.rows('', 0, 1)).rows.single;
+    final row = await _firstTrack(core);
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
-    await tester.tap(find.byKey(ValueKey('table-album-${row.trackId}')));
+    await tester.tap(find.byKey(ValueKey('table-release-${row.releaseId}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
@@ -474,7 +666,7 @@ void main() {
 
   testWidgets('a release row and Enter play the release from that index', (tester) async {
     final core = _RecordingCore();
-    final row = (await core.rows('', 0, 1)).rows.single;
+    final row = await _firstTrack(core);
     await core.startTrail(TargetDto.release(id: row.releaseId));
     await _surface(tester, core);
     await tester.pump();
@@ -496,11 +688,10 @@ void main() {
 
   testWidgets('Command-Enter follows the selected table row and a strip star goes back', (tester) async {
     final core = FakeCore();
-    final row = (await core.rows('', 0, 1)).rows.single;
+    final row = await _firstTrack(core);
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
-    final title = find.descendant(of: find.byKey(const ValueKey('table-row-0')), matching: find.text(row.title));
-    await tester.tap(title);
+    await tester.tapAt(tester.getTopLeft(find.byKey(const ValueKey('table-row-0'))) + const Offset(8, 13));
     await _commandKey(tester, LogicalKeyboardKey.enter);
     expect(_paneTitles(tester), ['Everything', row.album]);
     await tester.tap(find.byKey(const ValueKey('trail-stop-0')));
@@ -512,7 +703,7 @@ void main() {
 
   test('fake releases, people, recent doors and hits share row identities', () async {
     final core = FakeCore();
-    final row = (await core.rows('', 2, 1)).rows.single;
+    final row = await _firstTrack(core, offset: 2);
     final release = await core.release(row.releaseId);
     final person = await core.person(row.artistId!);
     expect(release.title, row.album);
@@ -550,13 +741,18 @@ Future<void> _commandKey(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
-Widget _table(CoreBridge core, {String query = '', BigInt? libraryVersion}) => MaterialApp(
-  home: Scaffold(body: TablePane(core: core, query: query, libraryVersion: libraryVersion, onQuery: (_) {})),
+Future<TrackRowDto> _firstTrack(CoreBridge core, {int offset = 0}) async =>
+    ((await core.rows('', _libraryView, offset, 1)).items.single as ItemDto_Track).row;
+
+Widget _table(CoreBridge core, {String query = '', BigInt? libraryVersion, ValueChanged<String>? onQuery, Light light = Light.brass}) => MaterialApp(
+  home: Scaffold(body: LightScope(light: light, child: TablePane(core: core, query: query, libraryVersion: libraryVersion, onQuery: onQuery ?? (_) {}))),
 );
 
 class _RecordingCore extends FakeCore {
   final offsets = <int>[];
   final played = <(String, int)>[];
+  final views = <ViewDto>[];
+  final playedViews = <ViewDto>[];
   int frontCalls = 0;
   final releasesPlayed = <(int, int, int?)>[];
 
@@ -567,15 +763,17 @@ class _RecordingCore extends FakeCore {
   }
 
   @override
-  Future<RowsDto> rows(String query, int offset, int limit) {
+  Future<RowsDto> rows(String query, ViewDto view, int offset, int limit) {
     offsets.add(offset);
-    return super.rows(query, offset, limit);
+    views.add(view);
+    return super.rows(query, view, offset, limit);
   }
 
   @override
-  Future<void> playResults(String query, int index) {
+  Future<void> playResults(String query, ViewDto view, int index) {
     played.add((query, index));
-    return super.playResults(query, index);
+    playedViews.add(view);
+    return super.playResults(query, view, index);
   }
   @override
   Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop}) {
@@ -587,7 +785,7 @@ class _RecordingCore extends FakeCore {
 
 class _InvalidCore extends FakeCore {
   @override
-  Future<RowsDto> rows(String query, int offset, int limit) async => throw 'Invalid query';
+  Future<RowsDto> rows(String query, ViewDto view, int offset, int limit) async => throw 'Invalid query';
 }
 
 class _DelayedSearchCore extends FakeCore {
@@ -601,6 +799,33 @@ class _DelayedSearchCore extends FakeCore {
   }
 
   Future<SearchDto> result(String input) => super.search(input);
+}
+
+class _ArtworkCore extends FakeCore {
+  _ArtworkCore(this.state);
+  final NowDto state;
+
+  @override
+  Stream<NowDto> now() => Stream.value(state);
+
+  @override
+  Future<ReleaseDto> release(PlatformInt64 id) async {
+    final release = await super.release(id);
+    return ReleaseDto(
+      id: release.id,
+      title: release.title,
+      cover: state.cover,
+      artist: release.artist,
+      year: release.year,
+      idiom: release.idiom,
+      tracks: release.tracks,
+      discs: release.discs,
+      lengthMs: release.lengthMs,
+      formats: release.formats,
+      rows: release.rows,
+      credits: release.credits,
+    );
+  }
 }
 
 class _Host extends StatefulWidget {

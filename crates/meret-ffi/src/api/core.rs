@@ -69,13 +69,18 @@ pub fn front() -> Result<FrontDto, String> {
 
 /// A page of the table for `query`. Call as rows scroll into view, never in
 /// `build`.
-pub fn rows(query: String, offset: u64, limit: u32) -> Result<RowsDto, String> {
-    api()?.rows(&query, offset, limit)
+pub fn rows(query: String, view: ViewDto, offset: u64, limit: u32) -> Result<RowsDto, String> {
+    api()?.rows(&query, view, offset, limit)
 }
 
-/// Plays `query`'s result from row `index`, replacing the queue.
-pub fn play_results(query: String, index: u64) -> Result<(), String> {
-    api()?.play_results(&query, index)
+/// Plays from a track ordinal in this view, replacing the queue.
+pub fn play_results(query: String, view: ViewDto, index: u64) -> Result<(), String> {
+    api()?.play_results(&query, view, index)
+}
+
+/// The cascaded idiom, person and release column browser.
+pub fn facets(query: String) -> Result<FacetsDto, String> {
+    api()?.facets(&query)
 }
 
 /// The query line's hits as you type a search: people, releases and tracks.

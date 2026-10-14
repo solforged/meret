@@ -11,7 +11,7 @@ use meret_model::{AgentId, Idiom, ReleaseId, TrackId};
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::library::{PREFERRED_SOURCE, TrackRow};
-use crate::{Result, Store};
+use crate::{Artwork, Result, Store};
 
 /// A release pane.
 #[derive(Clone, Debug, PartialEq)]
@@ -21,6 +21,7 @@ pub struct ReleasePage {
     pub year: Option<u16>,
     pub idiom: Option<Idiom>,
     pub album_artist: Option<(AgentId, String)>,
+    pub cover: Option<Artwork>,
     /// Present tracks, in disc and track order.
     pub tracks: Vec<TrackRow>,
     /// Track artists in order of first appearance, with the tracks they're on.
@@ -115,7 +116,8 @@ impl Store {
                 None => artists.push(TrackCredit { agent, name: name.clone(), positions: vec![(t.disc, t.number)] }),
             }
         }
-        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, tracks, artists }))
+        let cover = self.release_art(&[release])?.remove(&release);
+        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, cover, tracks, artists }))
     }
 
     /// None when the person doesn't exist.

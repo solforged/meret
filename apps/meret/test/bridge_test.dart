@@ -15,6 +15,7 @@ import 'package:meret/src/rust/frb_generated.dart';
 final _lib = '${Directory.current.path}/../../target/debug/libmeret_ffi.dylib';
 late Directory _fixtureDir;
 Future<void>? _scan;
+const _libraryView = ViewDto(sort: SortKeyDto.library_, descending: false, group: false);
 
 Future<void> _scanFixture(CoreBridge core) => _scan ??= () async {
   final scanned = core.status().firstWhere((status) => status.tracks >= BigInt.one);
@@ -79,20 +80,31 @@ void main() {
     expect(front.roots.single.online, isTrue);
   });
 
-  test('a scanned folder supplies table rows and plays its results', () async {
+  test('a scanned folder supplies grouped rows and plays from its view ordinal', () async {
     final core = RustCore();
     try {
       await _scanFixture(core);
 
-      final page = await core.rows('', 0, 50);
-      expect(page.total, greaterThanOrEqualTo(BigInt.one));
-      expect(page.rows, hasLength(1));
-      final row = page.rows.single;
+      const view = ViewDto(sort: SortKeyDto.title, descending: true, group: true);
+      final page = await core.rows('', view, 0, 50);
+      expect(page.total, BigInt.two);
+      expect(page.tracks, BigInt.one);
+      expect(page.releases, BigInt.one);
+      expect(page.items, hasLength(2));
+      final group = (page.items.first as ItemDto_Group).field0;
+      final track = page.items.last as ItemDto_Track;
+      final row = track.row;
+      expect(group.releaseId, row.releaseId);
+      expect(group.title, row.album);
+      expect(group.tracks, 1);
+      expect(group.lengthMs, row.lengthMs);
+      expect(group.format, 'Lossless, up to 16/48');
+      expect(track.ordinal, 0);
       expect(row.title, isNotEmpty);
       expect(row.format, 'FLAC 16/44.1');
 
       final started = core.now().firstWhere((now) => now.title == row.title && now.path.isNotEmpty);
-      await core.playResults('', 0);
+      await core.playResults('', view, track.ordinal);
       final now = await started.timeout(const Duration(seconds: 5));
       expect(now.title, row.title);
       expect(now.path.map((stage) => stage.detail), contains('FLAC 16/44.1'));
@@ -101,10 +113,34 @@ void main() {
     }
   });
 
+  test('facets count the fixture and supply selected-release queries', () async {
+    final core = RustCore();
+    await _scanFixture(core);
+    final row = ((await core.rows('', _libraryView, 0, 1)).items.single as ItemDto_Track).row;
+    final album = row.album.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+    final facets = await core.facets('release:"$album"');
+    expect(facets.idioms.tracks, 1);
+    expect(facets.idioms.entries.single.tracks, 1);
+    expect(facets.people.tracks, 1);
+    expect(facets.people.entries, isNotEmpty);
+    expect(facets.releases.tracks, 1);
+    expect(facets.releases.allQuery, '');
+    final release = facets.releases.entries.single;
+    expect(release.id, row.releaseId);
+    expect(release.name, row.album);
+    expect(release.selected, isTrue);
+    expect(release.query, '');
+    final idiom = facets.idioms.entries.single;
+    final selected = await core.facets(idiom.query);
+    expect(selected.idioms.entries.single.selected, isTrue);
+    expect(selected.people.allQuery, idiom.query);
+    expect((await core.rows(idiom.query, _libraryView, 0, 10)).tracks, BigInt.one);
+  });
+
   test('search groups the fixture and starts a trail rooted at its canonical query', () async {
     final core = RustCore();
     await _scanFixture(core);
-    final row = (await core.rows('', 0, 1)).rows.single;
+    final row = ((await core.rows('', _libraryView, 0, 1)).items.single as ItemDto_Track).row;
     final hits = await core.search(row.title);
     expect(hits.query, isNotEmpty);
     expect(hits.tracks, BigInt.one);
@@ -134,7 +170,7 @@ void main() {
   test('release and person panes follow the fixture credits and navigate their trail', () async {
     final core = RustCore();
     await _scanFixture(core);
-    final row = (await core.rows('', 0, 1)).rows.single;
+    final row = ((await core.rows('', _libraryView, 0, 1)).items.single as ItemDto_Track).row;
     final root = await core.startTrail(const TargetDto.search(query: ''));
     final releaseTrail = await core.follow(root.current, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn);
     final releaseStop = releaseTrail.current;
