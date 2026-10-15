@@ -34,6 +34,7 @@ pub struct DeviceInfo {
     pub id: String,
     /// "RME ADI-2 DAC", "MacBook Pro Speakers".
     pub name: String,
+    pub is_default: bool,
     pub sample_rates: Vec<u32>,
     pub max_bits: u8,
     pub can_be_exclusive: bool,

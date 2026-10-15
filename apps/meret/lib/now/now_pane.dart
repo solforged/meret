@@ -24,7 +24,7 @@ class NowPane extends StatelessWidget {
     final n = now;
     final length = n?.lengthMs?.toDouble() ?? 1;
     return Container(
-      color: Tok.panel,
+      color: Color.alphaBlend(Light.of(context).wash, Tok.panel),
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('NOW', style: Tok.label),

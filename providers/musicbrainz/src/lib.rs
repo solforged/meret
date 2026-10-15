@@ -22,7 +22,7 @@ impl Provider for MusicBrainz {
         Capabilities { catalog: true, threads: true, ..Default::default() }
     }
     fn health(&self) -> Health {
-        Health::Ok { detail: "open data".into() }
+        Health::Ok { detail: "not used yet".into() }
     }
     fn as_catalog(&self) -> Option<&dyn Catalog> {
         Some(self)

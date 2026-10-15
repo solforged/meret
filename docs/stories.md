@@ -45,14 +45,14 @@ Decided 2026-10-14.
 
 | Story | Where | State |
 |---|---|---|
-| I open Meret with nothing in it and see what to do first | The Front's empty state | Built (one button) |
-| Meret finds my music without my hunting for it: `~/Music`, an Apple Music or iTunes library, mounted volumes and NAS shares | The empty Front, one line each, with counts once a quick look has run | Placed |
+| I open Meret with nothing in it and see what to do first | The empty Front, shaped like the Front it becomes | Built |
+| Meret finds my music without my hunting for it: `~/Music`, an Apple Music or iTunes library, mounted volumes and NAS shares | The empty Front, one line each, with counts once a quick look has run | Built |
 | I see the scan working, and can start listening before it ends | Status line progress; the Front and table fill as batches commit | Built (progress) |
 | I bring my history | The empty Front's "Bring your history"; Settings › History | Later |
-| I choose where sound goes and whether Meret takes the device exclusively | Asked on the first play, in Now's signal path; Settings › Playback | Placed |
+| I choose where sound goes and whether Meret takes the device exclusively | Asked on the first play, in Now's signal path; Settings › Playback | Settings › Playback built; the first-play question isn't |
 | I decide whether Meret may look my music up online | A line in Needs you before the first lookup, with a status line reminder; Settings › Lookups | Placed |
-| I connect the services I pay for, now or later, without being forced through them | The empty Front's "Connect a service"; Settings › Sources | Placed |
-| macOS asks for folder access and I understand why | Meret says why just before the system dialog | Placed |
+| I connect the services I pay for, now or later, without being forced through them | The empty Front's "Connect a service"; Settings › Sources | Doors built; every service says it's coming later |
+| macOS asks for folder access and I understand why | Meret says why just before the system dialog | A suggested folder that macOS protects says so; the moment before the dialog isn't built |
 
 ## Every day
 
@@ -75,7 +75,7 @@ Decided 2026-10-14.
 
 | Story | Where | State |
 |---|---|---|
-| I add or remove a folder, or an external drive comes and goes | Settings › Folders; the Front's Folders list adds | Partly built (add only) |
+| I add or remove a folder, or an external drive comes and goes | Settings › Folders; the Front's Folders list adds | Built (drives coming and going are marked offline) |
 | I see what Meret couldn't read | The Front, Needs you | Built |
 | I fix a release Meret guessed wrong | The `≈` mark where I see it; the Front's Needs you for batches | Placed |
 | I tell Meret what kind of music a release is (its idiom) | The release pane's header | Placed |
@@ -116,7 +116,7 @@ Designed now, built late. The doors exist from the start and say what they'll do
 | I let Meret control Roon (authorised inside Roon's own app) | Settings › Sources, which says where to look in Roon | Placed |
 | I connect Bandcamp, YouTube, Qobuz (session-based, no public API) | Settings › Sources | Placed |
 | I connect ListenBrainz or Last.fm to import and scrobble | Settings › Sources and Settings › History | Placed |
-| I see at a glance whether every source is working | Status line dots | Built (local and MusicBrainz) |
+| I see at a glance whether every source is working | Status line dots, each opening a popover with its state | Built (local and MusicBrainz) |
 | A token expires or a service rate-limits; I find out and fix it | The status line dot turns; clicking it opens a popover with the problem, a one-click fix and "Open in Settings" | Placed |
 | I disconnect a service and its claims go with it | That source's section in Settings | Placed |
 | I see where I can hear something I don't own | A pane's "Where to hear it" | Placed (plate 01) |
