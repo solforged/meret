@@ -6,6 +6,19 @@ import FlutterMacOS
 /// move and zoom the window, and tells it when full screen hides the buttons.
 class MainFlutterWindow: NSWindow {
   private var channel: FlutterMethodChannel?
+  private var settingsVisible = false
+
+  @IBAction func showSettings(_ sender: Any?) {
+    channel?.invokeMethod("showSettings", arguments: nil)
+  }
+
+  override func performClose(_ sender: Any?) {
+    if settingsVisible {
+      channel?.invokeMethod("closeSettings", arguments: nil)
+    } else {
+      super.performClose(sender)
+    }
+  }
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -36,6 +49,9 @@ class MainFlutterWindow: NSWindow {
         result(nil)
       case "fullScreen":
         result(self.styleMask.contains(.fullScreen))
+      case "settingsVisible":
+        self.settingsVisible = call.arguments as? Bool ?? false
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }

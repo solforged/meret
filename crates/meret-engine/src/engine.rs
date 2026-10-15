@@ -33,6 +33,9 @@ pub enum Control {
     Play(Load),
     /// What follows the current item, opened early for a gapless join.
     SetNext(Option<Load>),
+    /// Use this output choice from the next track opened. The current stream,
+    /// including pause and resume, stays on its existing output until then.
+    SetOutput { device: Option<String>, exclusive: bool },
     Resume,
     Pause,
     Seek(u64),
@@ -125,6 +128,8 @@ struct Output {
     stream: Box<dyn OutputStream>,
     writer: RingWriter,
     spec: StreamSpec,
+    device: Option<String>,
+    exclusive: bool,
 }
 
 struct Worker {
@@ -207,6 +212,10 @@ impl Worker {
                 self.resume_output();
             }
             Control::SetNext(load) => self.next = load,
+            Control::SetOutput { device, exclusive } => {
+                self.config.device = device;
+                self.config.exclusive = exclusive;
+            }
             Control::Resume => {
                 self.playing = true;
                 self.resume_output();
@@ -260,7 +269,7 @@ impl Worker {
         self.clock.set_playing(false);
     }
 
-    /// Makes `load` current, reopening the device if its format differs.
+    /// Makes `load` current, reopening if the format or output choice differs.
     fn start(&mut self, mut load: Load) {
         let spec = load.decoder.spec();
         if load.start_frame > 0
@@ -268,7 +277,7 @@ impl Worker {
         {
             self.error(Some(load.item), e.to_string());
         }
-        if self.out.as_ref().map(|o| o.spec) != Some(spec) && !self.open_output(spec) {
+        if !self.output_matches(spec) && !self.open_output(spec) {
             self.error(Some(load.item), "the output device could not be opened".into());
             return;
         }
@@ -284,6 +293,12 @@ impl Worker {
         self.draining = false;
     }
 
+    fn output_matches(&self, spec: StreamSpec) -> bool {
+        self.out.as_ref().is_some_and(|o| {
+            o.spec == spec && o.device == self.config.device && o.exclusive == self.config.exclusive
+        })
+    }
+
     fn open_output(&mut self, spec: StreamSpec) -> bool {
         // Drop the old stream (and its callback) before opening a new one.
         self.out = None;
@@ -296,7 +311,7 @@ impl Worker {
         let req = OutputRequest { device: self.config.device.clone(), spec, exclusive: self.config.exclusive };
         match self.backend.open(&req, reader, self.clock.clone()) {
             Ok(stream) => {
-                self.out = Some(Output { stream, writer, spec });
+                self.out = Some(Output { stream, writer, spec, device: req.device, exclusive: req.exclusive });
                 true
             }
             Err(e) => {
@@ -371,18 +386,17 @@ impl Worker {
 
     /// The current item has run out. Returns whether filling can continue.
     fn advance(&mut self) -> bool {
-        let next_spec = self.next.as_ref().map(|n| n.decoder.spec());
-        let same_format = next_spec.is_some() && next_spec == self.out.as_ref().map(|o| o.spec);
+        let can_join = self.next.as_ref().is_some_and(|n| self.output_matches(n.decoder.spec()));
 
-        if same_format {
+        if can_join {
             // Gapless: the next item's first frame follows this one's last.
             let load = self.next.take().expect("checked");
             self.start(load);
             return true;
         }
 
-        // Either nothing follows, or the format changes and the device must
-        // reopen. Both wait for the ring to drain first.
+        // Either nothing follows, or the format/output choice changes and the
+        // device must reopen. Both wait for the ring to drain first.
         self.draining = true;
         let played = self.clock.read().0;
         if played < self.written {
@@ -428,7 +442,7 @@ impl Worker {
             return;
         }
         if self.draining && self.current.is_some() {
-            // Format change pending: try to move on once drained.
+            // Output change pending: try to move on once drained.
             if played >= self.written && self.playing {
                 self.fill();
             }
@@ -487,6 +501,8 @@ mod tests {
     use super::*;
     use crate::decode::Tone;
     use crate::output::null::NullBackend;
+    use crate::output::{DeviceInfo, OutputError};
+    use crate::ring::RingReader;
     use meret_model::audio::Codec;
     use meret_model::signal::Fidelity;
 
@@ -510,6 +526,177 @@ mod tests {
             }
         }
         out
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum OutputAction {
+        Open { device: Option<String>, exclusive: bool },
+        Start,
+        Pause,
+        Drop,
+    }
+
+    struct RecordingBackend(Sender<OutputAction>);
+
+    impl OutputBackend for RecordingBackend {
+        fn name(&self) -> &'static str { "recording" }
+
+        fn devices(&self) -> Result<Vec<DeviceInfo>, OutputError> { Ok(vec![]) }
+
+        fn open(
+            &self,
+            req: &OutputRequest,
+            source: RingReader,
+            _clock: Arc<SharedClock>,
+        ) -> Result<Box<dyn OutputStream>, OutputError> {
+            self.0.send(OutputAction::Open { device: req.device.clone(), exclusive: req.exclusive }).unwrap();
+            if req.device.as_deref() == Some("missing") {
+                return Err(OutputError::NoDevice("missing".into()));
+            }
+            Ok(Box::new(RecordingStream {
+                actions: self.0.clone(),
+                _source: source,
+                opened: Opened {
+                    device_name: req.device.clone().unwrap_or_else(|| "default".into()),
+                    sample_rate: req.spec.sample_rate,
+                    bits: req.spec.bits,
+                    channels: req.spec.channels,
+                    exclusive: req.exclusive,
+                    latency_frames: 0,
+                },
+            }))
+        }
+    }
+
+    struct RecordingStream {
+        actions: Sender<OutputAction>,
+        _source: RingReader,
+        opened: Opened,
+    }
+
+    impl OutputStream for RecordingStream {
+        fn opened(&self) -> &Opened { &self.opened }
+
+        fn start(&mut self) -> Result<(), OutputError> {
+            self.actions.send(OutputAction::Start).unwrap();
+            Ok(())
+        }
+
+        fn pause(&mut self) -> Result<(), OutputError> {
+            self.actions.send(OutputAction::Pause).unwrap();
+            Ok(())
+        }
+    }
+
+    impl Drop for RecordingStream {
+        fn drop(&mut self) {
+            let _ = self.actions.send(OutputAction::Drop);
+        }
+    }
+
+    fn recording_worker() -> (Worker, Receiver<OutputAction>, Receiver<EngineEvent>) {
+        let (actions_tx, actions) = unbounded();
+        let (events_tx, events) = unbounded();
+        let worker = Worker::new(Arc::new(RecordingBackend(actions_tx)), EngineConfig::default(), events_tx);
+        (worker, actions, events)
+    }
+
+    #[test]
+    fn output_choice_waits_for_the_current_track_to_drain_even_across_pause_resume() {
+        for (device, exclusive) in [(Some("dac"), true), (None, false), (Some("dac"), false)] {
+            let (mut worker, actions, _events) = recording_worker();
+            worker.handle(Control::Play(load(1, cd(), 0.01)));
+            assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
+                OutputAction::Open { device: None, exclusive: true },
+                OutputAction::Start,
+            ]);
+            worker.handle(Control::SetNext(Some(load(2, cd(), 0.01))));
+            let device = device.map(str::to_owned);
+            worker.handle(Control::SetOutput { device: device.clone(), exclusive });
+            assert_eq!(worker.config.device, device);
+            assert_eq!(worker.config.exclusive, exclusive);
+            assert!(actions.is_empty());
+            worker.handle(Control::Pause);
+            worker.handle(Control::Resume);
+            assert_eq!(actions.try_iter().collect::<Vec<_>>(), [OutputAction::Pause, OutputAction::Start]);
+            worker.fill();
+            assert!(actions.is_empty());
+            assert_eq!(worker.current.as_ref().unwrap().item, 1);
+            assert_eq!(worker.next.as_ref().unwrap().item, 2);
+            assert!(worker.written > 0);
+            assert_eq!(worker.clock.read().0, 0);
+
+            // Stand in for the callback consuming every old-output frame.
+            worker.clock.advance(worker.written, now_ns());
+            worker.fill();
+            assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
+                OutputAction::Drop,
+                OutputAction::Open { device, exclusive },
+                OutputAction::Start,
+            ]);
+            assert_eq!(worker.current.as_ref().unwrap().item, 2);
+            assert_eq!(worker.out.as_ref().unwrap().spec, cd());
+        }
+    }
+
+    #[test]
+    fn unchanged_output_choice_keeps_same_format_tracks_gapless() {
+        let (mut worker, actions, _events) = recording_worker();
+        worker.handle(Control::Play(load(1, cd(), 0.01)));
+        actions.try_iter().for_each(drop);
+        worker.handle(Control::SetOutput { device: None, exclusive: true });
+        worker.handle(Control::SetNext(Some(load(2, cd(), 0.01))));
+        worker.fill();
+        assert!(actions.is_empty());
+        assert_eq!(worker.clock.read().0, 0);
+        assert_eq!(worker.current.as_ref().unwrap().item, 2);
+        assert!(worker.next.is_none());
+    }
+
+    #[test]
+    fn explicit_play_reopens_same_format_for_a_changed_choice_and_back_to_default() {
+        let (mut worker, actions, _events) = recording_worker();
+        worker.handle(Control::Play(load(1, cd(), 0.01)));
+        actions.try_iter().for_each(drop);
+        for (item, device, exclusive) in [(2, Some("dac"), false), (3, None, true)] {
+            worker.handle(Control::Pause);
+            assert_eq!(actions.try_recv().unwrap(), OutputAction::Pause);
+            let device = device.map(str::to_owned);
+            worker.handle(Control::SetOutput { device: device.clone(), exclusive });
+            assert!(actions.is_empty());
+            worker.handle(Control::Play(load(item, cd(), 0.01)));
+            assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
+                OutputAction::Drop,
+                OutputAction::Open { device, exclusive },
+                OutputAction::Start,
+            ]);
+            assert_eq!(worker.current.as_ref().unwrap().item, item);
+        }
+    }
+
+    #[test]
+    fn rejected_output_choice_reports_an_error_only_when_the_next_track_opens() {
+        let (mut worker, actions, events) = recording_worker();
+        worker.handle(Control::Play(load(1, cd(), 0.01)));
+        worker.publish();
+        actions.try_iter().for_each(drop);
+        events.try_iter().for_each(drop);
+        worker.handle(Control::SetOutput { device: Some("missing".into()), exclusive: false });
+        worker.handle(Control::SetNext(Some(load(2, cd(), 0.01))));
+        worker.fill();
+        assert!(actions.is_empty());
+        assert!(events.is_empty());
+        assert!(worker.out.is_some());
+        worker.clock.advance(worker.written, now_ns());
+        worker.fill();
+        assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
+            OutputAction::Drop,
+            OutputAction::Open { device: Some("missing".into()), exclusive: false },
+        ]);
+        assert!(worker.out.is_none());
+        assert_eq!(events.try_iter().collect::<Vec<_>>(), [
+            EngineEvent::Error { item: Some(2), message: "the output device could not be opened".into() },
+        ]);
     }
 
     #[test]

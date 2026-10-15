@@ -16,6 +16,7 @@ pub(crate) enum ScanRequest {
     /// Rebuild the hot columns from SQLite.
     LoadColumns,
     Root(RootId),
+    Remove(RootId, crossbeam_channel::Sender<crate::Result<()>>),
     /// Rescan every root the library knows.
     AllRoots,
     /// Answered once everything queued before it is done.
@@ -27,20 +28,29 @@ pub(crate) fn spawn_worker(core: Arc<Core>, requests: Receiver<ScanRequest>) {
         .name("meret-scan".into())
         .spawn(move || {
             while let Ok(r) = requests.recv() {
-                match r {
-                    ScanRequest::LoadColumns => reload(&core),
-                    ScanRequest::Root(root) => scan(&core, root),
-                    ScanRequest::AllRoots => match meret_library::roots(&core.store) {
-                        Ok(roots) => roots.into_iter().for_each(|r| scan(&core, r.id)),
-                        Err(e) => tracing::error!(error = %e, "could not list roots"),
-                    },
-                    ScanRequest::Settled(done) => {
-                        let _ = done.send(());
-                    }
-                }
+                handle(&core, r);
             }
         })
         .expect("spawn scan worker");
+}
+
+pub(super) fn handle(core: &Core, request: ScanRequest) {
+    match request {
+        ScanRequest::LoadColumns => reload(core),
+        ScanRequest::Root(root) => scan(core, root),
+        ScanRequest::Remove(root, done) => {
+            let result = meret_library::remove_root(&core.store, root).map_err(crate::CoreError::from)
+                .and_then(|()| reload_result(core));
+            let _ = done.send(result);
+        }
+        ScanRequest::AllRoots => match meret_library::roots(&core.store) {
+            Ok(roots) => roots.into_iter().for_each(|r| scan(core, r.id)),
+            Err(e) => tracing::error!(error = %e, "could not list roots"),
+        },
+        ScanRequest::Settled(done) => {
+            let _ = done.send(());
+        }
+    }
 }
 
 fn scan(core: &Core, root: RootId) {
@@ -70,12 +80,15 @@ fn scan(core: &Core, root: RootId) {
 
 /// Swaps in freshly loaded columns; the write lock is held only for the swap.
 fn reload(core: &Core) {
-    match core.store.load_columns() {
-        Ok(cols) => {
-            let tracks = cols.len() as u64;
-            *core.columns.write() = cols;
-            core.status.send_modify(|s| status::set_library(s, tracks));
-        }
-        Err(e) => tracing::error!(error = %e, "could not load the hot columns"),
+    if let Err(e) = reload_result(core) {
+        tracing::error!(error = %e, "could not load the hot columns");
     }
+}
+
+fn reload_result(core: &Core) -> crate::Result<()> {
+    let cols = core.store.load_columns()?;
+    let tracks = cols.len() as u64;
+    *core.columns.write() = cols;
+    core.status.send_modify(|s| status::set_library(s, tracks));
+    Ok(())
 }

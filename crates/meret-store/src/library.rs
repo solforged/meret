@@ -53,7 +53,9 @@ const ALBUM_ARTIST: &str = "(SELECT COALESCE(a.sort_name, a.name) FROM credit c 
 /// The source a track plays from and is counted by: a present file,
 /// lossless first. Both reads use it, so a row matches what it shows.
 pub(crate) const PREFERRED_SOURCE: &str = "(SELECT s2.id FROM source s2 JOIN file f2 ON f2.id = s2.file_id
-    WHERE s2.track_id = t.id AND s2.kind = 'file' AND f2.state = 'present' ORDER BY s2.lossless DESC, s2.id LIMIT 1)";
+    JOIN root r2 ON r2.id = f2.root_id
+    WHERE s2.track_id = t.id AND s2.kind = 'file' AND f2.state = 'present' AND r2.state <> 'removed'
+    ORDER BY s2.lossless DESC, s2.id LIMIT 1)";
 
 impl Store {
     /// Builds the hot columns from SQLite: one row per track with a present
@@ -233,7 +235,8 @@ impl Store {
                 })?
                 .collect::<rusqlite::Result<_>>()?;
 
-            for row in c.prepare("SELECT state, COUNT(*) FROM file GROUP BY state")?.query_map([], |r| {
+            for row in c.prepare("SELECT f.state, COUNT(*) FROM file f JOIN root r ON r.id = f.root_id
+                                 WHERE r.state <> 'removed' GROUP BY f.state")?.query_map([], |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))
             })? {
                 match row? {

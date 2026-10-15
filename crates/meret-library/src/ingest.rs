@@ -72,16 +72,19 @@ pub struct Root {
     pub id: RootId,
     pub path: PathBuf,
     pub online: bool,
+    pub tracks: u64,
+    pub label: String,
 }
 
-/// Adds a folder as a root, or returns the existing root for it.
+/// Adds a folder as a root, restoring a removed root at the same path.
 pub fn add_root(store: &Store, path: &Path) -> Result<RootId, ScanError> {
     let path = path.canonicalize()?;
     let label = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
     let text = path.to_string_lossy().into_owned();
     let id = store.writer.write(move |tx| {
         tx.execute(
-            "INSERT INTO root (label, path, kind) VALUES (?1, ?2, 'local') ON CONFLICT(path) DO NOTHING",
+            "INSERT INTO root (label, path, kind) VALUES (?1, ?2, 'local')
+             ON CONFLICT(path) DO UPDATE SET state = 'online', label = excluded.label",
             params![label, text],
         )?;
         tx.query_row("SELECT id FROM root WHERE path = ?1", [&text], |r| r.get(0))
@@ -89,14 +92,32 @@ pub fn add_root(store: &Store, path: &Path) -> Result<RootId, ScanError> {
     Ok(RootId(id))
 }
 
+/// Removes a root from the library without deleting its files or stored rows.
+pub fn remove_root(store: &Store, root: RootId) -> Result<(), ScanError> {
+    let changed = store.writer.write(move |tx| {
+        tx.execute("UPDATE root SET state = 'removed' WHERE id = ?1", [root.0])
+    })?;
+    if changed == 0 {
+        return Err(ScanError::NoRoot(root.0));
+    }
+    Ok(())
+}
+
 pub fn roots(store: &Store) -> Result<Vec<Root>, ScanError> {
     Ok(store.read(|c| {
-        let mut stmt = c.prepare("SELECT id, path, state FROM root ORDER BY id")?;
+        let mut stmt = c.prepare(
+            "SELECT r.id, r.path, r.state, r.label,
+                    (SELECT COUNT(DISTINCT s.track_id) FROM source s JOIN file f ON f.id = s.file_id
+                     WHERE f.root_id = r.id AND f.state = 'present' AND s.kind = 'file')
+             FROM root r WHERE r.state <> 'removed' ORDER BY r.id",
+        )?;
         let rows = stmt.query_map([], |r| {
             Ok(Root {
                 id: RootId(r.get(0)?),
                 path: PathBuf::from(r.get::<_, String>(1)?),
                 online: r.get::<_, String>(2)? == "online",
+                label: r.get(3)?,
+                tracks: r.get::<_, i64>(4)? as u64,
             })
         })?;
         rows.collect()
@@ -107,7 +128,7 @@ pub fn roots(store: &Store) -> Result<Vec<Root>, ScanError> {
 /// Blocks; call it from a background thread, never an engine thread.
 pub fn scan(store: &Store, root: RootId, progress: &(dyn Fn(ScanProgress) + Sync)) -> Result<ScanReport, ScanError> {
     let dir: Option<String> =
-        store.read(|c| c.query_row("SELECT path FROM root WHERE id = ?1", [root.0], |r| r.get(0)).optional())?;
+        store.read(|c| c.query_row("SELECT path FROM root WHERE id = ?1 AND state <> 'removed'", [root.0], |r| r.get(0)).optional())?;
     let dir = PathBuf::from(dir.ok_or(ScanError::NoRoot(root.0))?);
     let mut report = ScanReport::default();
 

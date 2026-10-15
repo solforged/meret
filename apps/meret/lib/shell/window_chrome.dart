@@ -11,6 +11,8 @@ class WindowChrome {
     if (!Platform.isMacOS) return;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'fullScreen') fullScreen.value = call.arguments as bool;
+      if (call.method == 'showSettings') onSettings?.call();
+      if (call.method == 'closeSettings') onCloseSettings?.call();
     });
     _channel.invokeMethod<bool>('fullScreen').then((v) => fullScreen.value = v ?? false, onError: (_) {});
   }
@@ -19,6 +21,12 @@ class WindowChrome {
   static const _channel = MethodChannel('meret/window');
 
   final fullScreen = ValueNotifier(false);
+  VoidCallback? onSettings;
+  VoidCallback? onCloseSettings;
+
+  void setSettingsVisible(bool visible) {
+    if (Platform.isMacOS) _channel.invokeMethod<void>('settingsVisible', visible).catchError((_) {});
+  }
 
   /// Room to leave at the left of the bar for the window buttons.
   double get buttonsInset => Platform.isMacOS && !fullScreen.value ? 76 : 0;

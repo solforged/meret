@@ -71,7 +71,12 @@ impl OutputBackend for CoreAudioBackend {
 
     fn devices(&self) -> Result<Vec<DeviceInfo>, OutputError> {
         let ids: Vec<AudioObjectID> = get_vec(SYSTEM, kAudioHardwarePropertyDevices, GLOBAL).map_err(platform)?;
-        Ok(ids.into_iter().filter_map(|id| Device(id).info()).collect())
+        let default: AudioObjectID = get(SYSTEM, kAudioHardwarePropertyDefaultOutputDevice, GLOBAL).map_err(platform)?;
+        Ok(ids.into_iter().filter_map(|id| {
+            let mut info = Device(id).info()?;
+            info.is_default = id == default;
+            Some(info)
+        }).collect())
     }
 
     fn open(
@@ -140,6 +145,7 @@ impl Device {
         Some(DeviceInfo {
             id: self.uid()?,
             name: self.name().unwrap_or_else(|| format!("Device {}", self.0)),
+            is_default: false,
             sample_rates,
             max_bits: formats
                 .iter()

@@ -7,6 +7,7 @@ use meret_provider::{Health, Registry};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SourceStatus {
+    pub key: String,
     /// "This Mac", "Music Assistant", "Spotify".
     pub name: String,
     /// "48,210", "6 providers", "Connect", "1 of 2 zones".
@@ -29,16 +30,16 @@ pub struct StatusState {
 const SCAN_VERBS: [&str; 3] = ["scanning", "reading tags", "reading covers"];
 
 pub(crate) fn initial(registry: &Registry) -> StatusState {
-    let mut sources = vec![SourceStatus { name: local_name().into(), detail: "0".into(), ok: true }];
-    for (name, health) in registry.health() {
-        let (detail, ok) = match health {
+    let mut sources = vec![SourceStatus { key: "local".into(), name: local_name().into(), detail: "0".into(), ok: true }];
+    for provider in registry.all() {
+        let (detail, ok) = match provider.health() {
             Health::Ok { detail } => (detail, true),
             Health::Degraded { reason } => (reason, false),
             Health::NeedsAuth => ("sign in".into(), false),
             Health::Offline { reason } => (reason, false),
             Health::Disabled => continue,
         };
-        sources.push(SourceStatus { name: name.into(), detail, ok });
+        sources.push(SourceStatus { key: provider.key().into(), name: provider.name().into(), detail, ok });
     }
     StatusState { sources, ..Default::default() }
 }

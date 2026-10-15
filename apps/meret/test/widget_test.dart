@@ -52,7 +52,7 @@ void main() {
 
     final light = tester.widget<LightScope>(find.byType(LightScope)).light;
     expect(light.accent, Color(now.light!.light));
-    expect(light.wash, Color(now.light!.wash));
+    expect(light.wash, Colors.transparent);
     expect(light.dim, Color(now.light!.dim));
     expect(light.track, now.trackId!.toInt());
     expect(light.release, now.releaseId!.toInt());
@@ -75,7 +75,7 @@ void main() {
 
     final light = tester.widget<LightScope>(find.byType(LightScope)).light;
     expect(light.accent, Light.brass.accent);
-    expect(light.wash, Light.brass.wash);
+    expect(light.wash, Colors.transparent);
     expect(light.dim, Light.brass.dim);
     expect(light.track, 3);
     expect(light.release, 1);
@@ -85,6 +85,7 @@ void main() {
 
   testWidgets('the release lights the playing row without inventing a cover', (tester) async {
     final core = FakeCore();
+    await core.setSettings(const SettingsDto(light: LightLevelDto.accentAndWash, exclusive: true));
     final releaseId = (await core.now().first).releaseId!;
     await core.playRelease(id: releaseId, index: 2);
     final now = await core.now().first;
@@ -156,11 +157,11 @@ void main() {
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
   });
 
-  testWidgets('an empty library opens only the add-folder door and fills after adding', (tester) async {
+  testWidgets('an empty library offers folders and fills after adding', (tester) async {
     final core = FakeCore.empty();
     await _surface(tester, core);
 
-    expect(find.text('Add a music folder'), findsOneWidget);
+    expect(find.text('Choose a folder…'), findsOneWidget);
     expect(find.byType(TablePane), findsNothing);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
     expect((await core.rows('', _libraryView, 0, 20)).total, BigInt.zero);
@@ -168,7 +169,7 @@ void main() {
     await core.addRoot('/New music');
     await tester.pump();
     await tester.pump();
-    expect(find.text('Add a music folder'), findsNothing);
+    expect(find.text('Choose a folder…'), findsNothing);
     expect(find.text('/New music'), findsOneWidget);
     expect(find.text('Scores'), findsOneWidget);
   });
@@ -418,7 +419,7 @@ void main() {
     ))));
     await tester.pumpAndSettle();
     expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, 0.5);
-    expect(find.text('Add a music folder'), findsOneWidget);
+    expect(find.text('Choose a folder…'), findsOneWidget);
   });
 
   testWidgets('the playhead extrapolates while playing and holds when paused', (tester) async {

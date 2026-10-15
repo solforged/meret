@@ -14,6 +14,92 @@ use meret_store::{TrackRow, format_code};
 
 pub use meret_model::ThreadKind;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LightLevelDto {
+    Off,
+    #[default]
+    Accent,
+    AccentAndWash,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SettingsDto {
+    pub light: LightLevelDto,
+    pub output_device: Option<String>,
+    pub exclusive: bool,
+}
+
+impl From<meret_core::Settings> for SettingsDto {
+    fn from(s: meret_core::Settings) -> Self {
+        let light = match s.light {
+            meret_core::LightLevel::Off => LightLevelDto::Off,
+            meret_core::LightLevel::Accent => LightLevelDto::Accent,
+            meret_core::LightLevel::AccentAndWash => LightLevelDto::AccentAndWash,
+        };
+        Self { light, output_device: s.output_device, exclusive: s.exclusive }
+    }
+}
+
+impl From<SettingsDto> for meret_core::Settings {
+    fn from(s: SettingsDto) -> Self {
+        let light = match s.light {
+            LightLevelDto::Off => meret_core::LightLevel::Off,
+            LightLevelDto::Accent => meret_core::LightLevel::Accent,
+            LightLevelDto::AccentAndWash => meret_core::LightLevel::AccentAndWash,
+        };
+        Self { light, output_device: s.output_device, exclusive: s.exclusive }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutputDeviceDto {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+    pub can_be_exclusive: bool,
+    pub sample_rates: Vec<u32>,
+    pub max_bits: u8,
+}
+
+impl From<meret_engine::output::DeviceInfo> for OutputDeviceDto {
+    fn from(d: meret_engine::output::DeviceInfo) -> Self {
+        Self { id: d.id, name: d.name, is_default: d.is_default, can_be_exclusive: d.can_be_exclusive,
+            sample_rates: d.sample_rates, max_bits: d.max_bits }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FolderKindDto {
+    Music,
+    Steam,
+    AppleMusic,
+    Volume,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FolderSuggestionDto {
+    pub path: String,
+    pub label: String,
+    pub kind: FolderKindDto,
+    pub audio_files: Option<u64>,
+    pub more: bool,
+    pub note: String,
+    pub asks_permission: bool,
+}
+
+impl From<meret_core::FolderSuggestion> for FolderSuggestionDto {
+    fn from(s: meret_core::FolderSuggestion) -> Self {
+        let kind = match s.kind {
+            meret_core::FolderKind::Music => FolderKindDto::Music,
+            meret_core::FolderKind::Steam => FolderKindDto::Steam,
+            meret_core::FolderKind::AppleMusic => FolderKindDto::AppleMusic,
+            meret_core::FolderKind::Volume => FolderKindDto::Volume,
+        };
+        Self { path: s.path.to_string_lossy().into_owned(), label: s.label, kind, audio_files: s.audio_files,
+            more: s.more, note: s.note, asks_permission: s.asks_permission }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum QueryKind {
     Search,
@@ -165,6 +251,7 @@ impl NowDto {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SourceDto {
+    pub key: String,
     pub name: String,
     pub detail: String,
     pub ok: bool,
@@ -192,7 +279,7 @@ pub struct StatusDto {
 impl From<&StatusState> for StatusDto {
     fn from(s: &StatusState) -> Self {
         StatusDto {
-            sources: s.sources.iter().map(|x| SourceDto { name: x.name.clone(), detail: x.detail.clone(), ok: x.ok }).collect(),
+            sources: s.sources.iter().map(|x| SourceDto { key: x.key.clone(), name: x.name.clone(), detail: x.detail.clone(), ok: x.ok }).collect(),
             jobs: s.jobs.iter().map(|j| JobDto { verb: j.verb.clone(), done: j.done, total: j.total }).collect(),
             guessed: s.guessed,
             new_leads: s.new_leads,
@@ -484,6 +571,8 @@ pub struct RootDto {
     pub id: i64,
     pub path: String,
     pub online: bool,
+    pub tracks: u64,
+    pub label: String,
 }
 
 impl From<Front> for FrontDto {
@@ -556,7 +645,7 @@ impl From<Front> for FrontDto {
             roots: f
                 .roots
                 .into_iter()
-                .map(|r| RootDto { id: r.id.0, path: r.path.display().to_string(), online: r.online })
+                .map(|r| RootDto { id: r.id.0, path: r.path.display().to_string(), online: r.online, tracks: r.tracks, label: r.label })
                 .collect(),
         }
     }
