@@ -182,7 +182,8 @@ fn fold(s: &str) -> Vec<char> {
 
 /// A track with a present file: what the table shows and hits count.
 const PRESENT: &str = "EXISTS (SELECT 1 FROM source s JOIN file f ON f.id = s.file_id
-    WHERE s.track_id = {t}.id AND s.kind = 'file' AND f.state = 'present')";
+    JOIN root r ON r.id = f.root_id
+    WHERE s.track_id = {t}.id AND s.kind = 'file' AND f.state = 'present' AND r.state <> 'removed')";
 
 /// The tracks credited to agent `{a}`: as a recording's artist, or on a
 /// release they are the album artist of.

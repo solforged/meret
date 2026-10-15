@@ -14,6 +14,7 @@ mod migrate;
 mod pages;
 mod plan;
 pub mod search;
+mod settings;
 mod writer;
 
 use std::path::Path;
@@ -27,6 +28,7 @@ pub use library::{LibraryFacts, RecentRelease, ReleaseHead, TrackRow};
 pub use pages::{Colleague, PersonPage, PersonRelease, ReleasePage, TrackCredit};
 pub use plan::{Plan, format_code, plan};
 pub use search::{PersonHit, ReleaseHit};
+pub use settings::{LightLevel, Settings};
 pub use writer::Writer;
 
 #[derive(Debug, thiserror::Error)]

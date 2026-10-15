@@ -48,7 +48,7 @@ pub fn covers(store: &Store, art_dir: &Path, progress: &(dyn Fn(ScanProgress) + 
                  JOIN medium m ON m.edition_id = e.id JOIN track t ON t.medium_id = m.id
                  JOIN source s ON s.track_id = t.id AND s.kind = 'file'
                  JOIN file f ON f.id = s.file_id JOIN root r ON r.id = f.root_id
-                 WHERE f.state = 'present' AND rl.art_checked = 0
+                 WHERE f.state = 'present' AND r.state <> 'removed' AND rl.art_checked = 0
                    AND NOT EXISTS (SELECT 1 FROM entity_artwork ea WHERE ea.entity_kind = 3 AND ea.entity_id = rl.id)
              ) WHERE n = 1 ORDER BY release_id",
         )?;

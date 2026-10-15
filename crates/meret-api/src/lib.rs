@@ -85,6 +85,28 @@ impl Api {
         self.core.add_root(Path::new(path)).map(|r| r.0).map_err(|e| e.to_string())
     }
 
+    pub fn remove_root(&self, id: i64) -> Result<(), String> {
+        self.core.remove_root(meret_model::RootId(id)).map_err(|e| e.to_string())
+    }
+
+    pub fn settings(&self) -> SettingsDto {
+        self.core.settings().into()
+    }
+
+    /// Persists settings. Output changes apply from the next track opened;
+    /// the currently playing track keeps its device and exclusive mode.
+    pub fn set_settings(&self, settings: SettingsDto) -> Result<(), String> {
+        self.core.set_settings(settings.into()).map_err(|e| e.to_string())
+    }
+
+    pub fn output_devices(&self) -> Result<Vec<OutputDeviceDto>, String> {
+        self.core.output_devices().map(|devices| devices.into_iter().map(Into::into).collect()).map_err(|e| e.to_string())
+    }
+
+    pub fn suggest_folders(&self) -> Vec<FolderSuggestionDto> {
+        self.core.suggest_folders().into_iter().map(Into::into).collect()
+    }
+
     pub fn rescan(&self) {
         self.core.rescan();
     }

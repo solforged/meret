@@ -33,6 +33,11 @@ abstract interface class CoreBridge {
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
   Future<void> transport(TransportDto cmd);
   Future<int> addRoot(String path);
+  Future<void> removeRoot(int id);
+  SettingsDto settings();
+  Future<void> setSettings(SettingsDto s);
+  Future<List<OutputDeviceDto>> outputDevices();
+  Future<List<FolderSuggestionDto>> suggestFolders();
   Future<RowsDto> rows(String query, ViewDto view, int offset, int limit);
   Future<void> playResults(String query, ViewDto view, int index);
   Future<FacetsDto> facets(String query);
@@ -78,6 +83,16 @@ class RustCore implements CoreBridge {
   @override
   Future<int> addRoot(String path) async => (await rust.addRoot(path: path)).toInt();
   @override
+  Future<void> removeRoot(int id) => rust.removeRoot(id: PlatformInt64Util.from(id));
+  @override
+  SettingsDto settings() => rust.settings();
+  @override
+  Future<void> setSettings(SettingsDto s) => rust.setSettings(s: s);
+  @override
+  Future<List<OutputDeviceDto>> outputDevices() => rust.outputDevices();
+  @override
+  Future<List<FolderSuggestionDto>> suggestFolders() => rust.suggestFolders();
+  @override
   Future<RowsDto> rows(String query, ViewDto view, int offset, int limit) =>
       rust.rows(query: query, view: view, offset: BigInt.from(offset), limit: limit);
   @override
@@ -93,10 +108,13 @@ class FakeCore implements CoreBridge {
 
   FakeCore.empty() : _empty = true {
     _state = const NowDto(title: '', subtitle: '', path: []);
+    _roots.clear();
   }
 
   bool _empty = false;
-  String _root = '/Music';
+  final _roots = <int, String>{1: '/Music'};
+  final _rootIds = <String, int>{'/Music': 1};
+  SettingsDto _settings = const SettingsDto(light: LightLevelDto.accent, exclusive: true);
   BigInt _libraryVersion = BigInt.one;
   TrailDto? _trail;
   final _forward = <int, int>{};
@@ -135,11 +153,9 @@ class FakeCore implements CoreBridge {
   }
 
   StatusDto get _status => StatusDto(
-        sources: _empty ? const [SourceDto(name: 'This Mac', detail: '0', ok: true)] : const [
-          SourceDto(name: 'This Mac', detail: '48,210', ok: true),
-          SourceDto(name: 'Music Assistant', detail: '6 providers', ok: true),
-          SourceDto(name: 'Spotify', detail: 'Connect', ok: true),
-          SourceDto(name: 'Roon', detail: '1 of 2 zones', ok: false),
+        sources: [
+          SourceDto(key: 'local', name: 'This Mac', detail: _empty ? '0' : '48,210', ok: true),
+          const SourceDto(key: 'musicbrainz', name: 'MusicBrainz', detail: 'not used yet', ok: true),
         ],
         jobs: _empty ? [] : [JobDto(verb: 'analysing', done: BigInt.from(1204), total: BigInt.from(3880))],
         guessed: _empty ? BigInt.zero : BigInt.from(312),
@@ -192,7 +208,11 @@ class FakeCore implements CoreBridge {
         FrontLineDto(label: 'Tracks with a guessed identity', count: BigInt.from(312), note: 'Mostly game rips; 41 could go to MusicBrainz with your tags and VGMdb’s list'),
         FrontLineDto(label: 'Albums with two editions', count: BigInt.from(18), note: 'Pick which one plays by default'),
       ],
-      roots: [RootDto(id: PlatformInt64Util.from(1), path: _root, online: true)],
+      roots: [for (final root in _roots.entries) RootDto(
+        id: PlatformInt64Util.from(root.key), path: root.value, online: true,
+        tracks: BigInt.from(48210 ~/ _roots.length),
+        label: root.value.split('/').where((part) => part.isNotEmpty).lastOrNull ?? root.value,
+      )],
     );
   }
 
@@ -521,13 +541,54 @@ class FakeCore implements CoreBridge {
 
   @override
   Future<int> addRoot(String path) async {
+    final id = _rootIds.putIfAbsent(path, () => _rootIds.length + 1);
+    _roots[id] = path;
     _empty = false;
-    _root = path;
+    _libraryChanged();
+    return id;
+  }
+
+  @override
+  Future<void> removeRoot(int id) async {
+    if (_roots.remove(id) == null) throw 'No folder with id $id';
+    _empty = _roots.isEmpty;
+    _libraryChanged();
+  }
+
+  void _libraryChanged() {
     _libraryVersion += BigInt.one;
     _results.clear();
     _lists.clear();
     _statuses.add(_status);
-    return 1;
+  }
+
+  @override
+  SettingsDto settings() => _settings;
+
+  @override
+  Future<void> setSettings(SettingsDto s) async {
+    _settings = s;
+  }
+
+  @override
+  Future<List<OutputDeviceDto>> outputDevices() async => [
+    OutputDeviceDto(id: 'speakers', name: 'MacBook Pro Speakers', isDefault: true,
+      canBeExclusive: true, sampleRates: Uint32List.fromList([44100, 48000, 96000]), maxBits: 24),
+    OutputDeviceDto(id: 'dac', name: 'RME ADI-2 DAC', isDefault: false,
+      canBeExclusive: true, sampleRates: Uint32List.fromList([44100, 48000, 88200, 96000, 192000]), maxBits: 32),
+  ];
+
+  @override
+  Future<List<FolderSuggestionDto>> suggestFolders() async {
+    final suggestions = [
+      FolderSuggestionDto(path: '~/Music', label: 'Music', kind: FolderKindDto.music,
+        audioFiles: BigInt.from(1014), more: false, note: 'includes your Apple Music library', asksPermission: false),
+      FolderSuggestionDto(path: '~/Library/Application Support/Steam/steamapps/music', label: 'Steam soundtracks', kind: FolderKindDto.steam,
+        audioFiles: BigInt.from(206), more: false, note: '', asksPermission: false),
+      const FolderSuggestionDto(path: '/Volumes/Music NAS', label: 'Music NAS', kind: FolderKindDto.volume,
+        more: false, note: '', asksPermission: true),
+    ];
+    return suggestions.where((s) => !_roots.values.any((root) => s.path == root || s.path.startsWith('$root/'))).toList();
   }
 
   @override

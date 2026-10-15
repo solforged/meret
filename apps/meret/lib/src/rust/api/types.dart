@@ -120,6 +120,51 @@ class FacetsDto {
 
 enum FidelityDto { bitPerfect, altered, lossy }
 
+enum FolderKindDto { music, steam, appleMusic, volume }
+
+class FolderSuggestionDto {
+  final String path;
+  final String label;
+  final FolderKindDto kind;
+  final BigInt? audioFiles;
+  final bool more;
+  final String note;
+  final bool asksPermission;
+
+  const FolderSuggestionDto({
+    required this.path,
+    required this.label,
+    required this.kind,
+    this.audioFiles,
+    required this.more,
+    required this.note,
+    required this.asksPermission,
+  });
+
+  @override
+  int get hashCode =>
+      path.hashCode ^
+      label.hashCode ^
+      kind.hashCode ^
+      audioFiles.hashCode ^
+      more.hashCode ^
+      note.hashCode ^
+      asksPermission.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FolderSuggestionDto &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          label == other.label &&
+          kind == other.kind &&
+          audioFiles == other.audioFiles &&
+          more == other.more &&
+          note == other.note &&
+          asksPermission == other.asksPermission;
+}
+
 class FrontDto {
   final BigInt tracks;
   final BigInt releases;
@@ -394,6 +439,8 @@ class LightDto {
           dim == other.dim;
 }
 
+enum LightLevelDto { off, accent, accentAndWash }
+
 class NowDto {
   final PlatformInt64? trackId;
   final PlatformInt64? releaseId;
@@ -451,6 +498,45 @@ class NowDto {
           path == other.path &&
           fidelity == other.fidelity &&
           error == other.error;
+}
+
+class OutputDeviceDto {
+  final String id;
+  final String name;
+  final bool isDefault;
+  final bool canBeExclusive;
+  final Uint32List sampleRates;
+  final int maxBits;
+
+  const OutputDeviceDto({
+    required this.id,
+    required this.name,
+    required this.isDefault,
+    required this.canBeExclusive,
+    required this.sampleRates,
+    required this.maxBits,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      isDefault.hashCode ^
+      canBeExclusive.hashCode ^
+      sampleRates.hashCode ^
+      maxBits.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OutputDeviceDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          isDefault == other.isDefault &&
+          canBeExclusive == other.canBeExclusive &&
+          sampleRates == other.sampleRates &&
+          maxBits == other.maxBits;
 }
 
 class PersonDto {
@@ -624,11 +710,24 @@ class RootDto {
   final PlatformInt64 id;
   final String path;
   final bool online;
+  final BigInt tracks;
+  final String label;
 
-  const RootDto({required this.id, required this.path, required this.online});
+  const RootDto({
+    required this.id,
+    required this.path,
+    required this.online,
+    required this.tracks,
+    required this.label,
+  });
 
   @override
-  int get hashCode => id.hashCode ^ path.hashCode ^ online.hashCode;
+  int get hashCode =>
+      id.hashCode ^
+      path.hashCode ^
+      online.hashCode ^
+      tracks.hashCode ^
+      label.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -637,7 +736,9 @@ class RootDto {
           runtimeType == other.runtimeType &&
           id == other.id &&
           path == other.path &&
-          online == other.online;
+          online == other.online &&
+          tracks == other.tracks &&
+          label == other.label;
 }
 
 class RowsDto {
@@ -722,23 +823,56 @@ class SearchDto {
           trackHitsTotal == other.trackHitsTotal;
 }
 
+class SettingsDto {
+  final LightLevelDto light;
+  final String? outputDevice;
+  final bool exclusive;
+
+  const SettingsDto({
+    required this.light,
+    this.outputDevice,
+    required this.exclusive,
+  });
+
+  @override
+  int get hashCode =>
+      light.hashCode ^ outputDevice.hashCode ^ exclusive.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SettingsDto &&
+          runtimeType == other.runtimeType &&
+          light == other.light &&
+          outputDevice == other.outputDevice &&
+          exclusive == other.exclusive;
+}
+
 enum SortKeyDto { library_, title, artist, album, year, length, format }
 
 class SourceDto {
+  final String key;
   final String name;
   final String detail;
   final bool ok;
 
-  const SourceDto({required this.name, required this.detail, required this.ok});
+  const SourceDto({
+    required this.key,
+    required this.name,
+    required this.detail,
+    required this.ok,
+  });
 
   @override
-  int get hashCode => name.hashCode ^ detail.hashCode ^ ok.hashCode;
+  int get hashCode =>
+      key.hashCode ^ name.hashCode ^ detail.hashCode ^ ok.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SourceDto &&
           runtimeType == other.runtimeType &&
+          key == other.key &&
           name == other.name &&
           detail == other.detail &&
           ok == other.ok;

@@ -70,6 +70,24 @@ pub fn add(api: &Api, rt: &tokio::runtime::Runtime, root: &Path) -> Result<()> {
     Ok(())
 }
 
+pub fn remove(api: &Api, id: i64) -> Result<()> {
+    api.remove_root(id).map_err(|e| anyhow!(e))?;
+    println!("removed root {id}; the table holds {} tracks", api.status().tracks);
+    Ok(())
+}
+
+pub fn suggest(api: &Api) -> Result<()> {
+    for folder in api.suggest_folders() {
+        let count = folder.audio_files.map(|n| format!("{n}{} audio files", if folder.more { "+" } else { "" }))
+            .unwrap_or_else(|| "count after access".into());
+        println!("{}: {} · {}{}{}",
+            folder.label, folder.path, count,
+            if folder.asks_permission { " · macOS will ask for access" } else { "" },
+            if folder.note.is_empty() { String::new() } else { format!(" · {}", folder.note) });
+    }
+    Ok(())
+}
+
 pub fn rescan(api: &Api, rt: &tokio::runtime::Runtime) -> Result<()> {
     let t = Instant::now();
     settle(api, rt);

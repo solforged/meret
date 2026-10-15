@@ -55,6 +55,31 @@ pub fn add_root(path: String) -> Result<i64, String> {
     api()?.add_root(&path)
 }
 
+/// Removes the folder from the library, keeping its files and stored history.
+pub fn remove_root(id: i64) -> Result<(), String> {
+    api()?.remove_root(id)
+}
+
+#[frb(sync)]
+pub fn settings() -> Result<SettingsDto, String> {
+    Ok(api()?.settings())
+}
+
+/// Persists settings. Output changes apply from the next track opened;
+/// the currently playing track keeps its device and exclusive mode.
+pub fn set_settings(s: SettingsDto) -> Result<(), String> {
+    api()?.set_settings(s)
+}
+
+pub fn output_devices() -> Result<Vec<OutputDeviceDto>, String> {
+    api()?.output_devices()
+}
+
+/// Budgeted discovery runs off the UI thread; protected folders aren't walked.
+pub fn suggest_folders() -> Result<Vec<FolderSuggestionDto>, String> {
+    Ok(api()?.suggest_folders())
+}
+
 /// Runs a query-line command: `play <query>` plays what matches; the
 /// other commands return an error that says they aren't built yet.
 pub fn run_command(input: String) -> Result<(), String> {

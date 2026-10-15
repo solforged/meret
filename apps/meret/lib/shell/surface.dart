@@ -12,12 +12,14 @@ import '../panes/pane.dart';
 import '../panes/person_pane.dart';
 import '../panes/release_pane.dart';
 import '../panes/search_pane.dart';
+import '../settings/settings_window.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
 import 'status_line.dart';
 import 'width_class.dart';
+import 'window_chrome.dart';
 
 /// The one surface: query line, trail strip, panes, Now, status line.
 /// No tabs, no sidebar, no destinations.
@@ -41,10 +43,14 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   bool _frontOnly = true;
   int _navigationVersion = 0;
   String? _navigationError;
+  late SettingsDto _settings;
+  BuildContext? _settingsContext;
 
   @override
   void initState() {
     super.initState();
+    _settings = widget.core.settings();
+    WindowChrome.instance.onSettings = _openSettings;
     _nowSub = widget.core.now().listen((n) {
       if (!mounted) return;
       _clock.anchor(n.anchor);
@@ -70,7 +76,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _clock.dispose();
     _slide.dispose();
     _queryFocus.dispose();
+    WindowChrome.instance.onSettings = null;
     super.dispose();
+  }
+
+  void _openSettings() {
+    final context = _settingsContext;
+    if (context != null) showSettings(context);
   }
 
   void _toggle() => widget.core.transport(_clock.playing ? const TransportDto.pause() : const TransportDto.resume());
@@ -194,15 +206,21 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final colours = _now?.light;
+    final colours = _settings.light == LightLevelDto.off ? null : _now?.light;
+    final wash = _settings.light == LightLevelDto.accentAndWash
+        ? colours == null ? Light.brass.wash : Color(colours.wash)
+        : Colors.transparent;
     final light = Light(
       accent: colours == null ? Light.brass.accent : Color(colours.light),
-      wash: colours == null ? Light.brass.wash : Color(colours.wash),
+      wash: wash,
       dim: colours == null ? Light.brass.dim : Color(colours.dim),
       track: _now?.trackId?.toInt(),
       release: _now?.releaseId?.toInt(),
     );
-    return LightScope(light: light, child: Shortcuts(
+    return SettingsScope(
+      core: widget.core,
+      onChanged: (settings) => setState(() => _settings = settings),
+      child: LightScope(light: light, child: Shortcuts(
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.slash): _Focus(),
         SingleActivator(LogicalKeyboardKey.space): _Toggle(),
@@ -210,6 +228,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         SingleActivator(LogicalKeyboardKey.bracketRight): _Move(1),
         SingleActivator(LogicalKeyboardKey.digit1, meta: true): _Front(),
         SingleActivator(LogicalKeyboardKey.keyL, meta: true): _Table(),
+        SingleActivator(LogicalKeyboardKey.comma, meta: true): _Settings(),
       },
       child: Actions(
         actions: {
@@ -218,12 +237,14 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
           _Front: CallbackAction<_Front>(onInvoke: (_) => _showFront()),
           _Table: CallbackAction<_Table>(onInvoke: (_) => _report(_start(const TargetDto.search(query: '')))),
+          _Settings: CallbackAction<_Settings>(onInvoke: (_) => _openSettings()),
         },
         child: Focus(
           autofocus: true,
           child: ColoredBox(
             color: Tok.void_,
             child: LayoutBuilder(builder: (context, box) {
+              _settingsContext = context;
               final wc = WidthClass.of(box.maxWidth);
               final panes = <Widget>[
                 FrontPane(
@@ -257,13 +278,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 ),
                 if (!wc.pinnedNow) _NowBar(now: _now, clock: _clock, onToggle: _toggle),
                 if (wc != WidthClass.phone)
-                  StatusLine(status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
+                  StatusLine(core: widget.core, status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
               ]);
             }),
           ),
         ),
       ),
-    ));
+    )));
   }
 }
 
@@ -276,6 +297,10 @@ List<StopDto> _path(TrailDto trail) {
     stop = stops[stop.parent];
   }
   return path.reversed.toList();
+}
+
+class _Settings extends Intent {
+  const _Settings();
 }
 
 class _Front extends Intent {
@@ -313,7 +338,7 @@ class _NowBar extends StatelessWidget {
       onTap: onToggle,
       child: Container(
         height: 48,
-        color: Tok.panel,
+        color: Color.alphaBlend(Light.of(context).wash, Tok.panel),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(children: [
           Expanded(

@@ -1310,6 +1310,7 @@ name = "meret-core"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
+ "libc",
  "meret-engine",
  "meret-graph",
  "meret-jobs",

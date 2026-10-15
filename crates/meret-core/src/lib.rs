@@ -7,7 +7,11 @@ mod local_zone;
 mod now;
 mod scan;
 mod status;
+mod suggestions;
 mod views;
+
+#[cfg(test)]
+mod setup_tests;
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -33,6 +37,8 @@ pub use facets::{Facet, FacetColumn, Facets};
 pub use local_zone::{LocalZone, file_uri};
 pub use now::NowState;
 pub use status::{SourceStatus, StatusState};
+pub use meret_store::{LightLevel, Settings};
+pub use suggestions::{FolderKind, FolderSuggestion};
 pub use views::{GroupRow, Item, List, PageItem, RowsPage, SortKey, View};
 
 use scan::ScanRequest;
@@ -52,6 +58,8 @@ pub enum CoreError {
     Zone(#[from] ZoneError),
     #[error("{0}")]
     Query(String),
+    #[error(transparent)]
+    Output(#[from] meret_engine::output::OutputError),
     #[error("the core is already running with a different data directory")]
     AlreadyStarted,
 }
@@ -127,6 +135,7 @@ pub struct Core {
     scans: Sender<ScanRequest>,
     cover_report: Mutex<meret_library::CoverReport>,
     lists: Mutex<VecDeque<Arc<List>>>,
+    settings: Mutex<Settings>,
 }
 
 static CORE: OnceLock<Arc<Core>> = OnceLock::new();
@@ -153,9 +162,20 @@ pub fn get() -> Option<Arc<Core>> {
 }
 
 impl Core {
-    fn new(config: CoreConfig, scans: Sender<ScanRequest>) -> Result<Self> {
+    fn new(mut config: CoreConfig, scans: Sender<ScanRequest>) -> Result<Self> {
         std::fs::create_dir_all(&config.data_dir)?;
         let store = Store::open(&config.data_dir.join("library.db"))?;
+        let saved = store.settings()?;
+        let has_saved = saved.is_some();
+        let settings = saved.unwrap_or_else(|| match &config.output {
+            OutputChoice::System { device, exclusive } => Settings {
+                output_device: device.clone(), exclusive: *exclusive, ..Settings::default()
+            },
+            OutputChoice::Null { .. } => Settings::default(),
+        });
+        if has_saved && matches!(config.output, OutputChoice::System { .. }) {
+            config.output = OutputChoice::System { device: settings.output_device.clone(), exclusive: settings.exclusive };
+        }
 
         // TODO(core): load hot columns from a snapshot file first; the scan
         // worker loads them from SQLite after start-up.
@@ -205,6 +225,7 @@ impl Core {
             scans,
             cover_report: Mutex::new(meret_library::CoverReport::default()),
             lists: Mutex::new(VecDeque::with_capacity(LISTS)),
+            settings: Mutex::new(settings),
         })
     }
 
@@ -231,6 +252,53 @@ impl Core {
         let root = meret_library::add_root(&self.store, path)?;
         let _ = self.scans.send(ScanRequest::Root(root));
         Ok(root)
+    }
+
+    pub fn settings(&self) -> Settings {
+        self.settings.lock().clone()
+    }
+
+    /// Persists settings; output changes apply from the next track opened.
+    /// The currently playing track keeps its device and exclusive mode.
+    pub fn set_settings(&self, settings: Settings) -> Result<()> {
+        let mut current = self.settings.lock();
+        self.store.set_settings(settings.clone())?;
+        if current.output_device != settings.output_device || current.exclusive != settings.exclusive {
+            self.engine.send(meret_engine::Control::SetOutput {
+                device: settings.output_device.clone(), exclusive: settings.exclusive,
+            });
+        }
+        *current = settings;
+        Ok(())
+    }
+
+    pub fn output_devices(&self) -> Result<Vec<meret_engine::output::DeviceInfo>> {
+        #[cfg(target_os = "macos")]
+        let backend = meret_engine::output::coreaudio::CoreAudioBackend;
+        #[cfg(not(target_os = "macos"))]
+        return Err(meret_engine::output::OutputError::Unimplemented("output device enumeration").into());
+        #[cfg(target_os = "macos")]
+        Ok(backend.devices()?)
+    }
+
+    /// Budgeted disk discovery; protected locations are never walked.
+    pub fn suggest_folders(&self) -> Vec<FolderSuggestion> {
+        let roots = match meret_library::roots(&self.store) {
+            Ok(roots) => roots.into_iter().map(|r| r.path).collect::<Vec<_>>(),
+            Err(error) => {
+                tracing::error!(%error, "could not list roots for folder suggestions");
+                return Vec::new();
+            }
+        };
+        suggestions::suggest(&roots)
+    }
+
+    /// Serialized behind scans so an in-flight scan cannot restore this root.
+    /// Returns after the hot columns and library version have been updated.
+    pub fn remove_root(&self, root: RootId) -> Result<()> {
+        let (done, result) = crossbeam_channel::bounded(1);
+        self.scans.send(ScanRequest::Remove(root, done)).map_err(|_| meret_store::StoreError::WriterGone)?;
+        result.recv().map_err(|_| meret_store::StoreError::WriterGone)?
     }
 
     /// Rescans every root in the background.

@@ -24,6 +24,7 @@ impl OutputBackend for NullBackend {
         Ok(vec![DeviceInfo {
             id: "null".into(),
             name: "Nowhere".into(),
+            is_default: true,
             sample_rates: vec![44_100, 48_000, 88_200, 96_000, 176_400, 192_000],
             max_bits: 32,
             can_be_exclusive: true,

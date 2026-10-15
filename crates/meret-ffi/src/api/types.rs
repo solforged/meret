@@ -8,6 +8,50 @@ pub use meret_api::{
 };
 pub use meret_api::LightDto;
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
+pub use meret_api::{FolderKindDto, FolderSuggestionDto, LightLevelDto, OutputDeviceDto, SettingsDto};
+
+#[frb(mirror(LightLevelDto))]
+pub enum _LightLevelDto {
+    Off,
+    Accent,
+    AccentAndWash,
+}
+
+#[frb(mirror(SettingsDto))]
+pub struct _SettingsDto {
+    pub light: LightLevelDto,
+    pub output_device: Option<String>,
+    pub exclusive: bool,
+}
+
+#[frb(mirror(OutputDeviceDto))]
+pub struct _OutputDeviceDto {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+    pub can_be_exclusive: bool,
+    pub sample_rates: Vec<u32>,
+    pub max_bits: u8,
+}
+
+#[frb(mirror(FolderKindDto))]
+pub enum _FolderKindDto {
+    Music,
+    Steam,
+    AppleMusic,
+    Volume,
+}
+
+#[frb(mirror(FolderSuggestionDto))]
+pub struct _FolderSuggestionDto {
+    pub path: String,
+    pub label: String,
+    pub kind: FolderKindDto,
+    pub audio_files: Option<u64>,
+    pub more: bool,
+    pub note: String,
+    pub asks_permission: bool,
+}
 
 #[frb(mirror(HitKind))]
 pub enum _HitKind {
@@ -142,6 +186,7 @@ pub struct _NowDto {
 
 #[frb(mirror(SourceDto))]
 pub struct _SourceDto {
+    pub key: String,
     pub name: String,
     pub detail: String,
     pub ok: bool,
@@ -277,6 +322,8 @@ pub struct _RootDto {
     pub id: i64,
     pub path: String,
     pub online: bool,
+    pub tracks: u64,
+    pub label: String,
 }
 
 #[frb(mirror(StopDto))]

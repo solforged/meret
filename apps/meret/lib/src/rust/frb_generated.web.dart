@@ -58,6 +58,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LightDto dco_decode_box_autoadd_light_dto(dynamic raw);
 
   @protected
+  SettingsDto dco_decode_box_autoadd_settings_dto(dynamic raw);
+
+  @protected
   TargetDto dco_decode_box_autoadd_target_dto(dynamic raw);
 
   @protected
@@ -100,6 +103,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FidelityDto dco_decode_fidelity_dto(dynamic raw);
 
   @protected
+  FolderKindDto dco_decode_folder_kind_dto(dynamic raw);
+
+  @protected
+  FolderSuggestionDto dco_decode_folder_suggestion_dto(dynamic raw);
+
+  @protected
   FrontDto dco_decode_front_dto(dynamic raw);
 
   @protected
@@ -136,10 +145,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LightDto dco_decode_light_dto(dynamic raw);
 
   @protected
+  LightLevelDto dco_decode_light_level_dto(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
   List<FacetDto> dco_decode_list_facet_dto(dynamic raw);
+
+  @protected
+  List<FolderSuggestionDto> dco_decode_list_folder_suggestion_dto(dynamic raw);
 
   @protected
   List<FrontLineDto> dco_decode_list_front_line_dto(dynamic raw);
@@ -155,6 +170,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<JobDto> dco_decode_list_job_dto(dynamic raw);
+
+  @protected
+  List<OutputDeviceDto> dco_decode_list_output_device_dto(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
@@ -217,6 +235,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
+  OutputDeviceDto dco_decode_output_device_dto(dynamic raw);
+
+  @protected
   PersonDto dco_decode_person_dto(dynamic raw);
 
   @protected
@@ -242,6 +263,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchDto dco_decode_search_dto(dynamic raw);
+
+  @protected
+  SettingsDto dco_decode_settings_dto(dynamic raw);
 
   @protected
   SortKeyDto dco_decode_sort_key_dto(dynamic raw);
@@ -332,6 +356,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LightDto sse_decode_box_autoadd_light_dto(SseDeserializer deserializer);
 
   @protected
+  SettingsDto sse_decode_box_autoadd_settings_dto(SseDeserializer deserializer);
+
+  @protected
   TargetDto sse_decode_box_autoadd_target_dto(SseDeserializer deserializer);
 
   @protected
@@ -378,6 +405,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FidelityDto sse_decode_fidelity_dto(SseDeserializer deserializer);
 
   @protected
+  FolderKindDto sse_decode_folder_kind_dto(SseDeserializer deserializer);
+
+  @protected
+  FolderSuggestionDto sse_decode_folder_suggestion_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   FrontDto sse_decode_front_dto(SseDeserializer deserializer);
 
   @protected
@@ -414,10 +449,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LightDto sse_decode_light_dto(SseDeserializer deserializer);
 
   @protected
+  LightLevelDto sse_decode_light_level_dto(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
   List<FacetDto> sse_decode_list_facet_dto(SseDeserializer deserializer);
+
+  @protected
+  List<FolderSuggestionDto> sse_decode_list_folder_suggestion_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<FrontLineDto> sse_decode_list_front_line_dto(
@@ -437,6 +480,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<JobDto> sse_decode_list_job_dto(SseDeserializer deserializer);
+
+  @protected
+  List<OutputDeviceDto> sse_decode_list_output_device_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
@@ -505,6 +553,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
+  OutputDeviceDto sse_decode_output_device_dto(SseDeserializer deserializer);
+
+  @protected
   PersonDto sse_decode_person_dto(SseDeserializer deserializer);
 
   @protected
@@ -530,6 +581,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchDto sse_decode_search_dto(SseDeserializer deserializer);
+
+  @protected
+  SettingsDto sse_decode_settings_dto(SseDeserializer deserializer);
 
   @protected
   SortKeyDto sse_decode_sort_key_dto(SseDeserializer deserializer);
@@ -640,6 +694,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_settings_dto(
+    SettingsDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_target_dto(
     TargetDto self,
     SseSerializer serializer,
@@ -697,6 +757,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_fidelity_dto(FidelityDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_folder_kind_dto(FolderKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_folder_suggestion_dto(
+    FolderSuggestionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_front_dto(FrontDto self, SseSerializer serializer);
 
   @protected
@@ -733,10 +802,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_light_dto(LightDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_light_level_dto(LightLevelDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_facet_dto(List<FacetDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_folder_suggestion_dto(
+    List<FolderSuggestionDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_front_line_dto(
@@ -758,6 +836,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_job_dto(List<JobDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_output_device_dto(
+    List<OutputDeviceDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_32_strict(
@@ -856,6 +940,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_output_device_dto(
+    OutputDeviceDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_person_dto(PersonDto self, SseSerializer serializer);
 
   @protected
@@ -881,6 +971,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_search_dto(SearchDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_settings_dto(SettingsDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_sort_key_dto(SortKeyDto self, SseSerializer serializer);

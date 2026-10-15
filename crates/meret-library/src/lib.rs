@@ -22,6 +22,6 @@ pub mod walk;
 
 pub use art::{CoverReport, covers};
 pub use diff::{Diff, diff};
-pub use ingest::{Phase, Root, ScanError, ScanProgress, ScanReport, add_root, roots, scan};
+pub use ingest::{Phase, Root, ScanError, ScanProgress, ScanReport, add_root, remove_root, roots, scan};
 pub use tags::{Tags, read_tags};
 pub use walk::{FileStat, is_audio, walk};

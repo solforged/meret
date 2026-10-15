@@ -43,6 +43,24 @@ Future<void> transport({required TransportDto cmd}) =>
 Future<PlatformInt64> addRoot({required String path}) =>
     RustLib.instance.api.crateApiCoreAddRoot(path: path);
 
+/// Removes the folder from the library, keeping its files and stored history.
+Future<void> removeRoot({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiCoreRemoveRoot(id: id);
+
+SettingsDto settings() => RustLib.instance.api.crateApiCoreSettings();
+
+/// Persists settings. Output changes apply from the next track opened;
+/// the currently playing track keeps its device and exclusive mode.
+Future<void> setSettings({required SettingsDto s}) =>
+    RustLib.instance.api.crateApiCoreSetSettings(s: s);
+
+Future<List<OutputDeviceDto>> outputDevices() =>
+    RustLib.instance.api.crateApiCoreOutputDevices();
+
+/// Budgeted discovery runs off the UI thread; protected folders aren't walked.
+Future<List<FolderSuggestionDto>> suggestFolders() =>
+    RustLib.instance.api.crateApiCoreSuggestFolders();
+
 /// Runs a query-line command: `play <query>` plays what matches; the
 /// other commands return an error that says they aren't built yet.
 Future<void> runCommand({required String input}) =>

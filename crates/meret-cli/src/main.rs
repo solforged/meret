@@ -85,6 +85,10 @@ enum Cmd {
 enum LibraryCmd {
     /// Add a folder as a root and scan it into the store.
     Add { root: PathBuf },
+    /// Remove a root, keeping its files and stored history.
+    Rm { id: i64 },
+    /// Suggest music folders without prompting for access.
+    Suggest,
     /// Rescan every root.
     Rescan,
     /// Print the Front, as the app's first pane shows it.
@@ -205,6 +209,8 @@ fn main() -> Result<()> {
             let (api, rt) = library::open(&data, output)?;
             match cmd {
                 LibraryCmd::Add { root } => library::add(&api, &rt, &root),
+                LibraryCmd::Rm { id } => library::remove(&api, id),
+                LibraryCmd::Suggest => library::suggest(&api),
                 LibraryCmd::Rescan => library::rescan(&api, &rt),
                 LibraryCmd::Front => library::front(&api, &rt),
                 LibraryCmd::Search { input } => library::search(&api, &rt, &input),
