@@ -27,12 +27,19 @@ Desktop, macOS. Every story below happens in one of these, and each place answer
 
 Decided 2026-10-14.
 
-1. **Configuration lives in a Settings window** (`⌘,`), as on any Mac app. It never becomes a trail stop: the trail holds music. Every status line item opens its own section there (Spotify's dot opens Settings › Sources › Spotify; a job opens its detail).
+1. **Configuration lives in a Settings window** (`⌘,`), as on any Mac app. It never becomes a trail stop: the trail holds music. A status line item opens a small popover with its state and the common fix, and from there its section in Settings (Spotify's dot leads to Settings › Sources › Spotify; a job to its detail).
 2. **First launch is doors, not a wizard.** The empty Front offers the folders Meret finds itself as one-click lines, then "connect a service" and "bring your history" below them. Nothing is required before the first scan. Output and online lookups are asked the first time they matter.
 3. **Online lookups ask once.** Before matching sends tags or audio fingerprints to MusicBrainz or AcoustID, Meret asks, plainly, with what leaves the Mac. The answer lives in Settings › Lookups.
 4. **Volume stays at the DAC.** Meret's own volume is off by default; turning it on is allowed, and the signal path then says the output is no longer bit-perfect.
 5. **Meret's store is the main database, and changes propagate out to files** (see *Writing back to files*). Like beets: you correct things in Meret, and Meret writes tags and moves files to match.
 6. **History import is designed now and built late.** Its doors and flow are placed (see *Bringing your history*); the importers come after the providers.
+7. **The picks from the setup plates** ([`design/2026-10-14-setup/`](../design/2026-10-14-setup/index.html)):
+   - The empty Front is the Front's own shape (plate f3): the doors fill the Collection column, and Leads, Crates and trails, and Pick up sit beside it as quiet outlines saying what will fill them.
+   - The lookup question is a line in Needs you, with a reminder in the status line (f6). Matching waits until you answer; nothing interrupts.
+   - Settings is one window with a section list on the left (s2).
+   - Clicking a source's status line item opens a popover on it with the problem, a one-click fix and "Open in Settings" (c10).
+   - Editing happens in place in the release pane for a few fields (w1), and in a tracks × fields sheet for many tracks at once (w2).
+   - Tags are written on save, as beets does (w3); every batch can be undone.
 
 ## First launch
 
@@ -43,7 +50,7 @@ Decided 2026-10-14.
 | I see the scan working, and can start listening before it ends | Status line progress; the Front and table fill as batches commit | Built (progress) |
 | I bring my history | The empty Front's "Bring your history"; Settings › History | Later |
 | I choose where sound goes and whether Meret takes the device exclusively | Asked on the first play, in Now's signal path; Settings › Playback | Placed |
-| I decide whether Meret may look my music up online | Asked before the first lookup; Settings › Lookups | Placed |
+| I decide whether Meret may look my music up online | A line in Needs you before the first lookup, with a status line reminder; Settings › Lookups | Placed |
 | I connect the services I pay for, now or later, without being forced through them | The empty Front's "Connect a service"; Settings › Sources | Placed |
 | macOS asks for folder access and I understand why | Meret says why just before the system dialog | Placed |
 
@@ -73,7 +80,7 @@ Decided 2026-10-14.
 | I fix a release Meret guessed wrong | The `≈` mark where I see it; the Front's Needs you for batches | Placed |
 | I tell Meret what kind of music a release is (its idiom) | The release pane's header | Placed |
 | Two rips of one album show once, and I pick which plays | The release pane; Needs you, "albums with two editions" | Placed (plate 02) |
-| I correct a title or credit, and my files follow | The release pane, editing in place; see *Writing back to files* | Placed |
+| I correct a title or credit, and my files follow | The release pane, in place for a few fields; an edit sheet for many tracks; see *Writing back to files* | Placed |
 | My folders follow a naming scheme I choose | Settings › Files, a path template with a preview | Placed |
 | I see what a long job is doing and pause it | The status line job opens its detail | Status line built |
 | I move to a new Mac, or back up my trails and notes | Settings › Library | Unplaced |
@@ -84,13 +91,13 @@ Meret works like beets: its store is the main database, and your files are an ou
 
 - **Every correction lands in the store first**, with *you* as its source, so it outranks any provider's claim and survives a rescan.
 - **Each file knows whether its tags match the store**: in step, waiting to be written, or changed outside Meret.
-- **Writing is a job.** Tags waiting to be written show in the status line ("✎ 14 files to write"), and the job writes them in the background. Settings › Files chooses whether tags are written as soon as you edit or only when you say so.
+- **Writing is a job.** Saving an edit queues its files, the status line shows them ("✎ 14 files to write"), and the job writes them in the background. Writing on save is the default; Settings › Files can hold writes until you say so.
 - **Moving and renaming files always shows the plan first**: from, to, and what's in the way. The path template lives in Settings › Files.
 - **Every write can be undone.** Meret keeps the tag values it replaced, per batch.
 - **Changed on both sides** (you edited in Meret, and another app edited the file) goes to Needs you, showing both; you pick which wins.
 - **Offline volumes and read-only folders wait.** Their writes stay queued until the volume is back or the folder is writable.
 
-Open: which fields Meret writes (everything it reads, plus MusicBrainz IDs and the cover), and the default for writing tags (on edit, as beets does, or when you say so).
+Open: which fields Meret writes (everything it reads, plus MusicBrainz IDs and the cover).
 
 ## Bringing your history
 
@@ -110,7 +117,7 @@ Designed now, built late. The doors exist from the start and say what they'll do
 | I connect Bandcamp, YouTube, Qobuz (session-based, no public API) | Settings › Sources | Placed |
 | I connect ListenBrainz or Last.fm to import and scrobble | Settings › Sources and Settings › History | Placed |
 | I see at a glance whether every source is working | Status line dots | Built (local and MusicBrainz) |
-| A token expires or a service rate-limits; I find out and fix it | The status line dot turns; clicking it opens that source's section with the fix | Placed |
+| A token expires or a service rate-limits; I find out and fix it | The status line dot turns; clicking it opens a popover with the problem, a one-click fix and "Open in Settings" | Placed |
 | I disconnect a service and its claims go with it | That source's section in Settings | Placed |
 | I see where I can hear something I don't own | A pane's "Where to hear it" | Placed (plate 01) |
 
@@ -138,5 +145,5 @@ Mostly placed by the plates; listed so the whole set is in one file.
 ## Still open
 
 1. Moving to a new Mac and backing up trails and notes: a Settings action, a file, or a sync between hubs.
-2. Which fields Meret writes, and whether tags are written on edit by default.
+2. Which fields Meret writes.
 3. Where transport sits on the Front when nothing has played yet.
