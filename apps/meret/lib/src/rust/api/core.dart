@@ -39,6 +39,11 @@ Future<HistogramDto> histogram({
 Future<void> transport({required TransportDto cmd}) =>
     RustLib.instance.api.crateApiCoreTransport(cmd: cmd);
 
+/// Now's Up next: the queue after the playing item. Ask again when Now's
+/// item changes; the queue only moves with it.
+Future<UpNextDto> upNext({required int limit}) =>
+    RustLib.instance.api.crateApiCoreUpNext(limit: limit);
+
 /// Adds a music folder and scans it in the background; returns the root id.
 Future<PlatformInt64> addRoot({required String path}) =>
     RustLib.instance.api.crateApiCoreAddRoot(path: path);

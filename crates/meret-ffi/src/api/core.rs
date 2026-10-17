@@ -50,6 +50,12 @@ pub fn transport(cmd: TransportDto) -> Result<(), String> {
     api()?.transport(cmd)
 }
 
+/// Now's Up next: the queue after the playing item. Ask again when Now's
+/// item changes; the queue only moves with it.
+pub fn up_next(limit: u32) -> Result<UpNextDto, String> {
+    api()?.up_next(limit)
+}
+
 /// Adds a music folder and scans it in the background; returns the root id.
 pub fn add_root(path: String) -> Result<i64, String> {
     api()?.add_root(&path)

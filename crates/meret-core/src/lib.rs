@@ -46,6 +46,9 @@ use scan::ScanRequest;
 /// How many results "play these" queues, from the row it starts at.
 pub const MAX_QUEUE: usize = 10_000;
 
+/// Past this, "previous" restarts the playing item instead of leaving it.
+const PREVIOUS_RESTART_MS: u64 = 3_000;
+
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
     #[error(transparent)]
@@ -333,6 +336,14 @@ impl Core {
         self.player.lock().queue().items.clone()
     }
 
+    /// The queue after the playing item, up to `limit` items, and how many
+    /// follow in all.
+    pub fn up_next(&self, limit: usize) -> (Vec<QueueItem>, usize) {
+        let player = self.player.lock();
+        let rest = player.queue().up_next();
+        (rest.iter().take(limit).cloned().collect(), rest.len())
+    }
+
     /// What the query line shows as you type a search: the people and
     /// releases whose names have the typed words, and the result's tracks
     /// whose titles do: up to `names` people and releases, `tracks` tracks.
@@ -464,6 +475,40 @@ impl Core {
 
     pub fn seek_ms(&self, ms: u64) {
         let _ = self.local.command(ZoneCommand::Seek { ms });
+    }
+
+    /// The next playable item in the queue; at its end, playback stops.
+    pub fn next(&self) -> Result<()> {
+        let mut player = self.player.lock();
+        let result = player.next().map(|_| ());
+        if let Some(error) = player.take_error() {
+            self.now.send_modify(|n| n.error = Some(error));
+        }
+        Ok(result?)
+    }
+
+    /// Restarts the playing item when it's more than `PREVIOUS_RESTART_MS`
+    /// in, as every player does; otherwise the item before it.
+    pub fn previous(&self) -> Result<()> {
+        let mut player = self.player.lock();
+        let playing = player.queue().current().map(|i| i.token);
+        let position_ms = {
+            let now = self.now.borrow();
+            match now.anchor {
+                Some(a) if Some(a.item) == playing => a.seconds_at(meret_engine::clock::now_ns()) * 1000.0,
+                _ => 0.0,
+            }
+        };
+        if position_ms > PREVIOUS_RESTART_MS as f64 {
+            drop(player);
+            self.seek_ms(0);
+            return Ok(());
+        }
+        let result = player.previous().map(|_| ());
+        if let Some(error) = player.take_error() {
+            self.now.send_modify(|n| n.error = Some(error));
+        }
+        Ok(result?)
     }
 
     pub fn stop(&self) {

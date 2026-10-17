@@ -74,6 +74,8 @@ impl Api {
             TransportDto::Pause => self.core.pause(),
             TransportDto::Resume => self.core.resume(),
             TransportDto::Seek { ms } => self.core.seek_ms(ms),
+            TransportDto::Next => return self.core.next().map_err(|e| e.to_string()),
+            TransportDto::Previous => return self.core.previous().map_err(|e| e.to_string()),
             TransportDto::Stop => self.core.stop(),
         }
         Ok(())
@@ -164,6 +166,39 @@ impl Api {
     /// Each queued item's token and URI, in order.
     pub fn queue(&self) -> Vec<(u64, String)> {
         self.core.queue().into_iter().map(|i| (i.token, i.uri)).collect()
+    }
+
+    /// Now's Up next: the queue after the playing item, up to `limit` rows.
+    pub fn up_next(&self, limit: u32) -> Result<UpNextDto, String> {
+        let (items, remaining) = self.core.up_next(limit as usize);
+        let ids: Vec<_> = items.iter().filter_map(|i| i.track).collect();
+        let mut rows: std::collections::HashMap<_, _> =
+            self.core.store.track_rows(&ids).map_err(|e| e.to_string())?.into_iter().map(|r| (r.track, r)).collect();
+        let items = items
+            .into_iter()
+            .map(|item| match item.track.and_then(|t| rows.remove(&t)) {
+                Some(r) => UpNextItemDto {
+                    token: item.token,
+                    track_id: Some(r.track.0),
+                    title: r.title,
+                    subtitle: [r.artist.as_deref(), Some(r.album.as_str())].into_iter().flatten().collect::<Vec<_>>().join(" · "),
+                    length_ms: r.length_ms,
+                    why: item.why,
+                },
+                None => {
+                    let path = Path::new(item.uri.strip_prefix("file://").unwrap_or(&item.uri));
+                    UpNextItemDto {
+                        token: item.token,
+                        track_id: item.track.map(|t| t.0),
+                        title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+                        subtitle: path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
+                        length_ms: None,
+                        why: item.why,
+                    }
+                }
+            })
+            .collect();
+        Ok(UpNextDto { items, remaining: remaining as u64 })
     }
 
     pub fn now(&self) -> NowDto {
