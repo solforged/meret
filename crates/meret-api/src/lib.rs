@@ -477,6 +477,35 @@ impl Api {
         self.core.store.dormant(limit).map(|rows| rows.into_iter().map(|row| DormantDto::from_dormant(row, &art_dir)).collect())
             .map_err(|e| e.to_string())
     }
+
+    /// Play something's picks, best first, each saying why (plate 09).
+    pub fn picks(&self, limit: u32) -> Result<Vec<PickDto>, String> {
+        let now = now_ms();
+        let art_dir = self.core.art_dir();
+        self.core.picks(limit as usize, now).map_err(|e| e.to_string())?.into_iter().map(|pick| {
+            let page = self.core.store.release_page(pick.release).map_err(|e| e.to_string())?
+                .ok_or_else(|| "that release is gone".to_owned())?;
+            Ok(PickDto::new(pick, ReleaseDto::from_page(page, &art_dir), now))
+        }).collect()
+    }
+
+    /// `⇧Space`: plays the first pick from the top and returns it; `None`
+    /// when the library has nothing playable.
+    pub fn play_something(&self) -> Result<Option<PickDto>, String> {
+        let Some(pick) = self.picks(1)?.into_iter().next() else { return Ok(None) };
+        self.core.play_pick(ReleaseId(pick.release_id), pick.why()).map_err(|e| e.to_string())?;
+        Ok(Some(pick))
+    }
+
+    /// Play on: every zone and what it does to the sound.
+    pub fn zones(&self) -> Result<Vec<ZoneDto>, String> {
+        self.core.zones().map(|zones| zones.into_iter().map(Into::into).collect()).map_err(|e| e.to_string())
+    }
+
+    /// Sends output to a zone; while playing it applies from the next track.
+    pub fn play_on(&self, zone: String) -> Result<(), String> {
+        self.core.play_on(&zone).map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]

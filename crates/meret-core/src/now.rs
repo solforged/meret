@@ -24,6 +24,8 @@ pub struct NowState {
     pub cover: Option<Artwork>,
     pub title: String,
     pub subtitle: String,
+    /// Why this is playing, when something chose it: a Play something pick.
+    pub why: Option<String>,
     pub anchor: Option<Anchor>,
     pub length_ms: Option<u64>,
     pub path: Option<SignalPath>,
@@ -58,6 +60,7 @@ pub(crate) fn spawn_pump(core: Arc<Core>) -> std::thread::JoinHandle<()> {
                             n.cover = described.cover;
                             n.title = described.title;
                             n.subtitle = described.subtitle;
+                            n.why = described.why;
                             n.length_ms = described.length_ms;
                         });
                         crate::listens::on_started(&core, *item);
@@ -128,6 +131,7 @@ pub(crate) fn describe_item(core: &Core, item: &meret_player::QueueItem) -> NowS
             cover,
             title: r.title,
             subtitle,
+            why: item.why.clone(),
             length_ms: r.length_ms,
             ..Default::default()
         };
@@ -135,7 +139,7 @@ pub(crate) fn describe_item(core: &Core, item: &meret_player::QueueItem) -> NowS
     let path = Path::new(item.uri.strip_prefix("file://").unwrap_or(&item.uri));
     let title = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
     let subtitle = path.parent().map(|p| p.display().to_string()).unwrap_or_default();
-    NowState { track: item.track, title, subtitle, ..Default::default() }
+    NowState { track: item.track, title, subtitle, why: item.why.clone(), ..Default::default() }
 }
 
 #[cfg(test)]
