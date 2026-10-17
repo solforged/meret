@@ -1,0 +1,21 @@
+[tasks."app:install"]
+description = "Build the release macOS app, install it as /Applications/Meret.app and open it"
+alias = "install"
+dir = "apps/meret"
+run = """
+set -euo pipefail
+flutter build macos --release
+
+# Quit any running Meret, including a debug build, so the copy isn't in use.
+osascript -e 'quit app id "io.sowilo.meret"' 2>/dev/null || true
+for _ in $(seq 50); do
+  pgrep -qx meret || break
+  sleep 0.1
+done
+pkill -x meret || true
+
+rm -rf /Applications/Meret.app
+ditto build/macos/Build/Products/Release/meret.app /Applications/Meret.app
+open /Applications/Meret.app
+echo "Installed /Applications/Meret.app"
+"""
