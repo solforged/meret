@@ -272,11 +272,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 Expanded(
                   child: Row(children: [
                     Expanded(child: row),
-                    if (wc.pinnedNow)
-                      SizedBox(width: 380, child: NowPane(core: widget.core, now: _now, clock: _clock, onToggle: _toggle)),
+                    if (wc.nowWidth case final width?)
+                      SizedBox(width: width, child: NowPane(core: widget.core, now: _now, clock: _clock, onToggle: _toggle)),
                   ]),
                 ),
-                if (!wc.pinnedNow) _NowBar(core: widget.core, now: _now, clock: _clock, onToggle: _toggle),
+                if (!wc.pinnedNow) NowBar(core: widget.core, now: _now, clock: _clock, onToggle: _toggle),
                 if (wc != WidthClass.phone)
                   StatusLine(core: widget.core, status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
               ]);
@@ -322,57 +322,4 @@ class _Toggle extends Intent {
 class _Move extends Intent {
   const _Move(this.by);
   final int by;
-}
-
-/// Now as a bar, below the panes, on smaller screens.
-class _NowBar extends StatelessWidget {
-  const _NowBar({required this.core, required this.now, required this.clock, required this.onToggle});
-  final CoreBridge core;
-  final NowDto? now;
-  final PlayheadClock clock;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final length = now?.lengthMs?.toDouble() ?? 1;
-    return GestureDetector(
-      onTap: onToggle,
-      child: Container(
-        height: 48,
-        color: Color.alphaBlend(Light.of(context).wash, Tok.panel),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(children: [
-          Expanded(
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(now?.title ?? '', style: Tok.body, maxLines: 1, overflow: TextOverflow.ellipsis),
-              Text(now?.subtitle ?? '', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-            ]),
-          ),
-          DeviceVolume(core: core, now: now, compact: true),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 120,
-            height: 2,
-            child: CustomPaint(painter: _Progress(clock, length, Light.of(context).accent)),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-class _Progress extends CustomPainter {
-  _Progress(this.clock, this.length, this.light) : super(repaint: clock);
-  final PlayheadClock clock;
-  final double length;
-  final Color light;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = Tok.line);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * (clock.positionMs / length).clamp(0, 1), size.height), Paint()..color = light);
-  }
-
-  @override
-  bool shouldRepaint(_Progress old) => old.length != length || old.light != light;
 }

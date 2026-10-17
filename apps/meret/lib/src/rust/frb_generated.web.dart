@@ -211,6 +211,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TrackRowDto> dco_decode_list_track_row_dto(dynamic raw);
 
   @protected
+  List<UpNextItemDto> dco_decode_list_up_next_item_dto(dynamic raw);
+
+  @protected
   NowDto dco_decode_now_dto(dynamic raw);
 
   @protected
@@ -323,6 +326,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  UpNextDto dco_decode_up_next_dto(dynamic raw);
+
+  @protected
+  UpNextItemDto dco_decode_up_next_item_dto(dynamic raw);
 
   @protected
   ViewDto dco_decode_view_dto(dynamic raw);
@@ -537,6 +546,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TrackRowDto> sse_decode_list_track_row_dto(SseDeserializer deserializer);
 
   @protected
+  List<UpNextItemDto> sse_decode_list_up_next_item_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NowDto sse_decode_now_dto(SseDeserializer deserializer);
 
   @protected
@@ -653,6 +667,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  UpNextDto sse_decode_up_next_dto(SseDeserializer deserializer);
+
+  @protected
+  UpNextItemDto sse_decode_up_next_item_dto(SseDeserializer deserializer);
 
   @protected
   ViewDto sse_decode_view_dto(SseDeserializer deserializer);
@@ -925,6 +945,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_up_next_item_dto(
+    List<UpNextItemDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_now_dto(NowDto self, SseSerializer serializer);
 
   @protected
@@ -1055,6 +1081,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_up_next_dto(UpNextDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_up_next_item_dto(
+    UpNextItemDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_view_dto(ViewDto self, SseSerializer serializer);

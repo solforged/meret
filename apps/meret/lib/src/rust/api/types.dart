@@ -1184,7 +1184,66 @@ sealed class TransportDto with _$TransportDto {
   const factory TransportDto.pause() = TransportDto_Pause;
   const factory TransportDto.resume() = TransportDto_Resume;
   const factory TransportDto.seek({required BigInt ms}) = TransportDto_Seek;
+  const factory TransportDto.next() = TransportDto_Next;
+  const factory TransportDto.previous() = TransportDto_Previous;
   const factory TransportDto.stop() = TransportDto_Stop;
+}
+
+class UpNextDto {
+  final List<UpNextItemDto> items;
+  final BigInt remaining;
+
+  const UpNextDto({required this.items, required this.remaining});
+
+  @override
+  int get hashCode => items.hashCode ^ remaining.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UpNextDto &&
+          runtimeType == other.runtimeType &&
+          items == other.items &&
+          remaining == other.remaining;
+}
+
+class UpNextItemDto {
+  final BigInt token;
+  final PlatformInt64? trackId;
+  final String title;
+  final String subtitle;
+  final BigInt? lengthMs;
+  final String? why;
+
+  const UpNextItemDto({
+    required this.token,
+    this.trackId,
+    required this.title,
+    required this.subtitle,
+    this.lengthMs,
+    this.why,
+  });
+
+  @override
+  int get hashCode =>
+      token.hashCode ^
+      trackId.hashCode ^
+      title.hashCode ^
+      subtitle.hashCode ^
+      lengthMs.hashCode ^
+      why.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UpNextItemDto &&
+          runtimeType == other.runtimeType &&
+          token == other.token &&
+          trackId == other.trackId &&
+          title == other.title &&
+          subtitle == other.subtitle &&
+          lengthMs == other.lengthMs &&
+          why == other.why;
 }
 
 class ViewDto {

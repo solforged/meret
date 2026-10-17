@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 2088149629;
+  int get rustContentHash => -130927530;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -161,6 +161,8 @@ abstract class RustLibApi extends BaseApi {
   Future<TrailDto> crateApiCoreTrailGo({required int stop});
 
   Future<void> crateApiCoreTransport({required TransportDto cmd});
+
+  Future<UpNextDto> crateApiCoreUpNext({required int limit});
 
   Future<VolumeDto> crateApiCoreVolume();
 
@@ -968,6 +970,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "transport", argNames: ["cmd"]);
 
   @override
+  Future<UpNextDto> crateApiCoreUpNext({required int limit}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_up_next_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiCoreUpNextConstMeta,
+        argValues: [limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreUpNextConstMeta =>
+      const TaskConstMeta(debugName: "up_next", argNames: ["limit"]);
+
+  @override
   Future<VolumeDto> crateApiCoreVolume() {
     return handler.executeNormal(
       NormalTask(
@@ -976,7 +1006,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1006,7 +1036,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 29,
+              funcId: 30,
               port: port_,
             );
           },
@@ -1038,7 +1068,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 30,
+              funcId: 31,
               port: port_,
             );
           },
@@ -1557,6 +1587,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<UpNextItemDto> dco_decode_list_up_next_item_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_up_next_item_dto).toList();
+  }
+
+  @protected
   NowDto dco_decode_now_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1955,6 +1991,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 3:
         return TransportDto_Seek(ms: dco_decode_u_64(raw[1]));
       case 4:
+        return TransportDto_Next();
+      case 5:
+        return TransportDto_Previous();
+      case 6:
         return TransportDto_Stop();
       default:
         throw Exception("unreachable");
@@ -1989,6 +2029,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void dco_decode_unit(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return;
+  }
+
+  @protected
+  UpNextDto dco_decode_up_next_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UpNextDto(
+      items: dco_decode_list_up_next_item_dto(arr[0]),
+      remaining: dco_decode_u_64(arr[1]),
+    );
+  }
+
+  @protected
+  UpNextItemDto dco_decode_up_next_item_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return UpNextItemDto(
+      token: dco_decode_u_64(arr[0]),
+      trackId: dco_decode_opt_box_autoadd_i_64(arr[1]),
+      title: dco_decode_String(arr[2]),
+      subtitle: dco_decode_String(arr[3]),
+      lengthMs: dco_decode_opt_box_autoadd_u_64(arr[4]),
+      why: dco_decode_opt_String(arr[5]),
+    );
   }
 
   @protected
@@ -2668,6 +2736,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<UpNextItemDto> sse_decode_list_up_next_item_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UpNextItemDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_up_next_item_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   NowDto sse_decode_now_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_trackId = sse_decode_opt_box_autoadd_i_64(deserializer);
@@ -3184,6 +3266,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         var var_ms = sse_decode_u_64(deserializer);
         return TransportDto_Seek(ms: var_ms);
       case 4:
+        return TransportDto_Next();
+      case 5:
+        return TransportDto_Previous();
+      case 6:
         return TransportDto_Stop();
       default:
         throw UnimplementedError('');
@@ -3217,6 +3303,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_decode_unit(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  UpNextDto sse_decode_up_next_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_items = sse_decode_list_up_next_item_dto(deserializer);
+    var var_remaining = sse_decode_u_64(deserializer);
+    return UpNextDto(items: var_items, remaining: var_remaining);
+  }
+
+  @protected
+  UpNextItemDto sse_decode_up_next_item_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_token = sse_decode_u_64(deserializer);
+    var var_trackId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_subtitle = sse_decode_String(deserializer);
+    var var_lengthMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_why = sse_decode_opt_String(deserializer);
+    return UpNextItemDto(
+      token: var_token,
+      trackId: var_trackId,
+      title: var_title,
+      subtitle: var_subtitle,
+      lengthMs: var_lengthMs,
+      why: var_why,
+    );
   }
 
   @protected
@@ -3834,6 +3947,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_up_next_item_dto(
+    List<UpNextItemDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_up_next_item_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_now_dto(NowDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_i_64(self.trackId, serializer);
@@ -4204,8 +4329,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case TransportDto_Seek(ms: final ms):
         sse_encode_i_32(3, serializer);
         sse_encode_u_64(ms, serializer);
-      case TransportDto_Stop():
+      case TransportDto_Next():
         sse_encode_i_32(4, serializer);
+      case TransportDto_Previous():
+        sse_encode_i_32(5, serializer);
+      case TransportDto_Stop():
+        sse_encode_i_32(6, serializer);
     }
   }
 
@@ -4236,6 +4365,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  void sse_encode_up_next_dto(UpNextDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_up_next_item_dto(self.items, serializer);
+    sse_encode_u_64(self.remaining, serializer);
+  }
+
+  @protected
+  void sse_encode_up_next_item_dto(
+    UpNextItemDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.token, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.trackId, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.subtitle, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.lengthMs, serializer);
+    sse_encode_opt_String(self.why, serializer);
   }
 
   @protected

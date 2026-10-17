@@ -66,6 +66,63 @@ void main() {
     expect(find.text('Use the amplifier on this output.'), findsOneWidget);
   });
 
+  testWidgets('Now lists the queue after the playing row and next moves along it', (tester) async {
+    final core = _RecordingCore();
+    await _surface(tester, core);
+    await tester.pump();
+    // The fake's opening Now is a loose anchor with no queue behind it.
+    expect(find.text('Nothing queued after this.'), findsOneWidget);
+
+    await core.playResults('', _libraryView, 0);
+    await tester.pump();
+    await tester.pump();
+    final second = await _firstTrack(core, offset: 1);
+    final third = await _firstTrack(core, offset: 2);
+    // The fake's first queue takes tokens 2…; the second row is token 3.
+    expect(find.byKey(const ValueKey('up-next-3')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('up-next-3')), matching: find.text(second.title)), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('now-next')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byType(NowPane), matching: find.text(second.title)), findsAtLeastNWidgets(1));
+    expect(find.byKey(const ValueKey('up-next-3')), findsNothing);
+    expect(find.byKey(const ValueKey('up-next-4')), findsOneWidget);
+    expect(find.descendant(of: find.byType(UpNext), matching: find.text(third.title)), findsAtLeastNWidgets(1));
+
+    // Within three seconds, previous goes back a row rather than restarting.
+    await tester.tap(find.byKey(const ValueKey('now-previous')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('up-next-3')), findsOneWidget);
+  });
+
+  testWidgets('dragging the seek bar sends the position and re-anchors the clock', (tester) async {
+    final core = _RecordingCore();
+    await _surface(tester, core);
+    final now = await core.now().first;
+    final seek = find.byKey(const ValueKey('now-seek'));
+    final width = tester.getSize(seek).width;
+    await tester.drag(seek, Offset(width, 0));
+    await tester.pump();
+    final after = await core.now().first;
+    expect(after.anchor!.positionMs, closeTo(now.lengthMs!.toDouble(), 1));
+    expect(core.seeks.single.toInt(), closeTo(now.lengthMs!.toInt(), 1));
+  });
+
+  testWidgets('Now is pinned from 1400 wide and a bar below', (tester) async {
+    await _surface(tester, FakeCore(), size: const Size(1568, 984));
+    expect(find.byType(NowPane), findsOneWidget);
+    expect(find.byType(NowBar), findsNothing);
+    expect(tester.getSize(find.byType(NowPane)).width, 360);
+
+    tester.view.physicalSize = const Size(1380, 900);
+    await tester.pump();
+    expect(find.byType(NowPane), findsNothing);
+    expect(find.byType(NowBar), findsOneWidget);
+    expect(find.byKey(const ValueKey('now-toggle')), findsOneWidget);
+  });
+
   testWidgets('the fake library opens at the Front without a trail', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
@@ -796,6 +853,13 @@ class _RecordingCore extends FakeCore {
   final playedViews = <ViewDto>[];
   int frontCalls = 0;
   final releasesPlayed = <(int, int, int?)>[];
+  final seeks = <BigInt>[];
+
+  @override
+  Future<void> transport(TransportDto cmd) {
+    if (cmd case TransportDto_Seek(:final ms)) seeks.add(ms);
+    return super.transport(cmd);
+  }
 
   @override
   Future<FrontDto> front() {

@@ -92,6 +92,53 @@ impl Player {
         }
     }
 
+    /// Skips to the first playable item after the cursor. At the end of the
+    /// queue playback stops and the cursor stays; Ok(None) says so.
+    pub fn next(&mut self) -> Result<Option<&QueueItem>, ZoneError> {
+        if self.queue.cursor + 1 >= self.queue.items.len() {
+            self.stop()?;
+            return Ok(None);
+        }
+        self.jump(self.queue.cursor + 1, 1)
+    }
+
+    /// Plays the item before the cursor from its start; at the first item,
+    /// the current one from its start. The caller decides when "previous"
+    /// means "restart this one" instead.
+    pub fn previous(&mut self) -> Result<Option<&QueueItem>, ZoneError> {
+        self.jump(self.queue.cursor.saturating_sub(1), -1)
+    }
+
+    /// Moves the cursor to `at` and plays it, stepping on in `direction`
+    /// past anything the zone can't open.
+    fn jump(&mut self, at: usize, direction: isize) -> Result<Option<&QueueItem>, ZoneError> {
+        let mut at = at;
+        loop {
+            let Some(item) = self.queue.items.get(at) else {
+                self.stop()?;
+                return Ok(None);
+            };
+            match self.zone.command(ZoneCommand::Play { item: item.token, uri: item.uri.clone(), start_ms: 0 }) {
+                Ok(()) => break,
+                Err(e @ ZoneError::CannotPlay(_)) => {
+                    self.last_error = Some(e.to_string());
+                    match at.checked_add_signed(direction) {
+                        Some(step) => at = step,
+                        None => {
+                            self.stop()?;
+                            return Ok(None);
+                        }
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        self.queue.cursor = at;
+        self.awaiting_start = None;
+        self.preload();
+        Ok(self.queue.current())
+    }
+
     pub fn stop(&mut self) -> Result<(), ZoneError> {
         self.next = None;
         self.awaiting_start = None;
@@ -226,6 +273,39 @@ mod tests {
         // The engine reports the stopped item as ended.
         assert_eq!(p.ended(1), None);
         assert_eq!(p.queue().cursor, 0);
+    }
+
+    #[test]
+    fn next_and_previous_move_the_cursor_and_reload_what_follows() {
+        let (mut p, z) = player();
+        p.play(items(&["a", "b", "c"]), 0).unwrap();
+        log(&z);
+        assert_eq!(p.next().unwrap().map(|i| i.token), Some(2));
+        assert_eq!(log(&z), ["play 2", "next 3"]);
+        assert_eq!(p.previous().unwrap().map(|i| i.token), Some(1));
+        assert_eq!(log(&z), ["play 1", "next 2"]);
+        // The engine reports the replaced item ending; the cursor doesn't move.
+        assert_eq!(p.ended(2), None);
+        assert_eq!(p.queue().cursor, 0);
+        // At the first item, previous restarts it.
+        assert_eq!(p.previous().unwrap().map(|i| i.token), Some(1));
+        assert_eq!(log(&z), ["play 1", "next 2"]);
+    }
+
+    #[test]
+    fn next_past_the_end_stops_and_skips_what_cannot_open() {
+        let (mut p, z) = player();
+        p.play(items(&["a", "bad", "b"]), 0).unwrap();
+        log(&z);
+        assert_eq!(p.next().unwrap().map(|i| i.token), Some(3));
+        assert_eq!(log(&z), ["play 3"]);
+        assert!(p.take_error().is_some());
+        assert_eq!(p.next().unwrap(), None);
+        assert_eq!(log(&z), ["stop"]);
+        assert_eq!(p.queue().cursor, 2);
+        // Previous from the last item steps over the bad one too.
+        assert_eq!(p.previous().unwrap().map(|i| i.token), Some(1));
+        assert_eq!(log(&z), ["play 1", "next 3"]);
     }
 
     #[test]

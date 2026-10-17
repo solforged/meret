@@ -185,7 +185,31 @@ pub enum TransportDto {
     Pause,
     Resume,
     Seek { ms: u64 },
+    /// The next playable item; at the queue's end, stop.
+    Next,
+    /// More than three seconds in, the start of this item; otherwise the one before.
+    Previous,
     Stop,
+}
+
+/// One queued item after the playing one, as Now's Up next lists it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UpNextItemDto {
+    pub token: u64,
+    pub track_id: Option<i64>,
+    pub title: String,
+    /// "Joanne Hogg · Xenogears": the credit and the release, when known.
+    pub subtitle: String,
+    pub length_ms: Option<u64>,
+    /// Why it was queued, when the core can say: "from this trail".
+    pub why: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UpNextDto {
+    pub items: Vec<UpNextItemDto>,
+    /// How many items follow the playing one in all, listed or not.
+    pub remaining: u64,
 }
 
 /// The playhead, for the UI to extrapolate every vsync:
