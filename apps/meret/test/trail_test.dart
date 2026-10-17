@@ -11,7 +11,7 @@ import 'package:meret/theme/tokens.dart';
 
 void main() {
   testWidgets('meetings paint dots between visible stars but not folded peeks', (tester) async {
-    final trail = TrailDto(rootQuery: '', current: 2, stops: [
+    final trail = TrailDto(rootQuery: '', current: 2, kept: false, stops: [
       _stop(0, null, true),
       _stop(1, 0, true),
       _stop(2, 1, true),
@@ -28,7 +28,7 @@ void main() {
     final positions = painter.layoutPositions(const Size(800, 64));
     expect(positions.keys, containsAll([2, 3]));
     expect(positions, isNot(contains(4)));
-    final noMeeting = ConstellationPainter(TrailDto(rootQuery: '', current: 2, stops: trail.stops, meetings: const [(2, 4)]));
+    final noMeeting = ConstellationPainter(TrailDto(rootQuery: '', current: 2, kept: false, stops: trail.stops, meetings: const [(2, 4)]));
     await tester.pumpWidget(MaterialApp(home: CustomPaint(
       key: const ValueKey('constellation'), painter: noMeeting,
     )));
@@ -144,7 +144,7 @@ StopDto _stop(int index, int? parent, bool onPath, {bool peek = false}) => StopD
 );
 
 TrailDto _longTrail(int count, int current) => TrailDto(
-  rootQuery: '', current: current,
+  rootQuery: '', current: current, kept: false,
   stops: List.generate(count, (index) => _stop(index, index == 0 ? null : index - 1, index <= current)),
   meetings: const [],
 );

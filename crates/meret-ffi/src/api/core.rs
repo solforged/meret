@@ -182,6 +182,11 @@ pub fn keep_trail(name: Option<String>) -> Result<TrailDto, String> {
     api()?.keep_trail(name)
 }
 
+/// A trail picked on the Front becomes active at the stop it was left on.
+pub fn open_trail(uid: String) -> Result<TrailDto, String> {
+    api()?.open_trail(&uid)
+}
+
 /// Now, pushed whenever it changes: a new item, a new anchor, a new path.
 pub async fn watch_now(sink: StreamSink<NowDto>) -> Result<(), String> {
     let api = api()?;
