@@ -1365,12 +1365,16 @@ class TrailDto {
   final int current;
   final List<StopDto> stops;
   final List<(int, int)> meetings;
+  final bool kept;
+  final String? name;
 
   const TrailDto({
     this.rootQuery,
     required this.current,
     required this.stops,
     required this.meetings,
+    required this.kept,
+    this.name,
   });
 
   @override
@@ -1378,7 +1382,9 @@ class TrailDto {
       rootQuery.hashCode ^
       current.hashCode ^
       stops.hashCode ^
-      meetings.hashCode;
+      meetings.hashCode ^
+      kept.hashCode ^
+      name.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1388,7 +1394,9 @@ class TrailDto {
           rootQuery == other.rootQuery &&
           current == other.current &&
           stops == other.stops &&
-          meetings == other.meetings;
+          meetings == other.meetings &&
+          kept == other.kept &&
+          name == other.name;
 }
 
 class TrailSummaryDto {

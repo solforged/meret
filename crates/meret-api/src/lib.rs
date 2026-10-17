@@ -286,6 +286,12 @@ impl Api {
         self.move_along(|t, now| t.go(stop as usize, now)).ok_or_else(|| format!("the trail has no stop {stop}"))
     }
 
+    /// A trail picked on the Front becomes active at the stop it was left on.
+    pub fn open_trail(&self, uid: &str) -> Result<TrailDto, String> {
+        let uid = meret_model::TrailUid(uid.parse().map_err(|_| format!("{uid} isn't a trail id"))?);
+        self.move_history(|history, now| history.open(&uid, now)).ok_or_else(|| "that trail is no longer in the history".to_string())
+    }
+
     fn move_along(&self, step: impl FnOnce(&mut meret_graph::Trail, i64) -> bool) -> Option<TrailDto> {
         self.move_history(|history, now| history.current_mut().is_some_and(|trail| step(trail, now)))
     }

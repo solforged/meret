@@ -414,6 +414,22 @@ impl TrailHistory {
         }
         self.trails[i].trail.forward(now)
     }
+
+    /// A kept trail picked on the Front: it becomes active at the stop it
+    /// was left on, where it sits in history, so `[` and `]` go on from there.
+    pub fn open(&mut self, uid: &TrailUid, now: i64) -> bool {
+        let Some(i) = self.trails.iter().position(|entry| entry.trail.uid == *uid) else { return false };
+        if let Some(active) = self.active
+            && active != i
+        {
+            self.trails[active].trail.leave_current(now);
+        }
+        self.active = Some(i);
+        let trail = &mut self.trails[i].trail;
+        trail.entered_at = now;
+        trail.stops[trail.current].opened_at = now;
+        true
+    }
 }
 
 #[cfg(test)]

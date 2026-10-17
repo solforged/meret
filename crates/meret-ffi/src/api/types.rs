@@ -388,6 +388,8 @@ pub struct _TrailDto {
     pub current: u32,
     pub stops: Vec<StopDto>,
     pub meetings: Vec<(u32, u32)>,
+    pub kept: bool,
+    pub name: Option<String>,
 }
 
 #[frb(mirror(TargetDto))]

@@ -169,6 +169,10 @@ Future<List<TrailSummaryDto>> trailHistory({required int limit}) =>
 Future<TrailDto> keepTrail({String? name}) =>
     RustLib.instance.api.crateApiCoreKeepTrail(name: name);
 
+/// A trail picked on the Front becomes active at the stop it was left on.
+Future<TrailDto> openTrail({required String uid}) =>
+    RustLib.instance.api.crateApiCoreOpenTrail(uid: uid);
+
 /// Now, pushed whenever it changes: a new item, a new anchor, a new path.
 Stream<NowDto> watchNow() => RustLib.instance.api.crateApiCoreWatchNow();
 

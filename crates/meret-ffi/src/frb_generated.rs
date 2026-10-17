@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1257835332;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 651602941;
 
 // Section: executor
 
@@ -380,6 +380,39 @@ fn wire__crate__api__core__most_played_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::most_played(api_days, api_limit)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__open_trail_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "open_trail",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_uid = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::open_trail(api_uid)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1659,6 +1692,8 @@ const _: fn() = || {
         let _: u32 = TrailDto.current;
         let _: Vec<crate::api::types::StopDto> = TrailDto.stops;
         let _: Vec<(u32, u32)> = TrailDto.meetings;
+        let _: bool = TrailDto.kept;
+        let _: Option<String> = TrailDto.name;
     }
     {
         let TrailSummaryDto = None::<crate::api::types::TrailSummaryDto>.unwrap();
@@ -3084,11 +3119,15 @@ impl SseDecode for crate::api::types::TrailDto {
         let mut var_current = <u32>::sse_decode(deserializer);
         let mut var_stops = <Vec<crate::api::types::StopDto>>::sse_decode(deserializer);
         let mut var_meetings = <Vec<(u32, u32)>>::sse_decode(deserializer);
+        let mut var_kept = <bool>::sse_decode(deserializer);
+        let mut var_name = <Option<String>>::sse_decode(deserializer);
         return crate::api::types::TrailDto {
             root_query: var_rootQuery,
             current: var_current,
             stops: var_stops,
             meetings: var_meetings,
+            kept: var_kept,
+            name: var_name,
         };
     }
 }
@@ -3269,32 +3308,33 @@ fn pde_ffi_dispatcher_primary_impl(
         8 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__core__keep_trail_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__core__most_played_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__open_trail_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3307,8 +3347,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        12 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4425,6 +4465,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TrailDto> {
             self.0.current.into_into_dart().into_dart(),
             self.0.stops.into_into_dart().into_dart(),
             self.0.meetings.into_into_dart().into_dart(),
+            self.0.kept.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5640,6 +5682,8 @@ impl SseEncode for crate::api::types::TrailDto {
         <u32>::sse_encode(self.current, serializer);
         <Vec<crate::api::types::StopDto>>::sse_encode(self.stops, serializer);
         <Vec<(u32, u32)>>::sse_encode(self.meetings, serializer);
+        <bool>::sse_encode(self.kept, serializer);
+        <Option<String>>::sse_encode(self.name, serializer);
     }
 }
 

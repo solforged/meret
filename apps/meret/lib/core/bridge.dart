@@ -30,6 +30,8 @@ abstract interface class CoreBridge {
   Future<TrailDto> trailGo(int stop);
   Future<List<TrailSummaryDto>> trailHistory(int limit);
   Future<TrailDto> keepTrail({String? name});
+  /// A trail from the Front's history becomes active at the stop it was left on.
+  Future<TrailDto> openTrail(String uid);
   Future<void> runCommand(String input);
   QueryDto parse(String input);
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
@@ -86,6 +88,8 @@ class RustCore implements CoreBridge {
   Future<List<TrailSummaryDto>> trailHistory(int limit) => rust.trailHistory(limit: limit);
   @override
   Future<TrailDto> keepTrail({String? name}) => rust.keepTrail(name: name);
+  @override
+  Future<TrailDto> openTrail(String uid) => rust.openTrail(uid: uid);
   @override
   Future<void> runCommand(String input) => rust.runCommand(input: input);
   @override
@@ -188,8 +192,24 @@ class FakeCore implements CoreBridge {
     final trail = _trail;
     if (index == null || trail == null) throw 'No trail is open';
     _keptTrails[_trailUids[index]] = name;
+    _trail = _withKept(trail, index);
     _saveTrail();
-    return trail;
+    return _trail!;
+  }
+
+  @override
+  Future<TrailDto> openTrail(String uid) async {
+    final index = _trailUids.indexOf(uid);
+    if (index < 0) throw 'that trail is no longer in the history';
+    _saveTrail();
+    _loadTrail(index);
+    return trailGo(_trail!.current);
+  }
+
+  TrailDto _withKept(TrailDto trail, int index) {
+    final uid = _trailUids[index];
+    return TrailDto(rootQuery: trail.rootQuery, current: trail.current, stops: trail.stops, meetings: trail.meetings,
+      kept: _keptTrails.containsKey(uid), name: _keptTrails[uid]);
   }
 
   void _saveTrail() {
@@ -411,6 +431,7 @@ class FakeCore implements CoreBridge {
       current: 0,
       stops: [StopDto(index: 0, target: target, title: title, onPath: true, isFork: false, isPeek: false)],
       meetings: const [],
+      kept: false,
     );
     _trailHistory.add((trail: trail, forward: {}, departure: 0));
     final uid = 'fake-trail-${_nextTrail++}';
@@ -451,7 +472,7 @@ class FakeCore implements CoreBridge {
     }
     final index = trail.stops.length;
     _forward[fromStop] = index;
-    _trail = TrailDto(rootQuery: trail.rootQuery, current: index, stops: [
+    _trail = TrailDto(rootQuery: trail.rootQuery, current: index, kept: trail.kept, name: trail.name, stops: [
       ...trail.stops,
       StopDto(index: index, parent: fromStop, target: to, title: title, via: _threadLabel(via),
         viaSource: via == ThreadKind.matched ? 'your library' : 'tags',
@@ -491,12 +512,12 @@ class FakeCore implements CoreBridge {
     for (final node in trail.stops) {
       if (node.parent != null) children.update(node.parent!, (count) => count + 1, ifAbsent: () => 1);
     }
-    return _trail = TrailDto(rootQuery: trail.rootQuery, current: stop, stops: [
+    return _trail = _withKept(TrailDto(rootQuery: trail.rootQuery, current: stop, kept: false, stops: [
       for (final node in trail.stops)
         StopDto(index: node.index, parent: node.parent, target: node.target, title: node.title,
           via: node.via, viaSource: node.viaSource, onPath: path.contains(node.index),
           isFork: (children[node.index] ?? 0) > 1, isPeek: node.isPeek),
-    ], meetings: trail.meetings);
+    ], meetings: trail.meetings), _historyIndex!);
   }
 
   @override
