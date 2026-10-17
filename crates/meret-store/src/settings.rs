@@ -66,6 +66,27 @@ impl Store {
             Ok(())
         })
     }
+
+    /// This library's device id, a ULID minted on first use and kept in
+    /// `setting`. Every row a person makes (listens, trails, resume points)
+    /// carries it, so two devices' rows merge without colliding.
+    pub fn device_id(&self) -> Result<String> {
+        if let Some(id) = self.read(|c| {
+            c.query_row("SELECT value FROM setting WHERE key = 'device_id'", [], |r| r.get::<_, String>(0))
+                .map(Some)
+                .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        })? {
+            return Ok(id);
+        }
+        let minted = ulid::Ulid::generate().to_string();
+        let keep = minted.clone();
+        self.writer.write(move |tx| {
+            tx.execute("INSERT OR IGNORE INTO setting (key, value) VALUES ('device_id', ?1)", [keep])?;
+            Ok(())
+        })?;
+        // Another writer may have won the race; the row is what counts.
+        self.read(|c| c.query_row("SELECT value FROM setting WHERE key = 'device_id'", [], |r| r.get(0)))
+    }
 }
 
 #[cfg(test)]
