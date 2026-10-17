@@ -32,6 +32,8 @@ abstract interface class CoreBridge {
   QueryDto parse(String input);
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
   Future<void> transport(TransportDto cmd);
+  /// The queue after the playing item; ask again when Now's item changes.
+  Future<UpNextDto> upNext(int limit);
   Future<int> addRoot(String path);
   Future<void> removeRoot(int id);
   SettingsDto settings();
@@ -82,6 +84,8 @@ class RustCore implements CoreBridge {
       rust.histogram(column: column, query: query, lo: lo, hi: hi, bins: bins);
   @override
   Future<void> transport(TransportDto cmd) => rust.transport(cmd: cmd);
+  @override
+  Future<UpNextDto> upNext(int limit) => rust.upNext(limit: limit);
   @override
   Future<int> addRoot(String path) async => (await rust.addRoot(path: path)).toInt();
   @override
@@ -903,7 +907,40 @@ class FakeCore implements CoreBridge {
   Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop}) async {
     final rows = _releaseRows(id);
     if (index < 0 || index >= rows.length) throw RangeError.index(index, rows);
-    _playRow(rows[index]);
+    _playQueue(rows.sublist(index));
+  }
+
+  /// Tokens count up across queues, as the engine's do; the opening Now is 1.
+  final _queue = <(BigInt, TrackRowDto)>[];
+  int _cursor = 0;
+  BigInt _nextToken = BigInt.two;
+
+  void _playQueue(List<TrackRowDto> rows) {
+    _queue.clear();
+    for (final row in rows) {
+      _queue.add((_nextToken, row));
+      _nextToken += BigInt.one;
+    }
+    _cursor = 0;
+    _playRow(_queue.first);
+  }
+
+  @override
+  Future<UpNextDto> upNext(int limit) async {
+    final rest = _cursor + 1 < _queue.length ? _queue.sublist(_cursor + 1) : const <(BigInt, TrackRowDto)>[];
+    return UpNextDto(
+      items: [
+        for (final (token, row) in rest.take(limit))
+          UpNextItemDto(
+            token: token,
+            trackId: row.trackId,
+            title: row.title,
+            subtitle: '${row.artist} · ${row.album}',
+            lengthMs: row.lengthMs,
+          ),
+      ],
+      remaining: BigInt.from(rest.length),
+    );
   }
 
 
@@ -934,17 +971,18 @@ class FakeCore implements CoreBridge {
   Future<void> playResults(String query, ViewDto view, int index) async {
     final indices = _list(query, view).$1;
     if (index < 0 || index >= indices.length) throw RangeError.index(index, null, 'index', null, indices.length);
-    _playRow(_row(indices[index]));
+    _playQueue([for (final i in indices.skip(index).take(50)) _row(i)]);
   }
 
-  void _playRow(TrackRowDto row) {
+  void _playRow((BigInt, TrackRowDto) item) {
+    final (token, row) = item;
     _state = NowDto(
       trackId: row.trackId,
       releaseId: row.releaseId,
       light: _sampleLight,
       title: row.title,
       subtitle: '${row.artist} · ${row.album}',
-      anchor: AnchorDto(item: BigInt.from(row.trackId.toInt()), positionMs: 0, rate: 1),
+      anchor: AnchorDto(item: token, positionMs: 0, rate: 1),
       lengthMs: row.lengthMs,
       path: [
         StageDto(name: 'File', detail: row.format, alters: false),
@@ -961,6 +999,18 @@ class FakeCore implements CoreBridge {
     final a = _state.anchor;
     if (a == null) return;
     final pos = a.positionMs;
+    switch (cmd) {
+      case TransportDto_Next() || TransportDto_Previous() when _queue.isEmpty:
+        return;
+      case TransportDto_Next():
+        if (_cursor + 1 < _queue.length) _playRow(_queue[++_cursor]);
+        return;
+      case TransportDto_Previous():
+        if (pos <= 3000 && _cursor > 0) _cursor--;
+        _playRow(_queue[_cursor]);
+        return;
+      default:
+    }
     _state = switch (cmd) {
       TransportDto_Pause() => _with(AnchorDto(item: a.item, positionMs: pos, rate: 0)),
       TransportDto_Resume() => _with(AnchorDto(item: a.item, positionMs: pos, rate: 1)),

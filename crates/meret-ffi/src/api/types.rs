@@ -9,7 +9,7 @@ pub use meret_api::{
 pub use meret_api::LightDto;
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
 pub use meret_api::{FolderKindDto, FolderSuggestionDto, LightLevelDto, OutputDeviceDto, SettingsDto};
-pub use meret_api::VolumeDto;
+pub use meret_api::{UpNextDto, UpNextItemDto, VolumeDto};
 
 #[frb(mirror(VolumeDto))]
 pub struct _VolumeDto {
@@ -146,7 +146,25 @@ pub enum _TransportDto {
     Pause,
     Resume,
     Seek { ms: u64 },
+    Next,
+    Previous,
     Stop,
+}
+
+#[frb(mirror(UpNextItemDto))]
+pub struct _UpNextItemDto {
+    pub token: u64,
+    pub track_id: Option<i64>,
+    pub title: String,
+    pub subtitle: String,
+    pub length_ms: Option<u64>,
+    pub why: Option<String>,
+}
+
+#[frb(mirror(UpNextDto))]
+pub struct _UpNextDto {
+    pub items: Vec<UpNextItemDto>,
+    pub remaining: u64,
 }
 
 #[frb(mirror(AnchorDto))]
