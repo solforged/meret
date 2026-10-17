@@ -16,4 +16,5 @@ roaring.workspace = true
 rusqlite.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+ulid.workspace = true
 unicode-normalization.workspace = true
