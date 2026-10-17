@@ -1,2 +1,5 @@
 #include "../../Flutter/Flutter-Release.xcconfig"
 #include "Warnings.xcconfig"
+
+// Apple silicon only; Xcode 27 no longer requires x86_64.
+ARCHS = arm64
