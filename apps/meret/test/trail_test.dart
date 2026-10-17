@@ -111,6 +111,31 @@ void main() {
     expect((await core.trailBack())!.rootQuery, 'year:1998');
     expect((await core.trailForward())!.rootQuery, 'Iona');
   });
+
+  test('fake trail memory names and keeps the whole tree across history moves', () async {
+    final core = FakeCore();
+    final root = await core.startTrail(const TargetDto.search(query: 'year:2000'));
+    final rows = await core.rows('', const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), 0, 1);
+    final row = (rows.items.single as ItemDto_Track).row;
+    final hit = (id: row.releaseId, title: row.album);
+    await core.follow(root.current, TargetDto.release(id: hit.id), ThreadKind.matched);
+    await core.playRelease(id: hit.id, index: 0, fromStop: 1);
+    await core.keepTrail(name: 'A kept tree');
+    final saved = (await core.trailHistory(1)).single;
+    expect(saved.title, 'year:2000 → ${hit.title}');
+    expect(saved.stops, 2);
+    expect(saved.played, 1);
+    expect(saved.kept, isTrue);
+    expect(saved.name, 'A kept tree');
+    await core.startTrail(const TargetDto.search(query: 'year:2001'));
+    await core.trailBack();
+    await core.startTrail(const TargetDto.search(query: 'year:2002'));
+    final history = await core.trailHistory(10);
+    expect(history, hasLength(3));
+    expect(history[1].uid, saved.uid);
+    expect(history[1].name, saved.name);
+    expect(await core.trailHistory(0), isEmpty);
+  });
 }
 
 StopDto _stop(int index, int? parent, bool onPath, {bool peek = false}) => StopDto(

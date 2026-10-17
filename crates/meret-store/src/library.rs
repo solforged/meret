@@ -10,6 +10,7 @@ use rusqlite::Connection;
 
 use crate::columns::{HotColumns, Row};
 use crate::plan::{Plan, format_code};
+use crate::listens::COUNTED;
 use crate::{Result, Store};
 
 /// One track as the table draws it and the queue plays it.
@@ -105,8 +106,10 @@ impl Store {
                      WHERE c.subject_kind = 2 AND c.subject_id = r.id AND c.role = 'artist' ORDER BY c.sort LIMIT 1)
                  LEFT JOIN agent aa ON aa.id = (SELECT c.agent_id FROM credit c
                      WHERE c.subject_kind = 3 AND c.subject_id = rl.id AND c.role = 'album_artist' ORDER BY c.sort LIMIT 1)
-                 LEFT JOIN (SELECT recording_id, COUNT(*) AS plays, MAX(started_at) AS last
-                            FROM listen GROUP BY recording_id) l ON l.recording_id = t.recording_id
+                 LEFT JOIN (SELECT t.id AS track_id, COUNT(*) AS plays, MAX(l.started_at) AS last
+                            FROM listen l JOIN recording r ON r.id = l.recording_id
+                            JOIN track t ON t.recording_id = r.id
+                            WHERE {COUNTED} GROUP BY t.id) l ON l.track_id = t.id
                  ORDER BY album_artist IS NULL, album_artist COLLATE NOCASE, rl.title COLLATE NOCASE, rl.id,
                           m.position, t.position, f.rel_path"
             );

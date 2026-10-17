@@ -163,9 +163,31 @@ Future<TrailDto> trailGo({required int stop}) =>
 
 Future<TrailDto?> trail() => RustLib.instance.api.crateApiCoreTrail();
 
+Future<List<TrailSummaryDto>> trailHistory({required int limit}) =>
+    RustLib.instance.api.crateApiCoreTrailHistory(limit: limit);
+
+Future<TrailDto> keepTrail({String? name}) =>
+    RustLib.instance.api.crateApiCoreKeepTrail(name: name);
+
 /// Now, pushed whenever it changes: a new item, a new anchor, a new path.
 Stream<NowDto> watchNow() => RustLib.instance.api.crateApiCoreWatchNow();
 
 /// The status line, pushed whenever it changes.
 Stream<StatusDto> watchStatus() =>
     RustLib.instance.api.crateApiCoreWatchStatus();
+
+/// Every listen, including skips, newest first.
+Future<List<ListenDto>> history({required int limit}) =>
+    RustLib.instance.api.crateApiCoreHistory(limit: limit);
+
+Future<List<PlayedDto>> mostPlayed({required int days, required int limit}) =>
+    RustLib.instance.api.crateApiCoreMostPlayed(days: days, limit: limit);
+
+Future<List<DormantDto>> dormant({required int limit}) =>
+    RustLib.instance.api.crateApiCoreDormant(limit: limit);
+
+Future<List<ResumeDto>> resumePoints({required int limit}) =>
+    RustLib.instance.api.crateApiCoreResumePoints(limit: limit);
+
+Future<void> pickUp({required PlatformInt64 releaseId}) =>
+    RustLib.instance.api.crateApiCorePickUp(releaseId: releaseId);

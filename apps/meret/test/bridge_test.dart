@@ -12,7 +12,7 @@ import 'package:meret/core/bridge.dart';
 import 'package:meret/src/rust/api/core.dart' as rust;
 import 'package:meret/src/rust/frb_generated.dart';
 
-final _lib = '${Directory.current.path}/../../target/debug/libmeret_ffi.dylib';
+final _lib = Platform.environment['MERET_TEST_DYLIB'] ?? '${Directory.current.path}/../../target/debug/libmeret_ffi.dylib';
 late Directory _fixtureDir;
 Future<void>? _scan;
 const _libraryView = ViewDto(sort: SortKeyDto.library_, descending: false, group: false);
@@ -233,6 +233,14 @@ void main() {
       expect(now.title, row.title);
       expect(now.path.map((stage) => stage.detail), contains('FLAC 16/44.1'));
       expect((await core.trail())!.current, personStop);
+      await core.keepTrail(name: 'Fixture trail');
+      final summary = (await core.trailHistory(1)).single;
+      expect(summary.title, '${root.stops.first.title} → ${person.name}');
+      expect(summary.stops, 3);
+      expect(summary.played, 1);
+      expect(summary.kept, isTrue);
+      expect(summary.name, 'Fixture trail');
+      expect(summary.uid, isNotEmpty);
     } finally {
       await core.transport(const TransportDto.stop());
     }

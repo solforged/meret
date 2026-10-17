@@ -33,7 +33,7 @@ pub enum Action {
     Noted,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Stop {
     pub uid: StopUid,
     pub parent: Option<usize>,
@@ -89,6 +89,28 @@ impl Trail {
             pruned: false,
         };
         Self { uid: TrailUid::new(), name: None, root_query, kept: false, stops: vec![root], current: 0, entered_at: now }
+    }
+
+    /// Rebuilds persisted stops in their original insertion order. Restoring
+    /// starts a new dwell interval; time with the app closed is not dwell.
+    pub fn restore(
+        uid: TrailUid, name: Option<String>, root_query: Option<String>, kept: bool,
+        stops: Vec<Stop>, current: usize, now: i64,
+    ) -> Self {
+        assert!(!stops.is_empty() && current < stops.len(), "a trail needs a current stop");
+        Self { uid, name, root_query, kept, stops, current, entered_at: now }
+    }
+
+    pub fn stops(&self) -> &[Stop] {
+        &self.stops
+    }
+
+    /// A storage snapshot includes dwell up to this instant, without changing
+    /// the live interval (and therefore without counting it twice).
+    pub fn snapshot(&self, now: i64) -> Self {
+        let mut trail = self.clone();
+        trail.leave_current(now);
+        trail
     }
 
     pub fn stop(&self, i: usize) -> &Stop {
@@ -303,7 +325,7 @@ impl Trail {
     }
 }
 
-/// Session-only trail history, oldest first. Navigation never discards a tree.
+/// Persistent trail history, oldest first. Navigation never discards a tree.
 #[derive(Default)]
 pub struct TrailHistory {
     trails: Vec<HistoryEntry>,
@@ -317,6 +339,22 @@ struct HistoryEntry {
 }
 
 impl TrailHistory {
+    /// Reopens on the Front. `[` enters the newest trail where it was left.
+    pub fn restore(entries: Vec<(Trail, usize)>) -> Self {
+        Self {
+            trails: entries.into_iter().map(|(trail, departure)| HistoryEntry { trail, departure }).collect(),
+            active: None,
+        }
+    }
+
+    pub fn active_index(&self) -> Option<usize> {
+        self.active
+    }
+
+    pub fn entries(&self) -> impl Iterator<Item = (&Trail, usize)> {
+        self.trails.iter().map(|entry| (&entry.trail, entry.departure))
+    }
+
     pub fn current(&self) -> Option<&Trail> {
         self.active.map(|i| &self.trails[i].trail)
     }
@@ -340,7 +378,12 @@ impl TrailHistory {
     }
 
     pub fn back(&mut self, now: i64) -> bool {
-        let Some(i) = self.active else { return false };
+        let Some(i) = self.active else {
+            let Some(i) = self.trails.len().checked_sub(1) else { return false };
+            self.active = Some(i);
+            self.trails[i].trail.entered_at = now;
+            return true;
+        };
         if self.trails[i].trail.back(now) {
             return true;
         }
@@ -545,6 +588,25 @@ mod tests {
         assert!(history.back(6 * MIN));
         assert_eq!(history.current().unwrap().stop(0).entity, EntityRef::Release(ReleaseId(2)));
         assert!(!history.back(7 * MIN));
+    }
+
+    #[test]
+    fn restored_history_opens_on_front_and_back_enters_newest_saved_stop() {
+        let mut first = Trail::start(EntityRef::Search, Some("first".into()), 0);
+        first.follow(0, EntityRef::Release(ReleaseId(1)), via(ThreadKind::Matched), MIN);
+        let mut newest = Trail::start(EntityRef::Search, Some("newest".into()), 2 * MIN);
+        newest.follow(0, EntityRef::Release(ReleaseId(2)), via(ThreadKind::Matched), 3 * MIN);
+        let mut history = TrailHistory::restore(vec![
+            (Trail::restore(first.uid, first.name, first.root_query, first.kept, first.stops, first.current, 10 * MIN), 1),
+            (Trail::restore(newest.uid, newest.name, newest.root_query, newest.kept, newest.stops, newest.current, 10 * MIN), 0),
+        ]);
+        assert!(history.current().is_none());
+        assert!(!history.forward(10 * MIN));
+        assert!(history.back(20 * MIN));
+        let trail = history.current().unwrap();
+        assert_eq!(trail.root_query.as_deref(), Some("newest"));
+        assert_eq!(trail.current(), 1, "Front back uses current, not departure");
+        assert_eq!(trail.snapshot(21 * MIN).stop(1).dwell_ms, MIN, "closed time isn't dwell");
     }
 
     #[test]

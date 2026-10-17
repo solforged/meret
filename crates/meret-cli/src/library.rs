@@ -25,7 +25,7 @@ pub fn default_data_dir() -> PathBuf {
 
 pub fn open(data: &Path, output: OutputChoice) -> Result<(Api, tokio::runtime::Runtime)> {
     let core = meret_core::start(CoreConfig { data_dir: data.into(), output, contact: "meret@localhost".into() })?;
-    let rt = tokio::runtime::Builder::new_current_thread().enable_time().build()?;
+    let rt = tokio::runtime::Builder::new_current_thread().enable_time().enable_io().build()?;
     Ok((Api::new(core), rt))
 }
 
@@ -219,8 +219,13 @@ pub fn search(api: &Api, rt: &tokio::runtime::Runtime, input: &str) -> Result<()
 /// Walk numbered hits/threads, or navigate between session trails.
 pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[String]) -> Result<()> {
     settle(api, rt);
-    let mut trail = api.start_trail(TargetDto::Search { query: search.into() });
-    let mut lines = walk_pane(api, &trail.stops[trail.current as usize].target)?;
+    let mut trail = if search == "[" {
+        api.trail_back().ok_or_else(|| anyhow!("there's no saved trail"))?
+    } else {
+        api.start_trail(TargetDto::Search { query: search.into() })
+    };
+    let target = &trail.stops.iter().find(|stop| stop.index == trail.current).expect("current stop").target;
+    let mut lines = walk_pane(api, target)?;
     print_strip(&trail);
     for step in steps {
         trail = match step.as_str() {
@@ -236,6 +241,16 @@ pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[Stri
         let target = &trail.stops.iter().find(|stop| stop.index == trail.current).expect("current stop").target;
         lines = walk_pane(api, target)?;
         print_strip(&trail);
+    }
+    Ok(())
+}
+
+pub fn trails(api: &Api, limit: u32) -> Result<()> {
+    for trail in api.trail_history(limit).map_err(anyhow::Error::msg)? {
+        println!("{}  · {} stops · {} branches · {} played · {} wanted{}{}",
+            trail.title, trail.stops, trail.branches, trail.played, trail.wanted,
+            if trail.kept { " · kept" } else { "" },
+            trail.name.map(|name| format!(" · {name}")).unwrap_or_default());
     }
     Ok(())
 }
@@ -346,10 +361,21 @@ pub fn play(api: &Api, rt: &tokio::runtime::Runtime, query: &str, opts: PlayOpti
     let mut started: Vec<u64> = vec![];
     let mut ended = 0usize;
     rt.block_on(async {
+        let interrupt = tokio::signal::ctrl_c();
+        tokio::pin!(interrupt);
+        let mut interrupted = false;
         loop {
             // Anchors are only sent on a change, so a long track can be
             // silent for its whole length; wait for Idle.
-            let e = match events.recv().await {
+            let received = tokio::select! {
+                event = events.recv() => event,
+                _ = &mut interrupt, if !interrupted => {
+                    interrupted = true;
+                    api.transport(TransportDto::Stop).map_err(anyhow::Error::msg)?;
+                    continue;
+                }
+            };
+            let e = match received {
                 Ok(e) => e,
                 Err(RecvError::Lagged(n)) => {
                     println!("! missed {n} events");
@@ -407,7 +433,8 @@ pub fn play(api: &Api, rt: &tokio::runtime::Runtime, query: &str, opts: PlayOpti
                 EngineEvent::OutputChanged { .. } => {}
             }
         }
-    });
+        Ok::<(), anyhow::Error>(())
+    })?;
 
     // Every join must be "end n" immediately followed by "start n+1".
     let joins_in_order = order
@@ -436,5 +463,39 @@ pub fn play(api: &Api, rt: &tokio::runtime::Runtime, query: &str, opts: PlayOpti
             if reopened { " (rate change: the device reopened)" } else { "" }
         );
     }
+    Ok(())
+}
+
+pub fn history(api: &Api, limit: u32) -> Result<()> {
+    for row in api.history(limit).map_err(anyhow::Error::msg)? {
+        let seconds = row.started_at_ms / 1000;
+        let time = format!("{:02}:{:02}:{:02} UTC", seconds.rem_euclid(86_400) / 3600, seconds.rem_euclid(3600) / 60, seconds.rem_euclid(60));
+        let duration = |ms: u64| format!("{}:{:02}", ms / 60_000, ms / 1000 % 60);
+        let length = row.length_ms.map(duration).unwrap_or_else(|| "?".into());
+        println!("{time}  {:<40.40} {:<24.24} {}/{} {}", row.title, row.credit.as_deref().unwrap_or(""),
+            duration(row.played_ms), length, if row.counted { "✓" } else { "" });
+    }
+    Ok(())
+}
+
+pub fn resume(api: &Api, limit: u32) -> Result<()> {
+    let rows = api.resume_points(limit).map_err(anyhow::Error::msg)?;
+    for row in &rows {
+        println!("{} · {} · {} · {}-{} {} · {}:{:02} / {} · updated {}",
+            row.release_id, row.title, row.credit.as_deref().unwrap_or(""), row.disc, row.number,
+            row.recording_title, row.position_ms / 60_000, row.position_ms / 1000 % 60,
+            row.length_ms.map(|ms| format!("{}:{:02}", ms / 60_000, ms / 1000 % 60)).unwrap_or_default(),
+            row.updated_at);
+    }
+    println!("{} resume points", rows.len());
+    Ok(())
+}
+
+pub fn now(api: &Api) -> Result<()> {
+    let now = api.now();
+    let (position, rate) = now.anchor.map(|a| (a.position_ms, a.rate)).unwrap_or_default();
+    println!("{} · {} · {} at {:.0} ms / {:?} ms · track {:?} · release {:?}",
+        now.title, now.subtitle, if rate > 0.0 { "playing" } else { "paused" },
+        position, now.length_ms, now.track_id, now.release_id);
     Ok(())
 }
