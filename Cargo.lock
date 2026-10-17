@@ -1459,6 +1459,7 @@ dependencies = [
  "rusqlite",
  "thiserror",
  "tracing",
+ "ulid",
  "unicode-normalization",
 ]
 
