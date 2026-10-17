@@ -10,17 +10,20 @@ import '../core/when.dart';
 import '../draw/body_painter.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
+import 'zones.dart';
+import 'picks.dart';
 
 /// Now: what's playing, the transport, the signal path and the queue.
 /// Pinned at the right from 1400 px; [NowBar] below that.
 class NowPane extends StatelessWidget {
-  const NowPane({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease});
+  const NowPane({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease, this.settingsChanges});
 
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
+  final Listenable? settingsChanges;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +44,10 @@ class NowPane extends StatelessWidget {
         const SizedBox(height: 8),
         Text(n?.title.isNotEmpty == true ? n!.title : 'Nothing playing', style: Tok.title.copyWith(fontSize: 17), maxLines: 2, overflow: TextOverflow.ellipsis),
         Text(n?.subtitle ?? '', style: Tok.body.copyWith(color: Tok.muted, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (n?.why case final why?) Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(why, key: const ValueKey('now-why'), style: Tok.label.copyWith(color: Tok.gold), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
         if (n?.error case final error?) Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(error, style: Tok.label.copyWith(color: Tok.warn)),
@@ -59,10 +66,14 @@ class NowPane extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
             if (n?.fidelity != null) NowFidelity(now: n!),
+            const SizedBox(height: 12),
+            PlayOn(core: core, now: n, settingsChanges: settingsChanges),
             if (loaded) ...[
               const SizedBox(height: 12),
               UpNext(core: core, now: n),
             ],
+            const SizedBox(height: 12),
+            PlaySomething(core: core, now: n),
             const SizedBox(height: 12),
             NowMemory(core: core, now: n, resumeLimit: 3, historyLimit: 3, onRelease: onRelease),
             const SizedBox(height: 12),
@@ -314,12 +325,13 @@ class _NowDoorState extends State<NowDoor> {
 /// Now as a bar, below the panes, when the window is too narrow to pin it.
 /// The title opens the full pane as a sheet.
 class NowBar extends StatelessWidget {
-  const NowBar({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease});
+  const NowBar({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease, this.settingsChanges});
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
+  final Listenable? settingsChanges;
 
   @override
   Widget build(BuildContext context) {
@@ -373,6 +385,7 @@ class NowBar extends StatelessWidget {
           stream: core.now(),
           builder: (_, snapshot) => SizedBox(width: 380, height: 640, child: NowPane(
             core: core, now: snapshot.data, clock: clock, onToggle: onToggle,
+            settingsChanges: settingsChanges,
             onRelease: onRelease == null ? null : (id) async {
               Navigator.of(sheetContext).pop();
               await onRelease!(id);
