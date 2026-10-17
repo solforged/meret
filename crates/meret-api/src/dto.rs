@@ -1075,7 +1075,8 @@ impl PickDto {
             ),
             meret_core::Why::FromTrail { trail, latest } => (
                 if latest { "From your latest trail" } else { "From a recent trail" }.into(),
-                format!("You reached it on {trail} and haven't played it through."),
+                if trail == release.title { "You opened it, then left without playing it through.".to_owned() }
+                else { format!("You reached it on {trail} and haven't played it through.") },
             ),
             meret_core::Why::NeverPlayed { added_ms } => (
                 "Never played".into(),

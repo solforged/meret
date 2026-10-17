@@ -58,6 +58,8 @@ abstract interface class CoreBridge {
   Future<List<PickDto>> picks(int limit);
   /// `⇧Space`: plays the first pick from the top; null when nothing is playable.
   Future<PickDto?> playSomething();
+  /// A pick clicked in Now: plays that release from the top with its why.
+  Future<PickDto> playPick(PlatformInt64 releaseId);
   /// Play on: every zone and what it does to the sound.
   Future<List<ZoneDto>> zones();
   /// Sends output to a zone; while playing it applies from the next track.
@@ -147,6 +149,8 @@ class RustCore implements CoreBridge {
   Future<List<PickDto>> picks(int limit) => rust.picks(limit: limit);
   @override
   Future<PickDto?> playSomething() => rust.playSomething();
+  @override
+  Future<PickDto> playPick(PlatformInt64 releaseId) => rust.playPick(releaseId: releaseId);
   @override
   Future<List<ZoneDto>> zones() => rust.zones();
   @override
@@ -1093,9 +1097,19 @@ class FakeCore implements CoreBridge {
   Future<PickDto?> playSomething() async {
     final pick = (await picks(1)).firstOrNull;
     if (pick == null) return null;
-    _playQueue(_releaseRows(pick.releaseId), why: '${pick.label} · ${pick.reason.replaceAll(RegExp(r'\.$'), '')}');
+    _playQueue(_releaseRows(pick.releaseId), why: _pickWhy(pick));
     return pick;
   }
+
+  @override
+  Future<PickDto> playPick(PlatformInt64 releaseId) async {
+    final pick = (await picks(3)).where((pick) => pick.releaseId == releaseId).firstOrNull;
+    if (pick == null) throw 'that pick is gone';
+    _playQueue(_releaseRows(pick.releaseId), why: _pickWhy(pick));
+    return pick;
+  }
+
+  static String _pickWhy(PickDto pick) => '${pick.label} · ${pick.reason.replaceAll(RegExp(r'\.$'), '')}';
 
   @override
   Future<List<ZoneDto>> zones() async => [

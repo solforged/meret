@@ -237,6 +237,11 @@ pub fn play_something() -> Result<Option<PickDto>, String> {
     api()?.play_something()
 }
 
+/// A pick clicked in Now: plays that release from the top with its why.
+pub fn play_pick(release_id: i64) -> Result<PickDto, String> {
+    api()?.play_pick(release_id)
+}
+
 /// Play on: every zone and what it does to the sound.
 pub fn zones() -> Result<Vec<ZoneDto>, String> {
     api()?.zones()

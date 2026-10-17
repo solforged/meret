@@ -61,13 +61,13 @@ Decided 2026-10-14.
 | Story | Where | State |
 |---|---|---|
 | I open Meret and carry on where I stopped | Now, paused at the position; `Space` | Placed (plate 09) |
-| I want music without choosing | `⇧Space` Play something, with why | Placed (plate 09) |
+| I want music without choosing | `⇧Space` Play something, with why | Built (from listens and trails; habits and leads later) |
 | I want one specific album, now | `/`, type, `↵` | Built |
 | I browse the whole library as a table | `⌘L` or a Front door | Built |
 | I wander from a credit to a person to their other work | Panes and threads; the strip | Built (local credits only) |
 | I see what's next, and change it | Now, Up next | Placed (plate 09) |
 | I find out what played ten minutes ago | Now, "What was that?"; `H` for history | Placed |
-| I play on another speaker | Now, Play on | Placed (plate 09) |
+| I play on another speaker | Now, Play on | Built for this Mac's outputs; other zones later |
 | I control playback while working in another app | Menu bar item, media keys | Placed (plate 10) |
 | I know whether I'm hearing it bit-perfect | Now, signal path | Built |
 | I skip, go back, seek | Now, under the body; the bar on narrow windows | Placed |

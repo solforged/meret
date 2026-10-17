@@ -13,6 +13,8 @@ import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
 import 'package:meret/now/now_stage.dart';
+import 'package:meret/now/picks.dart';
+import 'package:meret/now/zones.dart';
 import 'package:meret/panes/front_pane.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/search_pane.dart';
@@ -28,6 +30,95 @@ const _libraryView = ViewDto(sort: SortKeyDto.library_, descending: false, group
 const _groupedView = ViewDto(sort: SortKeyDto.library_, descending: false, group: true);
 
 void main() {
+  testWidgets('the Now stage lists output devices with current rings and core verdict colours', (tester) async {
+    await _surface(tester, FakeCore());
+    await tester.pump();
+    expect(find.byType(PlayOn), findsOneWidget);
+    expect(find.text('every zone says what it does to the sound'), findsOneWidget);
+    expect(find.text('MacBook Pro Speakers'), findsOneWidget);
+    expect(find.text('RME ADI-2 DAC'), findsOneWidget);
+    expect(find.text('This Mac · default output'), findsOneWidget);
+    expect(find.descendant(
+      of: find.byKey(const ValueKey('now-zone-local:dac')), matching: find.text('This Mac'),
+    ), findsOneWidget);
+    final speakers = _zoneMarker(tester, 'speakers');
+    final dac = _zoneMarker(tester, 'dac');
+    expect(speakers.shape, BoxShape.circle);
+    expect(speakers.color, Light.of(tester.element(find.byType(PlayOn))).accent);
+    expect(dac.color, Colors.transparent);
+    expect(tester.getSize(find.byKey(const ValueKey('now-zone-marker-local:speakers'))), const Size(9, 9));
+    expect(tester.widget<Text>(find.text('◐ refuses above 96 kHz')).style!.color, Tok.warn);
+    expect(tester.widget<Text>(find.text('● bit-perfect')).style!.color, Tok.ok);
+    expect(tester.widget<Text>(find.text('● bit-perfect')).style!.fontSize, 11);
+    expect(tester.getTopLeft(find.byType(PlayOn)).dy, lessThan(tester.getTopLeft(find.byType(UpNext)).dy));
+  });
+
+  testWidgets('Play on switches to the DAC and does not navigate or replay the current device', (tester) async {
+    final core = _ZonesCore();
+    await _surface(tester, core);
+    await tester.pump();
+    final before = await core.now().first;
+    await tester.tap(find.byKey(const ValueKey('now-zone-local:speakers')));
+    await tester.pump();
+    expect(core.outputs, isEmpty);
+    await tester.tap(find.byKey(const ValueKey('now-zone-local:dac')));
+    await tester.pump();
+    await tester.pump();
+    expect(core.outputs, ['local:dac']);
+    expect(core.settings().outputDevice, 'dac');
+    expect(_zoneMarker(tester, 'speakers').color, Colors.transparent);
+    expect(_zoneMarker(tester, 'dac').color, Light.of(tester.element(find.byType(PlayOn))).accent);
+    expect((await core.now().first).anchor!.item, before.anchor!.item);
+    expect(await core.trail(), isNull);
+    expect(find.byType(TrailStrip), findsNothing);
+    expect(find.byType(NowStage), findsOneWidget);
+  });
+
+  testWidgets('Play on draws the shared-mode verdict verbatim for both devices', (tester) async {
+    final core = FakeCore();
+    await core.setSettings(SettingsDto(light: core.settings().light, exclusive: false));
+    await _surface(tester, core);
+    await tester.pump();
+    final verdicts = find.text('◐ shared with macOS');
+    expect(verdicts, findsNWidgets(2));
+    for (final text in tester.widgetList<Text>(verdicts)) {
+      expect(text.style!.color, Tok.warn);
+    }
+  });
+
+  testWidgets('Play on shows a switch failure under its list without moving the marker', (tester) async {
+    final core = _FailingZoneCore();
+    await _surface(tester, core);
+    await tester.pump();
+    final dac = find.byKey(const ValueKey('now-zone-local:dac'));
+    await tester.tap(dac);
+    await tester.pump();
+    expect(core.outputs, ['local:dac']);
+    final error = find.text('The DAC is unavailable.');
+    expect(error, findsOneWidget);
+    expect(tester.widget<Text>(error).style!.color, Tok.warn);
+    expect(tester.getTopLeft(error).dy, greaterThan(tester.getBottomLeft(dac).dy));
+    expect(_zoneMarker(tester, 'speakers').color, Light.of(tester.element(find.byType(PlayOn))).accent);
+    expect(_zoneMarker(tester, 'dac').color, Colors.transparent);
+    expect(core.settings().outputDevice, isNull);
+  });
+
+  testWidgets('the pinned Now pane puts Play on after the signal path and before Up next', (tester) async {
+    await _surface(tester, FakeCore());
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    await tester.pump();
+    final pane = find.byType(NowPane);
+    final zones = find.descendant(of: pane, matching: find.byType(PlayOn));
+    final path = find.descendant(of: pane, matching: find.text('SIGNAL PATH'));
+    final fidelity = find.descendant(of: pane, matching: find.byType(NowFidelity));
+    final next = find.descendant(of: pane, matching: find.byType(UpNext));
+    expect(zones, findsOneWidget);
+    expect(find.descendant(of: zones, matching: find.text('Play on')), findsOneWidget);
+    expect(tester.getTopLeft(zones).dy, greaterThan(tester.getBottomLeft(path).dy));
+    expect(tester.getTopLeft(zones).dy, greaterThan(tester.getBottomLeft(fidelity).dy));
+    expect(tester.getBottomLeft(zones).dy, lessThan(tester.getTopLeft(next).dy));
+  });
+
   testWidgets('a written joint credit opens each individual thread', (tester) async {
     final people = [
       for (final (id, name) in [(1, 'Roger Briggs'), (2, 'Mark Cromer')])
@@ -167,6 +258,163 @@ void main() {
     expect(find.byType(NowStage), findsNothing);
   });
 
+  testWidgets('Shift-Space plays the first pick and Now says the core why without opening a trail', (tester) async {
+    final core = _RecordingCore();
+    await _surface(tester, core);
+    await _shiftSpace(tester);
+    expect(core.playSomethingCalls, 1);
+    expect(core.transports, isEmpty);
+    final why = tester.widget<Text>(find.byKey(const ValueKey('now-why')));
+    expect(why.data, 'Dormant · 2 years · 96 plays, then nothing for 2 years');
+    expect(why.style!.color, Tok.gold);
+    expect(why.maxLines, 1);
+    expect(why.overflow, TextOverflow.ellipsis);
+    expect(find.byType(NowStage), findsOneWidget);
+    expect(find.byType(FrontPane), findsOneWidget);
+    expect(find.byType(TrailStrip), findsNothing);
+    expect(await core.trail(), isNull);
+    expect(find.text('⇧␣'), findsOneWidget);
+    expect(find.text('play something'), findsOneWidget);
+
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    expect(find.descendant(of: find.byType(NowPane), matching: find.byKey(const ValueKey('now-why'))), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('now-why'))).data, why.data);
+  });
+
+  testWidgets('Space with no anchor asks for a pick and with an anchor still pauses and resumes', (tester) async {
+    final core = _RecordingCore.empty();
+    await _surface(tester, core);
+    expect((await core.now().first).anchor, isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(core.playSomethingCalls, 1);
+    expect(core.transports, isEmpty);
+    expect((await core.now().first).anchor, isNull);
+
+    await core.addRoot('/New music');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.pump();
+    expect(core.playSomethingCalls, 2);
+    expect((await core.now().first).anchor?.rate, 1);
+    expect(find.byType(NowStage), findsNothing, reason: 'playing a pick leaves the Front alone');
+    expect(find.byType(FrontPane), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(core.transports, [const TransportDto.pause()]);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(core.transports, [const TransportDto.pause(), const TransportDto.resume()]);
+    expect(core.playSomethingCalls, 2);
+    expect(await core.trail(), isNull);
+    expect(find.byType(TrailStrip), findsNothing);
+  });
+
+  for (final empty in [false, true]) {
+    testWidgets('play keys leave a focused query alone with ${empty ? 'no anchor' : 'an anchor'}', (tester) async {
+      final core = empty ? _RecordingCore.empty() : _RecordingCore();
+      await _surface(tester, core);
+      await tester.tap(find.byType(TextField));
+      await _shiftSpace(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.pump();
+      expect(core.playSomethingCalls, 0);
+      expect(core.transports, isEmpty);
+    });
+  }
+
+  testWidgets('the stage draws three core-ordered picks and marks only the first in gold', (tester) async {
+    final core = _RecordingCore();
+    final picks = await core.picks(3);
+    core.pickLimits.clear();
+    await _surface(tester, core);
+    await tester.pump();
+    expect(core.pickLimits, isNotEmpty);
+    expect(core.pickLimits, everyElement(3));
+    final section = find.descendant(of: find.byType(NowStage), matching: find.byType(PlaySomething));
+    expect(tester.widget<PlaySomething>(section).expanded, isTrue);
+    expect(find.text('⇧Space plays the first · always says why'), findsOneWidget);
+    expect(tester.widgetList<NowDoor>(find.descendant(of: section, matching: find.byType(NowDoor))).map((door) => door.key),
+      picks.map((pick) => ValueKey('now-pick-${pick.releaseId}')));
+    for (final (index, pick) in picks.indexed) {
+      final row = find.byKey(ValueKey('now-pick-${pick.releaseId}'));
+      expect(find.descendant(of: row, matching: find.text(pick.title)), findsOneWidget);
+      expect(find.descendant(of: row, matching: find.text(pick.reason)), findsOneWidget);
+      expect(find.descendant(of: row, matching: find.text(pick.plan)), findsOneWidget);
+      expect(find.descendant(of: row, matching: find.text(pick.meta)), findsOneWidget);
+      final label = tester.widget<Text>(find.descendant(of: row, matching: find.text(pick.label.toUpperCase())));
+      expect(label.style!.color, index == 0 ? Tok.gold : Tok.faint);
+      final cell = tester.widget<Container>(find.byKey(ValueKey('now-pick-cell-${pick.releaseId}')));
+      final decoration = cell.decoration! as BoxDecoration;
+      expect(decoration.color, Tok.panel2);
+      expect((decoration.border! as Border).top, BorderSide(color: index == 0 ? Tok.gold : Tok.line, width: index == 0 ? 2 : 1));
+      expect(find.descendant(of: row, matching: find.text('Play ⇧Space')), index == 0 ? findsOneWidget : findsNothing);
+    }
+    expect(tester.getTopLeft(find.byKey(ValueKey('now-pick-${picks[0].releaseId}'))).dy,
+      lessThan(tester.getTopLeft(find.byKey(ValueKey('now-pick-${picks[1].releaseId}'))).dy));
+    expect(tester.getTopLeft(find.byKey(ValueKey('now-pick-${picks[1].releaseId}'))).dy,
+      lessThan(tester.getTopLeft(find.byKey(ValueKey('now-pick-${picks[2].releaseId}'))).dy));
+  });
+
+  testWidgets('pick clicks play that release with its why, refresh, and never change the stage or trail', (tester) async {
+    final core = _RecordingCore();
+    final picks = await core.picks(3);
+    await _surface(tester, core);
+    await tester.pump();
+    final first = find.byKey(ValueKey('now-pick-${picks.first.releaseId}'));
+    await tester.ensureVisible(first);
+    await tester.tap(first);
+    await tester.pump();
+    await tester.pump();
+    expect(core.picksPlayed, [picks.first.releaseId]);
+    expect(core.playSomethingCalls, 0);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('now-why'))).data, 'Dormant · 2 years · 96 plays, then nothing for 2 years');
+    core.pickLimits.clear();
+    final second = find.byKey(ValueKey('now-pick-${picks[1].releaseId}'));
+    await tester.ensureVisible(second);
+    await tester.tap(second);
+    await tester.pump();
+    await tester.pump();
+    expect(core.picksPlayed, [picks.first.releaseId, picks[1].releaseId]);
+    expect(core.releasesPlayed, isEmpty);
+    expect((await core.now().first).releaseId, picks[1].releaseId);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('now-why'))).data, startsWith('From your latest trail · '));
+    expect(core.pickLimits, isNotEmpty);
+    expect(core.pickLimits, everyElement(3));
+    expect(core.started, isEmpty);
+    expect(find.byType(NowStage), findsOneWidget);
+    expect(find.byType(FrontPane), findsOneWidget);
+    expect(find.byType(TrailStrip), findsNothing);
+    expect(await core.trail(), isNull);
+  });
+
+  testWidgets('the pinned pane puts picks below Up next and above listening memory', (tester) async {
+    await _surface(tester, FakeCore());
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    final pane = find.byType(NowPane);
+    final picks = find.descendant(of: pane, matching: find.byType(PlaySomething));
+    final queue = find.descendant(of: pane, matching: find.byType(UpNext));
+    final memory = find.descendant(of: pane, matching: find.byType(NowMemory));
+    expect(tester.widget<PlaySomething>(picks).expanded, isFalse);
+    expect(tester.getTopLeft(picks).dy, greaterThan(tester.getBottomLeft(queue).dy));
+    expect(tester.getBottomLeft(picks).dy, lessThan(tester.getTopLeft(memory).dy));
+  });
+
+  testWidgets('an empty library explains that there is nothing to pick', (tester) async {
+    await _surface(tester, FakeCore.empty());
+    final section = find.byType(PlaySomething);
+    expect(section, findsOneWidget);
+    expect(find.descendant(of: section, matching: find.text('Or play something')), findsOneWidget);
+    final empty = find.descendant(of: section, matching: find.text('Nothing to play yet · add a folder'));
+    expect(empty, findsOneWidget);
+    expect(tester.widget<Text>(empty).style, Tok.label);
+    expect(find.descendant(of: section, matching: find.byType(NowDoor)), findsNothing);
+  });
+
   testWidgets('Option-Space starts the current piece from the top without opening a trail', (tester) async {
     final core = _RecordingCore();
     await _surface(tester, core);
@@ -243,6 +491,7 @@ void main() {
     expect(find.byType(NowPane), findsOneWidget);
     final pane = find.byType(NowPane);
     expect(find.descendant(of: pane, matching: find.text('Pick up')), findsOneWidget);
+    expect(find.descendant(of: pane, matching: find.byType(PlaySomething)), findsOneWidget);
     expect(find.descendant(of: pane, matching: find.text('What was that?')), findsOneWidget);
     final memory = tester.widget<NowMemory>(find.byType(NowMemory));
     expect(memory.resumeLimit, 3);
@@ -516,7 +765,7 @@ void main() {
     core.pending.first.$2.complete(await core.result('o'));
     await tester.pump();
     expect(find.text('People · 1'), findsOneWidget);
-    expect(find.text('Open Sky'), findsNothing);
+    expect(find.descendant(of: find.byKey(const ValueKey('query-hits')), matching: find.text('Open Sky')), findsNothing);
   });
 
   testWidgets('the highlighted all-tracks line opens the search rather than a person', (tester) async {
@@ -1017,6 +1266,14 @@ Future<void> _commandKey(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
+Future<void> _shiftSpace(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.sendKeyEvent(LogicalKeyboardKey.space);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.pump();
+  await tester.pump();
+}
+
 Future<TrackRowDto> _firstTrack(CoreBridge core, {int offset = 0}) async =>
     ((await core.rows('', _libraryView, offset, 1)).items.single as ItemDto_Track).row;
 
@@ -1024,7 +1281,54 @@ Widget _table(CoreBridge core, {String query = '', BigInt? libraryVersion, Value
   home: Scaffold(body: LightScope(light: light, child: TablePane(core: core, query: query, libraryVersion: libraryVersion, onQuery: onQuery ?? (_) {}))),
 );
 
+BoxDecoration _zoneMarker(WidgetTester tester, String device) =>
+  tester.widget<Container>(find.byKey(ValueKey('now-zone-marker-local:$device'))).decoration! as BoxDecoration;
+
+class _ZonesCore extends FakeCore {
+  final outputs = <String>[];
+
+  @override
+  Future<void> playOn(String zone) {
+    outputs.add(zone);
+    return super.playOn(zone);
+  }
+}
+
+class _FailingZoneCore extends _ZonesCore {
+  @override
+  Future<void> playOn(String zone) async {
+    outputs.add(zone);
+    throw 'The DAC is unavailable.';
+  }
+}
+
 class _RecordingCore extends FakeCore {
+  _RecordingCore();
+  _RecordingCore.empty() : super.empty();
+
+  int playSomethingCalls = 0;
+  final pickLimits = <int>[];
+
+  @override
+  Future<PickDto?> playSomething() {
+    playSomethingCalls++;
+    return super.playSomething();
+  }
+
+  final picksPlayed = <PlatformInt64>[];
+
+  @override
+  Future<PickDto> playPick(PlatformInt64 releaseId) {
+    picksPlayed.add(releaseId);
+    return super.playPick(releaseId);
+  }
+
+  @override
+  Future<List<PickDto>> picks(int limit) {
+    pickLimits.add(limit);
+    return super.picks(limit);
+  }
+
   final offsets = <int>[];
   final played = <(String, int)>[];
   final views = <ViewDto>[];

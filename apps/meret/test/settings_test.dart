@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meret/core/bridge.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
+import 'package:meret/now/zones.dart';
 import 'package:meret/panes/front_pane.dart';
 import 'package:meret/settings/settings_window.dart';
 import 'package:meret/theme/light.dart';
@@ -134,6 +135,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final form in ['stage', 'pane', 'sheet']) {
+    testWidgets('Settings updates the open Now $form output marker and verdicts without a restart', (tester) async {
+      final core = FakeCore();
+      await _surface(tester, core);
+      if (form != 'stage') await _command(tester, LogicalKeyboardKey.digit1);
+      if (form == 'sheet') {
+        tester.view.physicalSize = const Size(1200, 900);
+        await _settle(tester);
+        await tester.tap(find.byKey(const ValueKey('now-bar-title')));
+        await _settle(tester);
+      }
+      final zones = tester.state(find.byType(PlayOn));
+      final item = (await core.now().first).anchor!.item;
+      expect(_zoneMarkerColour(tester, 'speakers'), Light.of(tester.element(find.byType(PlayOn))).accent);
+      expect(_zoneMarkerColour(tester, 'dac'), Colors.transparent);
+      final dac = find.byKey(const ValueKey('now-zone-local:dac'));
+      await tester.ensureVisible(dac);
+      await tester.tap(dac);
+      await _settle(tester);
+      expect(core.settings().outputDevice, 'dac');
+
+      showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.playback);
+      await _settle(tester);
+      await tester.tap(find.byKey(const ValueKey('settings-output')));
+      await _settle(tester);
+      await tester.tap(find.text('System default').last);
+      await _settle(tester);
+      expect(core.settings().outputDevice, isNull);
+      expect(_zoneMarkerColour(tester, 'speakers'), Light.of(tester.element(find.byType(PlayOn))).accent);
+      expect(_zoneMarkerColour(tester, 'dac'), Colors.transparent);
+      await tester.tap(find.byKey(const ValueKey('settings-output')));
+      await _settle(tester);
+      await tester.tap(find.text('RME ADI-2 DAC').last);
+      await _settle(tester);
+      expect(core.settings().outputDevice, 'dac');
+      expect(_zoneMarkerColour(tester, 'speakers'), Colors.transparent);
+      expect(_zoneMarkerColour(tester, 'dac'), Light.of(tester.element(find.byType(PlayOn))).accent);
+      await tester.tap(find.byType(Switch));
+      await _settle(tester);
+      expect(find.text('◐ shared with macOS'), findsNWidgets(2));
+      await tester.tap(find.byTooltip('Close Settings'));
+      await _settle(tester);
+
+      expect(tester.state(find.byType(PlayOn)), same(zones));
+      expect((await core.now().first).anchor!.item, item);
+      expect(await core.trail(), isNull);
+      expect(core.settings().exclusive, isFalse);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('Sources and future sections do not offer unavailable actions', (tester) async {
     await _surface(tester, FakeCore());
     showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.sources);
@@ -157,6 +209,9 @@ void main() {
     expect(find.byType(Switch), findsNothing);
   });
 }
+
+Color? _zoneMarkerColour(WidgetTester tester, String device) =>
+  (tester.widget<Container>(find.byKey(ValueKey('now-zone-marker-local:$device'))).decoration! as BoxDecoration).color;
 
 Future<void> _surface(WidgetTester tester, CoreBridge core) async {
   tester.view.physicalSize = const Size(1920, 1100);

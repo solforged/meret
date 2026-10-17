@@ -170,31 +170,37 @@ impl Api {
     }
 
     /// Now's Up next: the queue after the playing item, up to `limit` rows.
+    /// A row says why only when that differs from what's playing: a Play
+    /// something queue carries its why on every item, and Now already says it.
     pub fn up_next(&self, limit: u32) -> Result<UpNextDto, String> {
         let (items, remaining) = self.core.up_next(limit as usize);
+        let playing_why = self.now().why;
         let ids: Vec<_> = items.iter().filter_map(|i| i.track).collect();
         let mut rows: std::collections::HashMap<_, _> =
             self.core.store.track_rows(&ids).map_err(|e| e.to_string())?.into_iter().map(|r| (r.track, r)).collect();
         let items = items
             .into_iter()
-            .map(|item| match item.track.and_then(|t| rows.remove(&t)) {
-                Some(r) => UpNextItemDto {
-                    token: item.token,
-                    track_id: Some(r.track.0),
-                    title: r.title,
-                    subtitle: [r.artist.as_deref(), Some(r.album.as_str())].into_iter().flatten().collect::<Vec<_>>().join(" · "),
-                    length_ms: r.length_ms,
-                    why: item.why,
-                },
-                None => {
-                    let path = Path::new(item.uri.strip_prefix("file://").unwrap_or(&item.uri));
-                    UpNextItemDto {
+            .map(|mut item| {
+                if item.why == playing_why { item.why = None; }
+                match item.track.and_then(|t| rows.remove(&t)) {
+                    Some(r) => UpNextItemDto {
                         token: item.token,
-                        track_id: item.track.map(|t| t.0),
-                        title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
-                        subtitle: path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
-                        length_ms: None,
+                        track_id: Some(r.track.0),
+                        title: r.title,
+                        subtitle: [r.artist.as_deref(), Some(r.album.as_str())].into_iter().flatten().collect::<Vec<_>>().join(" · "),
+                        length_ms: r.length_ms,
                         why: item.why,
+                    },
+                    None => {
+                        let path = Path::new(item.uri.strip_prefix("file://").unwrap_or(&item.uri));
+                        UpNextItemDto {
+                            token: item.token,
+                            track_id: item.track.map(|t| t.0),
+                            title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+                            subtitle: path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
+                            length_ms: None,
+                            why: item.why,
+                        }
                     }
                 }
             })
@@ -423,6 +429,8 @@ impl Api {
 /// How many people and releases the query line shows, and how many tracks.
 const NAME_HITS: usize = 5;
 const TRACK_HITS: usize = 8;
+/// How many picks Now shows, and how far `play_pick` looks for a clicked one.
+pub const PICKS_SHOWN: u32 = 3;
 
 impl From<ColumnDto> for ColumnId {
     fn from(c: ColumnDto) -> Self {
@@ -495,6 +503,14 @@ impl Api {
         let Some(pick) = self.picks(1)?.into_iter().next() else { return Ok(None) };
         self.core.play_pick(ReleaseId(pick.release_id), pick.why()).map_err(|e| e.to_string())?;
         Ok(Some(pick))
+    }
+
+    /// A pick clicked in Now: plays that release from the top with its why.
+    pub fn play_pick(&self, release_id: i64) -> Result<PickDto, String> {
+        let pick = self.picks(PICKS_SHOWN)?.into_iter().find(|pick| pick.release_id == release_id)
+            .ok_or_else(|| "that pick is gone".to_owned())?;
+        self.core.play_pick(ReleaseId(release_id), pick.why()).map_err(|e| e.to_string())?;
+        Ok(pick)
     }
 
     /// Play on: every zone and what it does to the sound.

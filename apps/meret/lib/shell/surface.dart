@@ -51,6 +51,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   int _memoryVersion = 0;
   String? _navigationError;
   late SettingsDto _settings;
+  final _settingsChanges = ValueNotifier(0);
   BuildContext? _settingsContext;
 
   @override
@@ -86,6 +87,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _clock.dispose();
     _slide.dispose();
     _queryFocus.dispose();
+    _settingsChanges.dispose();
     WindowChrome.instance.onSettings = null;
     super.dispose();
   }
@@ -95,7 +97,17 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     if (context != null) showSettings(context);
   }
 
-  void _toggle() => widget.core.transport(_clock.playing ? const TransportDto.pause() : const TransportDto.resume());
+  void _toggle() {
+    if (_now?.anchor == null) {
+      _report(_playSomething());
+    } else {
+      widget.core.transport(_clock.playing ? const TransportDto.pause() : const TransportDto.resume());
+    }
+  }
+
+  Future<void> _playSomething() async {
+    if (!_queryFocus.hasFocus) await widget.core.playSomething();
+  }
 
   Future<void> _keep() async {
     if (_queryFocus.hasFocus) return;
@@ -289,11 +301,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     );
     return SettingsScope(
       core: widget.core,
-      onChanged: (settings) => setState(() => _settings = settings),
+      onChanged: (settings) {
+        setState(() => _settings = settings);
+        _settingsChanges.value++;
+      },
       child: LightScope(light: light, child: Shortcuts(
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.slash): _Focus(),
         SingleActivator(LogicalKeyboardKey.space): _Toggle(),
+        SingleActivator(LogicalKeyboardKey.space, shift: true): _PlaySomething(),
         SingleActivator(LogicalKeyboardKey.space, alt: true): _FromStart(),
         SingleActivator(LogicalKeyboardKey.keyH): _History(),
         SingleActivator(LogicalKeyboardKey.bracketLeft): _Move(-1),
@@ -307,6 +323,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         actions: {
           _Focus: CallbackAction<_Focus>(onInvoke: (_) => _queryFocus.requestFocus()),
           _Toggle: CallbackAction<_Toggle>(onInvoke: (_) { if (!_queryFocus.hasFocus) _toggle(); return null; }),
+          _PlaySomething: CallbackAction<_PlaySomething>(onInvoke: (_) => _report(_playSomething())),
           _FromStart: CallbackAction<_FromStart>(onInvoke: (_) => _fromStart()),
           _History: CallbackAction<_History>(onInvoke: (_) => _history()),
           _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
@@ -384,6 +401,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                           ),
                         Expanded(child: NowStage(
                           core: widget.core, now: _now!, clock: _clock, onToggle: _toggle,
+                          settingsChanges: _settingsChanges,
                           onRelease: (id) => _report(_start(TargetDto.release(id: id))), onLeave: _showFront,
                         )),
                       ])
@@ -392,16 +410,18 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                         if (wc.nowWidth case final width?)
                           SizedBox(width: width, child: NowPane(
                             core: widget.core, now: _now, clock: _clock, onToggle: _toggle,
+                            settingsChanges: _settingsChanges,
                             onRelease: (id) => _report(_start(TargetDto.release(id: id))),
                           )),
                       ]),
                 ),
                 if (_stage != _Stage.now && !wc.pinnedNow) NowBar(
                   core: widget.core, now: _now, clock: _clock, onToggle: _toggle,
+                  settingsChanges: _settingsChanges,
                   onRelease: (id) => _report(_start(TargetDto.release(id: id))),
                 ),
                 if (wc != WidthClass.phone)
-                  StatusLine(core: widget.core, status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
+                  StatusLine(core: widget.core, status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), ('⇧␣', 'play something'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
               ]);
             }),
           ),
@@ -444,6 +464,10 @@ class _Focus extends Intent {
 
 class _Toggle extends Intent {
   const _Toggle();
+}
+
+class _PlaySomething extends Intent {
+  const _PlaySomething();
 }
 
 class _FromStart extends Intent {

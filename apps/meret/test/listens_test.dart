@@ -36,8 +36,8 @@ void main() {
     expect(await empty.dormant(20), isEmpty);
   });
 
-  test('real playback persists a counted listen and a one-second skip across the bridge', () async {
-    final lib = Platform.environment['MERET_FFI_DYLIB'] ?? '${Directory.current.path}/../../target/debug/libmeret_ffi.dylib';
+  test('real Play something explains a never-played pick, counts it through, then has nothing left to pick', () async {
+    final lib = Platform.environment['MERET_TEST_DYLIB'] ?? '${Directory.current.path}/../../target/debug/libmeret_ffi.dylib';
     await RustLib.init(externalLibrary: ExternalLibrary.open(lib));
     final data = await Directory.systemTemp.createTemp('meret-listens-bridge');
     final music = await Directory.systemTemp.createTemp('meret-listens-music');
@@ -54,8 +54,18 @@ void main() {
     const view = ViewDto(sort: SortKeyDto.library_, descending: false, group: false);
     final rows = await core.rows('', view, 0, 1);
     final row = (rows.items.single as ItemDto_Track).row;
+    final picks = await core.picks(3);
+    expect(picks, hasLength(1));
+    expect(picks.single.releaseId, row.releaseId);
+    expect(picks.single.label, 'Never played');
+    final startedPick = core.now().firstWhere((now) => now.anchor != null && now.why != null);
     final finished = core.now().firstWhere((now) => now.trackId == row.trackId && now.anchor?.rate == 0 && now.path.isNotEmpty);
-    await core.playResults('', view, 0);
+    final picked = await core.playSomething();
+    expect(picked?.releaseId, picks.single.releaseId);
+    expect(picked?.label, 'Never played');
+    final playing = await startedPick.timeout(const Duration(seconds: 5));
+    expect(playing.releaseId, picks.single.releaseId);
+    expect(playing.why, startsWith('Never played · In your library for'));
     await finished.timeout(const Duration(seconds: 12));
     var history = await core.history(10);
     expect(history, hasLength(1));
@@ -64,6 +74,8 @@ void main() {
     expect((await core.mostPlayed(7, 10)).single.plays, BigInt.one);
     expect((await core.rows('plays:1', view, 0, 10)).tracks, BigInt.one);
     expect(await core.dormant(10), isEmpty);
+    expect(await core.picks(3), isEmpty);
+    expect(await core.playSomething(), isNull);
     final started = core.now().firstWhere((now) => now.trackId == row.trackId && now.anchor?.rate == 1);
     await core.playResults('', view, 0);
     await started.timeout(const Duration(seconds: 5));

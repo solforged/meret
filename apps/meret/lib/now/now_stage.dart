@@ -7,12 +7,15 @@ import '../core/when.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'now_pane.dart';
+import 'zones.dart';
+import 'picks.dart';
 
 /// The opening view resumes music without starting or changing a trail.
 class NowStage extends StatelessWidget {
   const NowStage({
     super.key, required this.core, required this.now, required this.clock,
     required this.onToggle, required this.onRelease, required this.onLeave,
+    this.settingsChanges,
   });
   final CoreBridge core;
   final NowDto now;
@@ -20,6 +23,7 @@ class NowStage extends StatelessWidget {
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64) onRelease;
   final VoidCallback onLeave;
+  final Listenable? settingsChanges;
 
   Widget _resume(List<ResumeDto> points) {
     final updatedAt = points.where((point) => point.releaseId == now.releaseId).firstOrNull?.updatedAt;
@@ -32,6 +36,10 @@ class NowStage extends StatelessWidget {
           Text(now.title, style: Tok.title),
           const SizedBox(height: 4),
           Text(now.subtitle, style: Tok.body.copyWith(color: Tok.muted)),
+          if (now.why case final why?) Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(why, key: const ValueKey('now-why'), style: Tok.label.copyWith(color: Tok.gold), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
           const SizedBox(height: 12),
           ListenableBuilder(listenable: clock, builder: (_, _) => Text(
             '${clock.playing ? 'Playing ' : updatedAt == null ? '' : 'Paused ${dayAndTime(updatedAt.toInt())} '}at ${clockLength(clock.positionMs.round())}${now.lengthMs == null ? '' : ' of ${clockLength(now.lengthMs!.toInt())}'} · on This Mac',
@@ -79,6 +87,10 @@ class NowStage extends StatelessWidget {
   }
 
   Widget _queue() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    PlaySomething(core: core, now: now, expanded: true),
+    const SizedBox(height: 22),
+    PlayOn(core: core, now: now, expanded: true, settingsChanges: settingsChanges),
+    const SizedBox(height: 22),
     const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('when this ends', style: Tok.label)),
     UpNext(core: core, now: now),
     const SizedBox(height: 10),

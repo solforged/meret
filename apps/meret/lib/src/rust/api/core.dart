@@ -198,6 +198,10 @@ Future<List<PickDto>> picks({required int limit}) =>
 Future<PickDto?> playSomething() =>
     RustLib.instance.api.crateApiCorePlaySomething();
 
+/// A pick clicked in Now: plays that release from the top with its why.
+Future<PickDto> playPick({required PlatformInt64 releaseId}) =>
+    RustLib.instance.api.crateApiCorePlayPick(releaseId: releaseId);
+
 /// Play on: every zone and what it does to the sound.
 Future<List<ZoneDto>> zones() => RustLib.instance.api.crateApiCoreZones();
 
