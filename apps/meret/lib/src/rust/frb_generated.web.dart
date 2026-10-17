@@ -91,6 +91,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ColumnDto dco_decode_column_dto(dynamic raw);
 
   @protected
+  DormantDto dco_decode_dormant_dto(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -157,6 +160,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<DormantDto> dco_decode_list_dormant_dto(dynamic raw);
+
+  @protected
   List<FacetDto> dco_decode_list_facet_dto(dynamic raw);
 
   @protected
@@ -178,7 +184,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<JobDto> dco_decode_list_job_dto(dynamic raw);
 
   @protected
+  List<ListenDto> dco_decode_list_listen_dto(dynamic raw);
+
+  @protected
   List<OutputDeviceDto> dco_decode_list_output_device_dto(dynamic raw);
+
+  @protected
+  List<PlayedDto> dco_decode_list_played_dto(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
@@ -191,6 +203,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, int)> dco_decode_list_record_u_32_u_32(dynamic raw);
+
+  @protected
+  List<ResumeDto> dco_decode_list_resume_dto(dynamic raw);
 
   @protected
   List<RootDto> dco_decode_list_root_dto(dynamic raw);
@@ -211,7 +226,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TrackRowDto> dco_decode_list_track_row_dto(dynamic raw);
 
   @protected
+  List<TrailSummaryDto> dco_decode_list_trail_summary_dto(dynamic raw);
+
+  @protected
   List<UpNextItemDto> dco_decode_list_up_next_item_dto(dynamic raw);
+
+  @protected
+  ListenDto dco_decode_listen_dto(dynamic raw);
 
   @protected
   NowDto dco_decode_now_dto(dynamic raw);
@@ -253,6 +274,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PersonDto dco_decode_person_dto(dynamic raw);
 
   @protected
+  PlayedDto dco_decode_played_dto(dynamic raw);
+
+  @protected
   QueryDto dco_decode_query_dto(dynamic raw);
 
   @protected
@@ -266,6 +290,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ReleaseDto dco_decode_release_dto(dynamic raw);
+
+  @protected
+  ResumeDto dco_decode_resume_dto(dynamic raw);
 
   @protected
   RootDto dco_decode_root_dto(dynamic raw);
@@ -308,6 +335,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TrailDto dco_decode_trail_dto(dynamic raw);
+
+  @protected
+  TrailSummaryDto dco_decode_trail_summary_dto(dynamic raw);
 
   @protected
   TransportDto dco_decode_transport_dto(dynamic raw);
@@ -414,6 +444,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ColumnDto sse_decode_column_dto(SseDeserializer deserializer);
 
   @protected
+  DormantDto sse_decode_dormant_dto(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
@@ -482,6 +515,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<DormantDto> sse_decode_list_dormant_dto(SseDeserializer deserializer);
+
+  @protected
   List<FacetDto> sse_decode_list_facet_dto(SseDeserializer deserializer);
 
   @protected
@@ -509,9 +545,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<JobDto> sse_decode_list_job_dto(SseDeserializer deserializer);
 
   @protected
+  List<ListenDto> sse_decode_list_listen_dto(SseDeserializer deserializer);
+
+  @protected
   List<OutputDeviceDto> sse_decode_list_output_device_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<PlayedDto> sse_decode_list_played_dto(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
@@ -526,6 +568,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(int, int)> sse_decode_list_record_u_32_u_32(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<ResumeDto> sse_decode_list_resume_dto(SseDeserializer deserializer);
 
   @protected
   List<RootDto> sse_decode_list_root_dto(SseDeserializer deserializer);
@@ -546,9 +591,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TrackRowDto> sse_decode_list_track_row_dto(SseDeserializer deserializer);
 
   @protected
+  List<TrailSummaryDto> sse_decode_list_trail_summary_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UpNextItemDto> sse_decode_list_up_next_item_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  ListenDto sse_decode_listen_dto(SseDeserializer deserializer);
 
   @protected
   NowDto sse_decode_now_dto(SseDeserializer deserializer);
@@ -594,6 +647,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PersonDto sse_decode_person_dto(SseDeserializer deserializer);
 
   @protected
+  PlayedDto sse_decode_played_dto(SseDeserializer deserializer);
+
+  @protected
   QueryDto sse_decode_query_dto(SseDeserializer deserializer);
 
   @protected
@@ -607,6 +663,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ReleaseDto sse_decode_release_dto(SseDeserializer deserializer);
+
+  @protected
+  ResumeDto sse_decode_resume_dto(SseDeserializer deserializer);
 
   @protected
   RootDto sse_decode_root_dto(SseDeserializer deserializer);
@@ -649,6 +708,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TrailDto sse_decode_trail_dto(SseDeserializer deserializer);
+
+  @protected
+  TrailSummaryDto sse_decode_trail_summary_dto(SseDeserializer deserializer);
 
   @protected
   TransportDto sse_decode_transport_dto(SseDeserializer deserializer);
@@ -786,6 +848,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_column_dto(ColumnDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_dormant_dto(DormantDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -858,6 +923,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_dormant_dto(
+    List<DormantDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_facet_dto(List<FacetDto> self, SseSerializer serializer);
 
   @protected
@@ -888,8 +959,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_job_dto(List<JobDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_listen_dto(
+    List<ListenDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_output_device_dto(
     List<OutputDeviceDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_played_dto(
+    List<PlayedDto> self,
     SseSerializer serializer,
   );
 
@@ -914,6 +997,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_u_32_u_32(
     List<(int, int)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_resume_dto(
+    List<ResumeDto> self,
     SseSerializer serializer,
   );
 
@@ -945,10 +1034,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_trail_summary_dto(
+    List<TrailSummaryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_up_next_item_dto(
     List<UpNextItemDto> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_listen_dto(ListenDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_now_dto(NowDto self, SseSerializer serializer);
@@ -1008,6 +1106,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_person_dto(PersonDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_played_dto(PlayedDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_query_dto(QueryDto self, SseSerializer serializer);
 
   @protected
@@ -1021,6 +1122,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_release_dto(ReleaseDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_resume_dto(ResumeDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_root_dto(RootDto self, SseSerializer serializer);
@@ -1063,6 +1167,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_trail_dto(TrailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_trail_summary_dto(
+    TrailSummaryDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_transport_dto(TransportDto self, SseSerializer serializer);

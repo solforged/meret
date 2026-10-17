@@ -93,6 +93,11 @@ enum LibraryCmd {
     Rescan,
     /// Print the Front, as the app's first pane shows it.
     Front,
+    /// Print every listen, newest first, including uncounted skips.
+    History {
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
     /// Read or set the output device's own volume (0–1), without sample gain.
     Volume {
         scalar: Option<f32>,
@@ -105,6 +110,11 @@ enum LibraryCmd {
     /// Walk numbered hits/threads; '[' and ']' navigate, 'search=QUERY'
     /// starts another trail. Prints every pane and the current trail.
     Walk { search: String, steps: Vec<String> },
+    /// List persisted trails, newest first.
+    Trails {
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
     /// Print a page of a query's rows ('' for everything).
     Ls {
         #[arg(default_value = "")]
@@ -141,6 +151,13 @@ enum LibraryCmd {
         #[command(flatten)]
         out: OutputArgs,
     },
+    /// Print release-level pick-up points, newest first.
+    Resume {
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+    /// Print Now, including a restored paused queue, without opening audio.
+    Now,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -220,6 +237,7 @@ fn main() -> Result<()> {
                 LibraryCmd::Suggest => library::suggest(&api),
                 LibraryCmd::Rescan => library::rescan(&api, &rt),
                 LibraryCmd::Front => library::front(&api, &rt),
+                LibraryCmd::History { limit } => library::history(&api, limit),
                 LibraryCmd::Volume { scalar, .. } => {
                     let volume = match scalar { Some(value) => api.set_volume(value), None => api.volume() }
                         .map_err(anyhow::Error::msg)?;
@@ -228,6 +246,7 @@ fn main() -> Result<()> {
                 }
                 LibraryCmd::Search { input } => library::search(&api, &rt, &input),
                 LibraryCmd::Walk { search, steps } => library::walk(&api, &rt, &search, &steps),
+                LibraryCmd::Trails { limit } => library::trails(&api, limit),
                 LibraryCmd::Ls { query, offset, limit, sort, desc, group } => {
                     library::ls(&api, &rt, &query, meret_api::ViewDto { sort: sort.into(), descending: desc, group }, offset, limit)
                 }
@@ -235,6 +254,8 @@ fn main() -> Result<()> {
                 LibraryCmd::Play { query, from, count, tail, .. } => {
                     library::play(&api, &rt, &query, library::PlayOptions { from, count, tail })
                 }
+                LibraryCmd::Resume { limit } => library::resume(&api, limit),
+                LibraryCmd::Now => library::now(&api),
             }
         }
     }

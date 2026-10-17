@@ -72,11 +72,12 @@ impl Api {
         match cmd {
             TransportDto::PlayFile { path } => return self.core.play_file(Path::new(&path)).map_err(|e| e.to_string()),
             TransportDto::Pause => self.core.pause(),
-            TransportDto::Resume => self.core.resume(),
+            TransportDto::Resume => return self.core.resume().map_err(|e| e.to_string()),
             TransportDto::Seek { ms } => self.core.seek_ms(ms),
             TransportDto::Next => return self.core.next().map_err(|e| e.to_string()),
             TransportDto::Previous => return self.core.previous().map_err(|e| e.to_string()),
             TransportDto::Stop => self.core.stop(),
+            TransportDto::FromStart => return self.core.from_start().map_err(|e| e.to_string()),
         }
         Ok(())
     }
@@ -238,6 +239,9 @@ impl Api {
             let mut history = self.core.trail.lock();
             history.start(meret_graph::Trail::start(entity, root_query, now), now).clone()
         };
+        if let Err(error) = self.core.save_trail_history() {
+            tracing::error!(%error, "saving trail history");
+        }
         self.trail_dto(&t)
     }
 
@@ -262,6 +266,7 @@ impl Api {
             trail.follow(from_stop as usize, to.entity().0, via, now_ms());
             trail.clone()
         };
+        self.core.save_trails().map_err(|e| e.to_string())?;
         Ok(self.trail_dto(&t))
     }
 
@@ -286,6 +291,7 @@ impl Api {
     }
 
     fn move_history(&self, step: impl FnOnce(&mut meret_graph::TrailHistory, i64) -> bool) -> Option<TrailDto> {
+        let previous = self.core.trail.lock().active_index();
         let t = {
             let mut history = self.core.trail.lock();
             if !step(&mut history, now_ms()) {
@@ -293,6 +299,15 @@ impl Api {
             }
             history.current()?.clone()
         };
+        if let Some(previous) = previous
+            && Some(previous) != self.core.trail.lock().active_index()
+            && let Err(error) = self.core.save_trail_at(previous)
+        {
+            tracing::error!(%error, "saving departed trail");
+        }
+        if let Err(error) = self.core.save_trails() {
+            tracing::error!(%error, "saving trail navigation");
+        }
         Some(self.trail_dto(&t))
     }
 
@@ -338,6 +353,7 @@ impl Api {
         {
             trail.act(stop as usize, meret_graph::Action::Played);
         }
+        self.core.save_trails().map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -346,6 +362,55 @@ impl Api {
     /// old text is the caller's to drop.
     pub fn search(&self, input: &str) -> Result<SearchDto, String> {
         self.core.search(input, NAME_HITS, TRACK_HITS).map(SearchDto::from).map_err(|e| e.to_string())
+    }
+}
+
+impl Api {
+    /// The Front's saved trees, newest history position first.
+    pub fn trail_history(&self, limit: u32) -> Result<Vec<TrailSummaryDto>, String> {
+        self.core.store.trail_summaries(limit).map_err(|e| e.to_string())?.into_iter().map(|summary| {
+            let title = |entity| -> Result<String, String> {
+                let name = match entity {
+                    EntityRef::Search => return Ok(summary.root_query.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| "Everything".into())),
+                    EntityRef::Release(id) => self.core.store.release_title(id),
+                    EntityRef::Agent(id) => self.core.store.agent_name(id),
+                    _ => return Ok("gone".into()),
+                };
+                Ok(name.map_err(|e| e.to_string())?.unwrap_or_else(|| "gone".into()))
+            };
+            let root = title(summary.root)?;
+            let leaf = title(summary.leaf)?;
+            Ok(TrailSummaryDto {
+                uid: summary.uid.to_string(), name: summary.name,
+                title: if summary.root == summary.leaf { root } else { format!("{root} → {leaf}") },
+                stops: summary.stops, branches: summary.branches, when_ms: summary.created_at,
+                kept: summary.kept, played: summary.played, wanted: summary.wanted,
+            })
+        }).collect()
+    }
+
+    /// Keeps the whole active tree, optionally naming it.
+    pub fn keep_trail(&self, name: Option<String>) -> Result<TrailDto, String> {
+        let trail = {
+            let mut history = self.core.trail.lock();
+            let trail = history.current_mut().ok_or("there's no trail to keep")?;
+            trail.kept = true;
+            trail.name = name;
+            trail.clone()
+        };
+        self.core.save_trails().map_err(|e| e.to_string())?;
+        Ok(self.trail_dto(&trail))
+    }
+
+    pub fn resume_points(&self, limit: u32) -> Result<Vec<ResumeDto>, String> {
+        let art_dir = self.core.art_dir();
+        self.core.resume_points(limit as usize)
+            .map(|rows| rows.into_iter().map(|row| ResumeDto::from_row(row, &art_dir)).collect())
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn pick_up(&self, release_id: i64) -> Result<(), String> {
+        self.core.pick_up(ReleaseId(release_id)).map_err(|e| e.to_string())
     }
 }
 
@@ -381,5 +446,71 @@ fn verb(c: &meret_query::Command) -> &'static str {
         Queue { .. } => "queue",
         Want { .. } => "want",
         CrateAdd { .. } | CrateNew { .. } => "crate",
+    }
+}
+
+impl Api {
+    /// What was that? Every listen, newest first, whether it counted or not.
+    pub fn history(&self, limit: u32) -> Result<Vec<ListenDto>, String> {
+        let art_dir = self.core.art_dir();
+        self.core.store.history(limit).map(|rows| rows.into_iter().map(|row| ListenDto::from_listen(row, &art_dir)).collect())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Counted plays in the last `days`, ranked by play count then recency.
+    pub fn most_played(&self, days: u32, limit: u32) -> Result<Vec<PlayedDto>, String> {
+        let art_dir = self.core.art_dir();
+        let since_ms = now_ms() - i64::from(days) * 86_400_000;
+        self.core.store.most_played(since_ms, limit).map(|rows| rows.into_iter().map(|row| PlayedDto::from_played(row, &art_dir)).collect())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Releases with five counted plays, then none in the last 180 days.
+    pub fn dormant(&self, limit: u32) -> Result<Vec<DormantDto>, String> {
+        let art_dir = self.core.art_dir();
+        self.core.store.dormant(limit).map(|rows| rows.into_iter().map(|row| DormantDto::from_dormant(row, &art_dir)).collect())
+            .map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod trail_memory_tests {
+    use super::*;
+
+    #[test]
+    fn api_walk_reopens_on_front_and_restores_the_same_dto_and_kept_summary() {
+        let dir = std::env::temp_dir().join(format!("meret-api-trails-{}-{}", std::process::id(), now_ms()));
+        let core = meret_core::start(meret_core::CoreConfig {
+            data_dir: dir.clone(), output: meret_core::OutputChoice::Null { speed: 1.0 }, contact: "test".into(),
+        }).unwrap();
+        core.runtime.block_on(core.scans_settled()).unwrap();
+        core.store.writer.write(|tx| {
+            tx.execute_batch(
+                "INSERT INTO release(id,title,idiom,rev) VALUES(1,'Fixture release',0,1);
+                 INSERT INTO agent(id,kind,name,rev) VALUES(1,0,'Fixture person',1);",
+            )?;
+            Ok(())
+        }).unwrap();
+        let api = Api::new(core.clone());
+        api.start_trail(TargetDto::Search { query: "older".into() });
+        let root = api.start_trail(TargetDto::Search { query: "fixture".into() });
+        let release = api.follow(root.current, TargetDto::Release { id: 1 }, ThreadKind::Matched).unwrap();
+        api.follow(release.current, TargetDto::Person { id: 1 }, ThreadKind::By).unwrap();
+        let expected = api.keep_trail(Some("Fixture tree".into())).unwrap();
+        let before = api.trail_history(10).unwrap();
+        assert_eq!(before.len(), 2);
+        assert_eq!(before[0].title, "fixture → Fixture person");
+        assert_eq!(before[0].stops, 3);
+        assert!(before[0].kept);
+        let reopened = meret_store::Store::open(&dir.join("library.db")).unwrap();
+        *core.trail.lock() = meret_graph::TrailHistory::restore(reopened.load_trails().unwrap());
+        assert!(api.trail().is_none());
+        assert!(api.trail_forward().is_none());
+        assert_eq!(api.trail_back(), Some(expected));
+        assert_eq!(api.trail_history(10).unwrap(), before);
+        assert_eq!(api.trail_back().unwrap().current, release.current);
+        assert_eq!(reopened.load_trails().unwrap()[1].0.current(), release.current as usize);
+        drop(reopened);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

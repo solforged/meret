@@ -4,11 +4,14 @@
 
 mod facets;
 mod local_zone;
+mod listens;
 mod now;
 mod scan;
 mod status;
 mod suggestions;
 mod views;
+mod trails;
+mod memory;
 
 #[cfg(test)]
 mod setup_tests;
@@ -139,6 +142,10 @@ pub struct Core {
     cover_report: Mutex<meret_library::CoverReport>,
     lists: Mutex<VecDeque<Arc<List>>>,
     settings: Mutex<Settings>,
+    open_listen: Mutex<Option<listens::Open>>,
+    device_id: String,
+    pending: Mutex<Option<memory::Pending>>,
+    memory_state: Mutex<memory::State>,
 }
 
 static CORE: OnceLock<Arc<Core>> = OnceLock::new();
@@ -152,6 +159,7 @@ pub fn start(mut config: CoreConfig) -> Result<Arc<Core>> {
     }
     let (scans, requests) = crossbeam_channel::unbounded();
     let core = Arc::new(Core::new(config, scans)?);
+    memory::restore(&core)?;
     let core = CORE.get_or_init(|| core).clone();
     now::spawn_pump(core.clone());
     scan::spawn_worker(core.clone(), requests);
@@ -168,6 +176,7 @@ impl Core {
     fn new(mut config: CoreConfig, scans: Sender<ScanRequest>) -> Result<Self> {
         std::fs::create_dir_all(&config.data_dir)?;
         let store = Store::open(&config.data_dir.join("library.db"))?;
+        let device_id = store.device_id()?;
         let saved = store.settings()?;
         let has_saved = saved.is_some();
         let settings = saved.unwrap_or_else(|| match &config.output {
@@ -212,13 +221,14 @@ impl Core {
             .build()?;
 
         let status = status::initial(&registry);
+        let trails = TrailHistory::restore(store.load_trails()?);
         Ok(Self {
             config,
             store,
             columns,
             registry,
             scheduler: Mutex::new(Scheduler::default()),
-            trail: Mutex::new(TrailHistory::default()),
+            trail: Mutex::new(trails),
             engine,
             player: Mutex::new(Player::new(local.clone())),
             local,
@@ -230,6 +240,10 @@ impl Core {
             cover_report: Mutex::new(meret_library::CoverReport::default()),
             lists: Mutex::new(VecDeque::with_capacity(LISTS)),
             settings: Mutex::new(settings),
+            open_listen: Mutex::new(None),
+            device_id,
+            pending: Mutex::new(None),
+            memory_state: Mutex::new(memory::State::default()),
         })
     }
 
@@ -333,12 +347,19 @@ impl Core {
 
     /// What's queued, in order.
     pub fn queue(&self) -> Vec<QueueItem> {
+        if let Some(saved) = &*self.pending.lock() {
+            return saved.items.clone();
+        }
         self.player.lock().queue().items.clone()
     }
 
     /// The queue after the playing item, up to `limit` items, and how many
     /// follow in all.
     pub fn up_next(&self, limit: usize) -> (Vec<QueueItem>, usize) {
+        if let Some(saved) = &*self.pending.lock() {
+            let rest = saved.items.get(saved.cursor + 1..).unwrap_or(&[]);
+            return (rest.iter().take(limit).cloned().collect(), rest.len());
+        }
         let player = self.player.lock();
         let rest = player.queue().up_next();
         (rest.iter().take(limit).cloned().collect(), rest.len())
@@ -456,12 +477,19 @@ impl Core {
     }
 
     fn play(&self, items: Vec<QueueItem>) -> Result<()> {
+        self.play_at(items, 0, 0)
+    }
+
+    fn play_at(&self, items: Vec<QueueItem>, cursor: usize, start_ms: u64) -> Result<()> {
+        self.memory_state.lock().stopping = false;
         let mut player = self.player.lock();
-        let result = player.play(items, 0).map(|_| ());
+        let result = player.play(items, cursor, start_ms).map(|_| ());
         if let Some(error) = player.take_error() {
             self.now.send_modify(|n| n.error = Some(error));
         }
         result?;
+        drop(player);
+        self.pending.lock().take();
         Ok(())
     }
 
@@ -469,8 +497,47 @@ impl Core {
         let _ = self.local.command(ZoneCommand::Pause);
     }
 
-    pub fn resume(&self) {
-        let _ = self.local.command(ZoneCommand::Resume);
+    pub fn resume(&self) -> Result<()> {
+        if !self.play_pending(false)? {
+            self.local.command(ZoneCommand::Resume)?;
+        }
+        Ok(())
+    }
+
+    pub fn from_start(&self) -> Result<()> {
+        if !self.play_pending(true)? {
+            self.local.command(ZoneCommand::Seek { ms: 0 })?;
+        }
+        Ok(())
+    }
+
+    fn play_pending(&self, from_start: bool) -> Result<bool> {
+        let pending = self.pending.lock().take();
+        let Some(saved) = pending else { return Ok(false) };
+        let position = if from_start { 0 } else {
+            meret_player::resume::resume_point(saved.items[saved.cursor].idiom, saved.position_ms, &[]).position_ms
+        };
+        if let Err(error) = self.play_at(saved.items, saved.cursor, position) {
+            memory::restore(self)?;
+            return Err(error);
+        }
+        Ok(true)
+    }
+
+    pub fn resume_points(&self, limit: usize) -> Result<Vec<meret_store::ResumeRow>> {
+        Ok(self.store.resume_points(limit)?)
+    }
+
+    pub fn pick_up(&self, release: ReleaseId) -> Result<()> {
+        let (recording, saved_ms) = self.store.resume_for(release)?
+            .ok_or_else(|| CoreError::Query("that release has no resume point".into()))?;
+        let page = self.store.release_page(release)?.ok_or_else(|| CoreError::Query("that release is gone".into()))?;
+        let at = page.tracks.iter().position(|row| row.recording == recording)
+            .ok_or_else(|| CoreError::Query("the saved recording is unavailable".into()))?;
+        let items = queue_items(page.tracks.into_iter().skip(at));
+        let idiom = items.first().ok_or_else(|| CoreError::Query("the saved recording is unavailable".into()))?.idiom;
+        let start_ms = meret_player::resume::resume_point(idiom, saved_ms, &[]).position_ms;
+        self.play_at(items, 0, start_ms)
     }
 
     pub fn seek_ms(&self, ms: u64) {
@@ -480,7 +547,7 @@ impl Core {
     /// The next playable item in the queue; at its end, playback stops.
     pub fn next(&self) -> Result<()> {
         let mut player = self.player.lock();
-        let result = player.next().map(|_| ());
+        let result = player.skip_next().map(|_| ());
         if let Some(error) = player.take_error() {
             self.now.send_modify(|n| n.error = Some(error));
         }
@@ -504,7 +571,7 @@ impl Core {
             self.seek_ms(0);
             return Ok(());
         }
-        let result = player.previous().map(|_| ());
+        let result = player.skip_previous().map(|_| ());
         if let Some(error) = player.take_error() {
             self.now.send_modify(|n| n.error = Some(error));
         }
@@ -512,6 +579,7 @@ impl Core {
     }
 
     pub fn stop(&self) {
+        self.memory_state.lock().stopping = true;
         let _ = self.player.lock().stop();
     }
 }

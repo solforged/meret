@@ -125,6 +125,14 @@ impl HotColumns {
         }
     }
 
+    /// One linear lookup per counted play; no extra index alongside the hot columns.
+    pub fn record_play(&mut self, track: TrackId, at_s: i64) {
+        if let Some(row) = self.track.iter().position(|&t| t == track) {
+            self.plays[row] += 1;
+            self.last_played[row] = self.last_played[row].max(at_s);
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.track.len()
     }

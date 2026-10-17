@@ -174,6 +174,14 @@ pub fn trail() -> Result<Option<TrailDto>, String> {
     Ok(api()?.trail())
 }
 
+pub fn trail_history(limit: u32) -> Result<Vec<TrailSummaryDto>, String> {
+    api()?.trail_history(limit)
+}
+
+pub fn keep_trail(name: Option<String>) -> Result<TrailDto, String> {
+    api()?.keep_trail(name)
+}
+
 /// Now, pushed whenever it changes: a new item, a new anchor, a new path.
 pub async fn watch_now(sink: StreamSink<NowDto>) -> Result<(), String> {
     let api = api()?;
@@ -199,4 +207,25 @@ pub async fn watch_status(sink: StreamSink<StatusDto>) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Every listen, including skips, newest first.
+pub fn history(limit: u32) -> Result<Vec<ListenDto>, String> {
+    api()?.history(limit)
+}
+
+pub fn most_played(days: u32, limit: u32) -> Result<Vec<PlayedDto>, String> {
+    api()?.most_played(days, limit)
+}
+
+pub fn dormant(limit: u32) -> Result<Vec<DormantDto>, String> {
+    api()?.dormant(limit)
+}
+
+pub fn resume_points(limit: u32) -> Result<Vec<ResumeDto>, String> {
+    api()?.resume_points(limit)
+}
+
+pub fn pick_up(release_id: i64) -> Result<(), String> {
+    api()?.pick_up(release_id)
 }

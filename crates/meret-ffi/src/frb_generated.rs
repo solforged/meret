@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -130927530;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1257835332;
 
 // Section: executor
 
@@ -74,6 +74,39 @@ fn wire__crate__api__core__add_root_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::add_root(api_path)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__dormant_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "dormant",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::dormant(api_limit)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -219,6 +252,39 @@ fn wire__crate__api__core__histogram_impl(
         },
     )
 }
+fn wire__crate__api__core__history_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "history",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::history(api_limit)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__init_app_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -247,6 +313,73 @@ fn wire__crate__api__core__init_app_impl(
                     let output_ok = Ok::<_, ()>({
                         crate::api::core::init_app();
                     })?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__keep_trail_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "keep_trail",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_name = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::keep_trail(api_name)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__most_played_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "most_played",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_days = <u32>::sse_decode(&mut deserializer);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::most_played(api_days, api_limit)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -342,6 +475,39 @@ fn wire__crate__api__core__person_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::person(api_id)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__pick_up_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "pick_up",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_release_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::pick_up(api_release_id)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -479,6 +645,39 @@ fn wire__crate__api__core__remove_root_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::remove_root(api_id)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__resume_points_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "resume_points",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::resume_points(api_limit)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -911,6 +1110,39 @@ fn wire__crate__api__core__trail_go_impl(
         },
     )
 }
+fn wire__crate__api__core__trail_history_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "trail_history",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::trail_history(api_limit)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__transport_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1099,6 +1331,15 @@ const _: fn() = || {
         let _: f64 = AnchorDto.rate;
     }
     {
+        let DormantDto = None::<crate::api::types::DormantDto>.unwrap();
+        let _: i64 = DormantDto.release_id;
+        let _: String = DormantDto.title;
+        let _: Option<String> = DormantDto.credit;
+        let _: Option<String> = DormantDto.cover;
+        let _: u64 = DormantDto.plays;
+        let _: i64 = DormantDto.last_played_ms;
+    }
+    {
         let FacetColumnDto = None::<crate::api::types::FacetColumnDto>.unwrap();
         let _: String = FacetColumnDto.all_query;
         let _: u32 = FacetColumnDto.tracks;
@@ -1203,6 +1444,21 @@ const _: fn() = || {
         let _: u32 = LightDto.dim;
     }
     {
+        let ListenDto = None::<crate::api::types::ListenDto>.unwrap();
+        let _: String = ListenDto.uid;
+        let _: Option<i64> = ListenDto.track_id;
+        let _: i64 = ListenDto.recording_id;
+        let _: Option<i64> = ListenDto.release_id;
+        let _: String = ListenDto.title;
+        let _: Option<String> = ListenDto.credit;
+        let _: Option<String> = ListenDto.release_title;
+        let _: Option<String> = ListenDto.cover;
+        let _: i64 = ListenDto.started_at_ms;
+        let _: u64 = ListenDto.played_ms;
+        let _: Option<u64> = ListenDto.length_ms;
+        let _: bool = ListenDto.counted;
+    }
+    {
         let NowDto = None::<crate::api::types::NowDto>.unwrap();
         let _: Option<i64> = NowDto.track_id;
         let _: Option<i64> = NowDto.release_id;
@@ -1235,6 +1491,18 @@ const _: fn() = || {
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.worked_with;
     }
     {
+        let PlayedDto = None::<crate::api::types::PlayedDto>.unwrap();
+        let _: i64 = PlayedDto.track_id;
+        let _: i64 = PlayedDto.recording_id;
+        let _: i64 = PlayedDto.release_id;
+        let _: String = PlayedDto.title;
+        let _: Option<String> = PlayedDto.credit;
+        let _: String = PlayedDto.release_title;
+        let _: Option<String> = PlayedDto.cover;
+        let _: u64 = PlayedDto.plays;
+        let _: i64 = PlayedDto.last_played_ms;
+    }
+    {
         let QueryDto = None::<crate::api::types::QueryDto>.unwrap();
         let _: crate::api::types::QueryKind = QueryDto.kind;
         let _: String = QueryDto.canonical;
@@ -1265,6 +1533,21 @@ const _: fn() = || {
         let _: Vec<String> = ReleaseDto.formats;
         let _: Vec<crate::api::types::TrackRowDto> = ReleaseDto.rows;
         let _: Vec<crate::api::types::ThreadDto> = ReleaseDto.credits;
+    }
+    {
+        let ResumeDto = None::<crate::api::types::ResumeDto>.unwrap();
+        let _: i64 = ResumeDto.release_id;
+        let _: String = ResumeDto.title;
+        let _: Option<String> = ResumeDto.credit;
+        let _: Option<String> = ResumeDto.cover;
+        let _: i64 = ResumeDto.recording_id;
+        let _: String = ResumeDto.recording_title;
+        let _: u32 = ResumeDto.disc;
+        let _: u32 = ResumeDto.number;
+        let _: u64 = ResumeDto.position_ms;
+        let _: Option<u64> = ResumeDto.length_ms;
+        let _: Option<String> = ResumeDto.idiom;
+        let _: i64 = ResumeDto.updated_at;
     }
     {
         let RootDto = None::<crate::api::types::RootDto>.unwrap();
@@ -1377,6 +1660,18 @@ const _: fn() = || {
         let _: Vec<crate::api::types::StopDto> = TrailDto.stops;
         let _: Vec<(u32, u32)> = TrailDto.meetings;
     }
+    {
+        let TrailSummaryDto = None::<crate::api::types::TrailSummaryDto>.unwrap();
+        let _: String = TrailSummaryDto.uid;
+        let _: String = TrailSummaryDto.title;
+        let _: u32 = TrailSummaryDto.stops;
+        let _: u32 = TrailSummaryDto.branches;
+        let _: i64 = TrailSummaryDto.when_ms;
+        let _: bool = TrailSummaryDto.kept;
+        let _: Option<String> = TrailSummaryDto.name;
+        let _: u32 = TrailSummaryDto.played;
+        let _: u32 = TrailSummaryDto.wanted;
+    }
     match None::<crate::api::types::TransportDto>.unwrap() {
         crate::api::types::TransportDto::PlayFile { path } => {
             let _: String = path;
@@ -1389,6 +1684,7 @@ const _: fn() = || {
         crate::api::types::TransportDto::Next => {}
         crate::api::types::TransportDto::Previous => {}
         crate::api::types::TransportDto::Stop => {}
+        crate::api::types::TransportDto::FromStart => {}
     }
     {
         let UpNextDto = None::<crate::api::types::UpNextDto>.unwrap();
@@ -1489,6 +1785,26 @@ impl SseDecode for crate::api::types::ColumnDto {
             4 => crate::api::types::ColumnDto::Added,
             5 => crate::api::types::ColumnDto::Dr,
             _ => unreachable!("Invalid variant for ColumnDto: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::DormantDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_releaseId = <i64>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_credit = <Option<String>>::sse_decode(deserializer);
+        let mut var_cover = <Option<String>>::sse_decode(deserializer);
+        let mut var_plays = <u64>::sse_decode(deserializer);
+        let mut var_lastPlayedMs = <i64>::sse_decode(deserializer);
+        return crate::api::types::DormantDto {
+            release_id: var_releaseId,
+            title: var_title,
+            credit: var_credit,
+            cover: var_cover,
+            plays: var_plays,
+            last_played_ms: var_lastPlayedMs,
         };
     }
 }
@@ -1824,6 +2140,18 @@ impl SseDecode for Vec<String> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::DormantDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::DormantDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::types::FacetDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1910,6 +2238,18 @@ impl SseDecode for Vec<crate::api::types::JobDto> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::ListenDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::ListenDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::types::OutputDeviceDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1919,6 +2259,18 @@ impl SseDecode for Vec<crate::api::types::OutputDeviceDto> {
             ans_.push(<crate::api::types::OutputDeviceDto>::sse_decode(
                 deserializer,
             ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::PlayedDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::PlayedDto>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -1967,6 +2319,18 @@ impl SseDecode for Vec<(u32, u32)> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<(u32, u32)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::ResumeDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::ResumeDto>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -2044,6 +2408,20 @@ impl SseDecode for Vec<crate::api::types::TrackRowDto> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::TrailSummaryDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::TrailSummaryDto>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::types::UpNextItemDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2053,6 +2431,38 @@ impl SseDecode for Vec<crate::api::types::UpNextItemDto> {
             ans_.push(<crate::api::types::UpNextItemDto>::sse_decode(deserializer));
         }
         return ans_;
+    }
+}
+
+impl SseDecode for crate::api::types::ListenDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_uid = <String>::sse_decode(deserializer);
+        let mut var_trackId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_recordingId = <i64>::sse_decode(deserializer);
+        let mut var_releaseId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_credit = <Option<String>>::sse_decode(deserializer);
+        let mut var_releaseTitle = <Option<String>>::sse_decode(deserializer);
+        let mut var_cover = <Option<String>>::sse_decode(deserializer);
+        let mut var_startedAtMs = <i64>::sse_decode(deserializer);
+        let mut var_playedMs = <u64>::sse_decode(deserializer);
+        let mut var_lengthMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_counted = <bool>::sse_decode(deserializer);
+        return crate::api::types::ListenDto {
+            uid: var_uid,
+            track_id: var_trackId,
+            recording_id: var_recordingId,
+            release_id: var_releaseId,
+            title: var_title,
+            credit: var_credit,
+            release_title: var_releaseTitle,
+            cover: var_cover,
+            started_at_ms: var_startedAtMs,
+            played_ms: var_playedMs,
+            length_ms: var_lengthMs,
+            counted: var_counted,
+        };
     }
 }
 
@@ -2236,6 +2646,32 @@ impl SseDecode for crate::api::types::PersonDto {
     }
 }
 
+impl SseDecode for crate::api::types::PlayedDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_trackId = <i64>::sse_decode(deserializer);
+        let mut var_recordingId = <i64>::sse_decode(deserializer);
+        let mut var_releaseId = <i64>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_credit = <Option<String>>::sse_decode(deserializer);
+        let mut var_releaseTitle = <String>::sse_decode(deserializer);
+        let mut var_cover = <Option<String>>::sse_decode(deserializer);
+        let mut var_plays = <u64>::sse_decode(deserializer);
+        let mut var_lastPlayedMs = <i64>::sse_decode(deserializer);
+        return crate::api::types::PlayedDto {
+            track_id: var_trackId,
+            recording_id: var_recordingId,
+            release_id: var_releaseId,
+            title: var_title,
+            credit: var_credit,
+            release_title: var_releaseTitle,
+            cover: var_cover,
+            plays: var_plays,
+            last_played_ms: var_lastPlayedMs,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::QueryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2324,6 +2760,38 @@ impl SseDecode for crate::api::types::ReleaseDto {
             formats: var_formats,
             rows: var_rows,
             credits: var_credits,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::ResumeDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_releaseId = <i64>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_credit = <Option<String>>::sse_decode(deserializer);
+        let mut var_cover = <Option<String>>::sse_decode(deserializer);
+        let mut var_recordingId = <i64>::sse_decode(deserializer);
+        let mut var_recordingTitle = <String>::sse_decode(deserializer);
+        let mut var_disc = <u32>::sse_decode(deserializer);
+        let mut var_number = <u32>::sse_decode(deserializer);
+        let mut var_positionMs = <u64>::sse_decode(deserializer);
+        let mut var_lengthMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_idiom = <Option<String>>::sse_decode(deserializer);
+        let mut var_updatedAt = <i64>::sse_decode(deserializer);
+        return crate::api::types::ResumeDto {
+            release_id: var_releaseId,
+            title: var_title,
+            credit: var_credit,
+            cover: var_cover,
+            recording_id: var_recordingId,
+            recording_title: var_recordingTitle,
+            disc: var_disc,
+            number: var_number,
+            position_ms: var_positionMs,
+            length_ms: var_lengthMs,
+            idiom: var_idiom,
+            updated_at: var_updatedAt,
         };
     }
 }
@@ -2625,6 +3093,32 @@ impl SseDecode for crate::api::types::TrailDto {
     }
 }
 
+impl SseDecode for crate::api::types::TrailSummaryDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_uid = <String>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_stops = <u32>::sse_decode(deserializer);
+        let mut var_branches = <u32>::sse_decode(deserializer);
+        let mut var_whenMs = <i64>::sse_decode(deserializer);
+        let mut var_kept = <bool>::sse_decode(deserializer);
+        let mut var_name = <Option<String>>::sse_decode(deserializer);
+        let mut var_played = <u32>::sse_decode(deserializer);
+        let mut var_wanted = <u32>::sse_decode(deserializer);
+        return crate::api::types::TrailSummaryDto {
+            uid: var_uid,
+            title: var_title,
+            stops: var_stops,
+            branches: var_branches,
+            when_ms: var_whenMs,
+            kept: var_kept,
+            name: var_name,
+            played: var_played,
+            wanted: var_wanted,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::TransportDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2652,6 +3146,9 @@ impl SseDecode for crate::api::types::TransportDto {
             }
             6 => {
                 return crate::api::types::TransportDto::Stop;
+            }
+            7 => {
+                return crate::api::types::TransportDto::FromStart;
             }
             _ => {
                 unimplemented!("");
@@ -2763,34 +3260,41 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__core__add_root_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__core__facets_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__core__follow_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__core__front_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__core__histogram_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__core__dormant_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__core__facets_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__core__follow_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__core__front_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__core__histogram_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__core__history_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__core__keep_trail_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__core__most_played_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2803,8 +3307,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        8 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2855,6 +3359,31 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ColumnDto>>
     for crate::api::types::ColumnDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::ColumnDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::DormantDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.release_id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.credit.into_into_dart().into_dart(),
+            self.0.cover.into_into_dart().into_dart(),
+            self.0.plays.into_into_dart().into_dart(),
+            self.0.last_played_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::DormantDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::DormantDto>>
+    for crate::api::types::DormantDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::DormantDto> {
         self.into()
     }
 }
@@ -3265,6 +3794,37 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::LightLevelD
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ListenDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.uid.into_into_dart().into_dart(),
+            self.0.track_id.into_into_dart().into_dart(),
+            self.0.recording_id.into_into_dart().into_dart(),
+            self.0.release_id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.credit.into_into_dart().into_dart(),
+            self.0.release_title.into_into_dart().into_dart(),
+            self.0.cover.into_into_dart().into_dart(),
+            self.0.started_at_ms.into_into_dart().into_dart(),
+            self.0.played_ms.into_into_dart().into_dart(),
+            self.0.length_ms.into_into_dart().into_dart(),
+            self.0.counted.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::ListenDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ListenDto>>
+    for crate::api::types::ListenDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::ListenDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::NowDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -3341,6 +3901,34 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::PersonDto>>
     for crate::api::types::PersonDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::PersonDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::PlayedDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.track_id.into_into_dart().into_dart(),
+            self.0.recording_id.into_into_dart().into_dart(),
+            self.0.release_id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.credit.into_into_dart().into_dart(),
+            self.0.release_title.into_into_dart().into_dart(),
+            self.0.cover.into_into_dart().into_dart(),
+            self.0.plays.into_into_dart().into_dart(),
+            self.0.last_played_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::PlayedDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::PlayedDto>>
+    for crate::api::types::PlayedDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::PlayedDto> {
         self.into()
     }
 }
@@ -3443,6 +4031,37 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ReleaseDto>
     for crate::api::types::ReleaseDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::ReleaseDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ResumeDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.release_id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.credit.into_into_dart().into_dart(),
+            self.0.cover.into_into_dart().into_dart(),
+            self.0.recording_id.into_into_dart().into_dart(),
+            self.0.recording_title.into_into_dart().into_dart(),
+            self.0.disc.into_into_dart().into_dart(),
+            self.0.number.into_into_dart().into_dart(),
+            self.0.position_ms.into_into_dart().into_dart(),
+            self.0.length_ms.into_into_dart().into_dart(),
+            self.0.idiom.into_into_dart().into_dart(),
+            self.0.updated_at.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::ResumeDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ResumeDto>>
+    for crate::api::types::ResumeDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::ResumeDto> {
         self.into()
     }
 }
@@ -3822,6 +4441,34 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::TrailDto>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TrailSummaryDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.uid.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.stops.into_into_dart().into_dart(),
+            self.0.branches.into_into_dart().into_dart(),
+            self.0.when_ms.into_into_dart().into_dart(),
+            self.0.kept.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.played.into_into_dart().into_dart(),
+            self.0.wanted.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::TrailSummaryDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::TrailSummaryDto>>
+    for crate::api::types::TrailSummaryDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::TrailSummaryDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TransportDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self.0 {
@@ -3836,6 +4483,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TransportDt
             crate::api::types::TransportDto::Next => [4.into_dart()].into_dart(),
             crate::api::types::TransportDto::Previous => [5.into_dart()].into_dart(),
             crate::api::types::TransportDto::Stop => [6.into_dart()].into_dart(),
+            crate::api::types::TransportDto::FromStart => [7.into_dart()].into_dart(),
             _ => {
                 unimplemented!("");
             }
@@ -4009,6 +4657,18 @@ impl SseEncode for crate::api::types::ColumnDto {
             },
             serializer,
         );
+    }
+}
+
+impl SseEncode for crate::api::types::DormantDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.release_id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.credit, serializer);
+        <Option<String>>::sse_encode(self.cover, serializer);
+        <u64>::sse_encode(self.plays, serializer);
+        <i64>::sse_encode(self.last_played_ms, serializer);
     }
 }
 
@@ -4270,6 +4930,16 @@ impl SseEncode for Vec<String> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::DormantDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::DormantDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::types::FacetDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4340,12 +5010,32 @@ impl SseEncode for Vec<crate::api::types::JobDto> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::ListenDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::ListenDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::types::OutputDeviceDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::types::OutputDeviceDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::types::PlayedDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::PlayedDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -4386,6 +5076,16 @@ impl SseEncode for Vec<(u32, u32)> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <(u32, u32)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::types::ResumeDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::ResumeDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -4450,6 +5150,16 @@ impl SseEncode for Vec<crate::api::types::TrackRowDto> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::TrailSummaryDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::TrailSummaryDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::types::UpNextItemDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4457,6 +5167,24 @@ impl SseEncode for Vec<crate::api::types::UpNextItemDto> {
         for item in self {
             <crate::api::types::UpNextItemDto>::sse_encode(item, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::types::ListenDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.uid, serializer);
+        <Option<i64>>::sse_encode(self.track_id, serializer);
+        <i64>::sse_encode(self.recording_id, serializer);
+        <Option<i64>>::sse_encode(self.release_id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.credit, serializer);
+        <Option<String>>::sse_encode(self.release_title, serializer);
+        <Option<String>>::sse_encode(self.cover, serializer);
+        <i64>::sse_encode(self.started_at_ms, serializer);
+        <u64>::sse_encode(self.played_ms, serializer);
+        <Option<u64>>::sse_encode(self.length_ms, serializer);
+        <bool>::sse_encode(self.counted, serializer);
     }
 }
 
@@ -4601,6 +5329,21 @@ impl SseEncode for crate::api::types::PersonDto {
     }
 }
 
+impl SseEncode for crate::api::types::PlayedDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.track_id, serializer);
+        <i64>::sse_encode(self.recording_id, serializer);
+        <i64>::sse_encode(self.release_id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.credit, serializer);
+        <String>::sse_encode(self.release_title, serializer);
+        <Option<String>>::sse_encode(self.cover, serializer);
+        <u64>::sse_encode(self.plays, serializer);
+        <i64>::sse_encode(self.last_played_ms, serializer);
+    }
+}
+
 impl SseEncode for crate::api::types::QueryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4664,6 +5407,24 @@ impl SseEncode for crate::api::types::ReleaseDto {
         <Vec<String>>::sse_encode(self.formats, serializer);
         <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.credits, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::ResumeDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.release_id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.credit, serializer);
+        <Option<String>>::sse_encode(self.cover, serializer);
+        <i64>::sse_encode(self.recording_id, serializer);
+        <String>::sse_encode(self.recording_title, serializer);
+        <u32>::sse_encode(self.disc, serializer);
+        <u32>::sse_encode(self.number, serializer);
+        <u64>::sse_encode(self.position_ms, serializer);
+        <Option<u64>>::sse_encode(self.length_ms, serializer);
+        <Option<String>>::sse_encode(self.idiom, serializer);
+        <i64>::sse_encode(self.updated_at, serializer);
     }
 }
 
@@ -4882,6 +5643,21 @@ impl SseEncode for crate::api::types::TrailDto {
     }
 }
 
+impl SseEncode for crate::api::types::TrailSummaryDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.uid, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <u32>::sse_encode(self.stops, serializer);
+        <u32>::sse_encode(self.branches, serializer);
+        <i64>::sse_encode(self.when_ms, serializer);
+        <bool>::sse_encode(self.kept, serializer);
+        <Option<String>>::sse_encode(self.name, serializer);
+        <u32>::sse_encode(self.played, serializer);
+        <u32>::sse_encode(self.wanted, serializer);
+    }
+}
+
 impl SseEncode for crate::api::types::TransportDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4908,6 +5684,9 @@ impl SseEncode for crate::api::types::TransportDto {
             }
             crate::api::types::TransportDto::Stop => {
                 <i32>::sse_encode(6, serializer);
+            }
+            crate::api::types::TransportDto::FromStart => {
+                <i32>::sse_encode(7, serializer);
             }
             _ => {
                 unimplemented!("");

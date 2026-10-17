@@ -28,6 +28,8 @@ abstract interface class CoreBridge {
   Future<TrailDto?> trailBack();
   Future<TrailDto?> trailForward();
   Future<TrailDto> trailGo(int stop);
+  Future<List<TrailSummaryDto>> trailHistory(int limit);
+  Future<TrailDto> keepTrail({String? name});
   Future<void> runCommand(String input);
   QueryDto parse(String input);
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
@@ -45,6 +47,11 @@ abstract interface class CoreBridge {
   Future<RowsDto> rows(String query, ViewDto view, int offset, int limit);
   Future<void> playResults(String query, ViewDto view, int index);
   Future<FacetsDto> facets(String query);
+  Future<List<ListenDto>> history(int limit);
+  Future<List<PlayedDto>> mostPlayed(int days, int limit);
+  Future<List<DormantDto>> dormant(int limit);
+  Future<List<ResumeDto>> resumePoints(int limit);
+  Future<void> pickUp(PlatformInt64 releaseId);
 }
 
 class RustCore implements CoreBridge {
@@ -75,6 +82,10 @@ class RustCore implements CoreBridge {
   Future<TrailDto?> trailForward() => rust.trailForward();
   @override
   Future<TrailDto> trailGo(int stop) => rust.trailGo(stop: stop);
+  @override
+  Future<List<TrailSummaryDto>> trailHistory(int limit) => rust.trailHistory(limit: limit);
+  @override
+  Future<TrailDto> keepTrail({String? name}) => rust.keepTrail(name: name);
   @override
   Future<void> runCommand(String input) => rust.runCommand(input: input);
   @override
@@ -110,6 +121,16 @@ class RustCore implements CoreBridge {
       rust.playResults(query: query, view: view, index: BigInt.from(index));
   @override
   Future<FacetsDto> facets(String query) => rust.facets(query: query);
+  @override
+  Future<List<ListenDto>> history(int limit) => rust.history(limit: limit);
+  @override
+  Future<List<PlayedDto>> mostPlayed(int days, int limit) => rust.mostPlayed(days: days, limit: limit);
+  @override
+  Future<List<DormantDto>> dormant(int limit) => rust.dormant(limit: limit);
+  @override
+  Future<List<ResumeDto>> resumePoints(int limit) => rust.resumePoints(limit: limit);
+  @override
+  Future<void> pickUp(PlatformInt64 releaseId) => rust.pickUp(releaseId: releaseId);
 }
 
 /// The plates' Tuesday evening, as data.
@@ -130,6 +151,46 @@ class FakeCore implements CoreBridge {
   final _forward = <int, int>{};
   final _trailHistory = <({TrailDto trail, Map<int, int> forward, int departure})>[];
   int? _historyIndex;
+  final _trailUids = <String>[];
+  final _trailCreated = <String, int>{};
+  final _keptTrails = <String, String?>{};
+  final _trailPlayed = <String, Set<int>>{};
+  int _nextTrail = 0;
+
+  @override
+  Future<List<TrailSummaryDto>> trailHistory(int limit) async {
+    _saveTrail();
+    return [
+      for (var i = _trailHistory.length - 1; i >= 0 && _trailHistory.length - i <= limit; i--)
+        _trailSummary(i),
+    ];
+  }
+
+  TrailSummaryDto _trailSummary(int index) {
+    final trail = _trailHistory[index].trail;
+    final uid = _trailUids[index];
+    final root = trail.stops.first.title;
+    final leaf = trail.stops.firstWhere((stop) => stop.index == trail.current).title;
+    final parents = trail.stops.map((stop) => stop.parent).toSet();
+    return TrailSummaryDto(
+      uid: uid, title: root == leaf ? root : '$root → $leaf',
+      stops: trail.stops.length,
+      branches: trail.stops.where((stop) => !parents.contains(stop.index)).length,
+      whenMs: PlatformInt64Util.from(_trailCreated[uid]!),
+      kept: _keptTrails.containsKey(uid), name: _keptTrails[uid],
+      played: _trailPlayed[uid]?.length ?? 0, wanted: 0,
+    );
+  }
+
+  @override
+  Future<TrailDto> keepTrail({String? name}) async {
+    final index = _historyIndex;
+    final trail = _trail;
+    if (index == null || trail == null) throw 'No trail is open';
+    _keptTrails[_trailUids[index]] = name;
+    _saveTrail();
+    return trail;
+  }
 
   void _saveTrail() {
     final index = _historyIndex;
@@ -342,6 +403,7 @@ class FakeCore implements CoreBridge {
     if (_historyIndex case final index?) {
       final previous = _trailHistory.removeAt(index);
       _trailHistory.add((trail: previous.trail, forward: previous.forward, departure: previous.trail.current));
+      _trailUids.add(_trailUids.removeAt(index));
     }
     _forward.clear();
     final trail = TrailDto(
@@ -351,6 +413,9 @@ class FakeCore implements CoreBridge {
       meetings: const [],
     );
     _trailHistory.add((trail: trail, forward: {}, departure: 0));
+    final uid = 'fake-trail-${_nextTrail++}';
+    _trailUids.add(uid);
+    _trailCreated[uid] = DateTime.now().millisecondsSinceEpoch;
     _historyIndex = _trailHistory.length - 1;
     return _trail = trail;
   }
@@ -908,6 +973,43 @@ class FakeCore implements CoreBridge {
     final rows = _releaseRows(id);
     if (index < 0 || index >= rows.length) throw RangeError.index(index, rows);
     _playQueue(rows.sublist(index));
+    final historyIndex = _historyIndex;
+    final trail = _trail;
+    if (fromStop != null && historyIndex != null && trail != null &&
+        trail.stops.any((stop) => stop.index == fromStop && stop.target == TargetDto.release(id: id))) {
+      (_trailPlayed[_trailUids[historyIndex]] ??= <int>{}).add(fromStop);
+    }
+  }
+
+  @override
+  Future<List<ResumeDto>> resumePoints(int limit) async {
+    if (_empty) return [];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return [
+      for (final (index, position) in [(3, 126000), (14, 47000)])
+        (() {
+          final row = _row(index);
+          return ResumeDto(releaseId: row.releaseId, title: row.album, credit: row.albumArtist,
+            recordingId: row.trackId, recordingTitle: row.title, disc: row.disc, number: row.number,
+            positionMs: BigInt.from(position), lengthMs: row.lengthMs, idiom: _idiom(row),
+            updatedAt: PlatformInt64Util.from(now - index * 60000));
+        })(),
+    ].take(limit).toList();
+  }
+
+  @override
+  Future<void> pickUp(PlatformInt64 releaseId) async {
+    final points = await resumePoints(20);
+    final saved = points.where((point) => point.releaseId == releaseId).firstOrNull;
+    if (saved == null) throw 'That release has no resume point';
+    final rows = _releaseRows(releaseId);
+    final at = rows.indexWhere((row) => row.trackId == saved.recordingId);
+    if (at < 0) throw 'The saved recording is unavailable';
+    _playQueue(rows.sublist(at));
+    final position = saved.idiom == 'score' || saved.idiom == 'set' ? saved.positionMs : BigInt.zero;
+    final anchor = _state.anchor!;
+    _state = _with(AnchorDto(item: anchor.item, positionMs: position.toDouble(), rate: 1));
+    _now.add(_state);
   }
 
   /// Tokens count up across queues, as the engine's do; the opening Now is 1.
@@ -1014,6 +1116,7 @@ class FakeCore implements CoreBridge {
     _state = switch (cmd) {
       TransportDto_Pause() => _with(AnchorDto(item: a.item, positionMs: pos, rate: 0)),
       TransportDto_Resume() => _with(AnchorDto(item: a.item, positionMs: pos, rate: 1)),
+      TransportDto_FromStart() => _with(AnchorDto(item: a.item, positionMs: 0, rate: a.rate)),
       TransportDto_Seek(:final ms) => _with(AnchorDto(item: a.item, positionMs: ms.toDouble(), rate: a.rate)),
       _ => _state,
     };
@@ -1033,4 +1136,68 @@ class FakeCore implements CoreBridge {
         fidelity: _state.fidelity,
         error: _state.error,
       );
+
+  DateTime get _memoryEvening {
+    final now = DateTime.now();
+    final evening = DateTime(now.year, now.month, now.day, 23, 14);
+    return evening.isAfter(now) ? evening.subtract(const Duration(days: 1)) : evening;
+  }
+
+  @override
+  Future<List<ListenDto>> history(int limit) async {
+    if (_empty) return [];
+    final evening = _memoryEvening;
+    final entries = [
+      (2, 23, 10, 226000, 391000, 'Small Two of Pieces'),
+      (86, 22, 58, 180000, 180000, 'Creid, track 3'),
+      (1, 22, 41, 313000, 313000, 'Stars of Tears'),
+      (36, 21, 31, 366000, 183000, 'Corridors of Time'),
+    ];
+    return [
+      for (final (index, hour, minute, played, length, title) in entries.take(limit))
+        (() {
+          final row = _row(index);
+          return ListenDto(
+            uid: 'fake-listen-$index', trackId: row.trackId, recordingId: row.trackId,
+            releaseId: row.releaseId, title: title,
+            credit: index == 1 ? _row(2).artist : row.artist, releaseTitle: row.album,
+            startedAtMs: PlatformInt64Util.from(DateTime(evening.year, evening.month, evening.day, hour, minute).millisecondsSinceEpoch),
+            playedMs: BigInt.from(played), lengthMs: BigInt.from(length), counted: true,
+          );
+        })(),
+    ];
+  }
+
+  @override
+  Future<List<PlayedDto>> mostPlayed(int days, int limit) async {
+    if (_empty || days == 0) return [];
+    final last = PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch);
+    return [
+      for (final (index, plays, title) in [(2, 14, 'Small Two of Pieces'), (36, 11, 'Corridors of Time')])
+        (() {
+          final row = _row(index);
+          return PlayedDto(trackId: row.trackId, recordingId: row.trackId, releaseId: row.releaseId,
+            title: title, credit: row.artist, releaseTitle: row.album,
+            plays: BigInt.from(plays), lastPlayedMs: last);
+        })(),
+      PlayedDto(trackId: PlatformInt64Util.from(48211), recordingId: PlatformInt64Util.from(48211),
+        releaseId: PlatformInt64Util.from(9), title: 'Allegretto', credit: 'Kleiber', releaseTitle: 'Beethoven 7',
+        plays: BigInt.from(6), lastPlayedMs: last),
+    ].take(limit).toList();
+  }
+
+  @override
+  Future<List<DormantDto>> dormant(int limit) async {
+    if (_empty) return [];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return [
+      for (final (id, title, credit, plays, days) in [
+        (10, 'Sunday at the Village Vanguard', _releases[2].$2, 96, 730),
+        (11, 'Outer Wilds', null, 18, 548),
+        (12, 'Gould Goldberg 1955', 'Gould', 31, 1095),
+      ])
+        DormantDto(releaseId: PlatformInt64Util.from(id), title: title, credit: credit,
+          plays: BigInt.from(plays), lastPlayedMs: PlatformInt64Util.from(now - days * 86400000)),
+    ].take(limit).toList();
+  }
 }

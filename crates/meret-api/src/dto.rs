@@ -190,6 +190,8 @@ pub enum TransportDto {
     /// More than three seconds in, the start of this item; otherwise the one before.
     Previous,
     Stop,
+    /// Start the current item at zero, including a restored, unloaded queue.
+    FromStart,
 }
 
 /// One queued item after the playing one, as Now's Up next lists it.
@@ -915,6 +917,19 @@ pub struct TrailDto {
     pub meetings: Vec<(u32, u32)>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrailSummaryDto {
+    pub uid: String,
+    pub title: String,
+    pub stops: u32,
+    pub branches: u32,
+    pub when_ms: i64,
+    pub kept: bool,
+    pub name: Option<String>,
+    pub played: u32,
+    pub wanted: u32,
+}
+
 impl TrailDto {
     /// `title` names a stop: a release's title, a person's name.
     pub fn from_trail(t: &Trail, now: i64, title: impl Fn(&TargetDto) -> String) -> Self {
@@ -945,6 +960,80 @@ impl TrailDto {
             meetings: t.meetings().into_iter().map(|(a, b)| (a as u32, b as u32)).collect(),
         }
     }
+}
+
+/// Every attempt to hear a recording, including a short skip.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListenDto {
+    pub uid: String,
+    pub track_id: Option<i64>,
+    pub recording_id: i64,
+    pub release_id: Option<i64>,
+    pub title: String,
+    pub credit: Option<String>,
+    pub release_title: Option<String>,
+    pub cover: Option<String>,
+    pub started_at_ms: i64,
+    pub played_ms: u64,
+    pub length_ms: Option<u64>,
+    pub counted: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlayedDto {
+    pub track_id: i64,
+    pub recording_id: i64,
+    pub release_id: i64,
+    pub title: String,
+    pub credit: Option<String>,
+    pub release_title: String,
+    pub cover: Option<String>,
+    pub plays: u64,
+    pub last_played_ms: i64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DormantDto {
+    pub release_id: i64,
+    pub title: String,
+    pub credit: Option<String>,
+    pub cover: Option<String>,
+    pub plays: u64,
+    pub last_played_ms: i64,
+}
+
+impl ListenDto {
+    pub(crate) fn from_listen(r: meret_store::ListenRow, art_dir: &Path) -> Self {
+        Self {
+            uid: r.uid, track_id: r.track.map(|id| id.0), recording_id: r.recording.0,
+            release_id: r.release.map(|id| id.0), title: r.title, credit: r.credit,
+            release_title: r.release_title, cover: memory_cover(r.cover, art_dir),
+            started_at_ms: r.started_at, played_ms: r.played_ms, length_ms: r.length_ms, counted: r.counted,
+        }
+    }
+}
+
+impl PlayedDto {
+    pub(crate) fn from_played(r: meret_store::PlayCount, art_dir: &Path) -> Self {
+        Self {
+            track_id: r.track.0, recording_id: r.recording.0, release_id: r.release.0,
+            title: r.title, credit: r.credit, release_title: r.release_title,
+            cover: memory_cover(r.cover, art_dir), plays: r.plays, last_played_ms: r.last_played,
+        }
+    }
+}
+
+impl DormantDto {
+    pub(crate) fn from_dormant(r: meret_store::Dormant, art_dir: &Path) -> Self {
+        Self {
+            release_id: r.release.0, title: r.title, credit: r.credit,
+            cover: memory_cover(r.cover, art_dir), plays: r.plays, last_played_ms: r.last_played,
+        }
+    }
+}
+
+fn memory_cover(hash: Option<String>, art_dir: &Path) -> Option<String> {
+    hash.map(|hash| meret_store::cover_file(art_dir, &hash, 64).to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
@@ -1046,5 +1135,30 @@ mod view_tests {
         assert_eq!(View::from(ViewDto::default()), View::default());
         assert_eq!(View::from(ViewDto { sort: SortKeyDto::Year, descending: true, group: true }),
             View { sort: SortKey::Year, descending: true, group: true });
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResumeDto {
+    pub release_id: i64,
+    pub title: String,
+    pub credit: Option<String>,
+    pub cover: Option<String>,
+    pub recording_id: i64,
+    pub recording_title: String,
+    pub disc: u32,
+    pub number: u32,
+    pub position_ms: u64,
+    pub length_ms: Option<u64>,
+    pub idiom: Option<String>,
+    pub updated_at: i64,
+}
+
+impl ResumeDto {
+    pub fn from_row(row: meret_store::ResumeRow, art_dir: &Path) -> Self {
+        Self { release_id: row.release.0, title: row.title, credit: row.credit,
+            cover: row.cover.map(|a| meret_store::cover_file(art_dir, &a.hash, 256).to_string_lossy().into_owned()),
+            recording_id: row.recording.0, recording_title: row.recording_title, disc: row.disc, number: row.number,
+            position_ms: row.position_ms, length_ms: row.length_ms, idiom: row.idiom.map(|i| i.as_str().into()), updated_at: row.updated_at }
     }
 }

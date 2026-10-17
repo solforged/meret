@@ -10,6 +10,22 @@ pub use meret_api::LightDto;
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
 pub use meret_api::{FolderKindDto, FolderSuggestionDto, LightLevelDto, OutputDeviceDto, SettingsDto};
 pub use meret_api::{UpNextDto, UpNextItemDto, VolumeDto};
+pub use meret_api::TrailSummaryDto;
+
+#[frb(mirror(TrailSummaryDto))]
+pub struct _TrailSummaryDto {
+    pub uid: String,
+    pub title: String,
+    pub stops: u32,
+    pub branches: u32,
+    pub when_ms: i64,
+    pub kept: bool,
+    pub name: Option<String>,
+    pub played: u32,
+    pub wanted: u32,
+}
+pub use meret_api::{DormantDto, ListenDto, PlayedDto};
+pub use meret_api::ResumeDto;
 
 #[frb(mirror(VolumeDto))]
 pub struct _VolumeDto {
@@ -149,6 +165,7 @@ pub enum _TransportDto {
     Next,
     Previous,
     Stop,
+    FromStart,
 }
 
 #[frb(mirror(UpNextItemDto))]
@@ -443,4 +460,59 @@ pub struct _PersonDto {
     pub releases: Vec<ThreadDto>,
     pub appears_on: Vec<ThreadDto>,
     pub worked_with: Vec<ThreadDto>,
+}
+
+#[frb(mirror(ListenDto))]
+pub struct _ListenDto {
+    pub uid: String,
+    pub track_id: Option<i64>,
+    pub recording_id: i64,
+    pub release_id: Option<i64>,
+    pub title: String,
+    pub credit: Option<String>,
+    pub release_title: Option<String>,
+    pub cover: Option<String>,
+    pub started_at_ms: i64,
+    pub played_ms: u64,
+    pub length_ms: Option<u64>,
+    pub counted: bool,
+}
+
+#[frb(mirror(PlayedDto))]
+pub struct _PlayedDto {
+    pub track_id: i64,
+    pub recording_id: i64,
+    pub release_id: i64,
+    pub title: String,
+    pub credit: Option<String>,
+    pub release_title: String,
+    pub cover: Option<String>,
+    pub plays: u64,
+    pub last_played_ms: i64,
+}
+
+#[frb(mirror(DormantDto))]
+pub struct _DormantDto {
+    pub release_id: i64,
+    pub title: String,
+    pub credit: Option<String>,
+    pub cover: Option<String>,
+    pub plays: u64,
+    pub last_played_ms: i64,
+}
+
+#[frb(mirror(ResumeDto))]
+pub struct _ResumeDto {
+    pub release_id: i64,
+    pub title: String,
+    pub credit: Option<String>,
+    pub cover: Option<String>,
+    pub recording_id: i64,
+    pub recording_title: String,
+    pub disc: u32,
+    pub number: u32,
+    pub position_ms: u64,
+    pub length_ms: Option<u64>,
+    pub idiom: Option<String>,
+    pub updated_at: i64,
 }

@@ -724,7 +724,7 @@ extension TransportDtoPatterns on TransportDto {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( TransportDto_PlayFile value)?  playFile,TResult Function( TransportDto_Pause value)?  pause,TResult Function( TransportDto_Resume value)?  resume,TResult Function( TransportDto_Seek value)?  seek,TResult Function( TransportDto_Next value)?  next,TResult Function( TransportDto_Previous value)?  previous,TResult Function( TransportDto_Stop value)?  stop,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( TransportDto_PlayFile value)?  playFile,TResult Function( TransportDto_Pause value)?  pause,TResult Function( TransportDto_Resume value)?  resume,TResult Function( TransportDto_Seek value)?  seek,TResult Function( TransportDto_Next value)?  next,TResult Function( TransportDto_Previous value)?  previous,TResult Function( TransportDto_Stop value)?  stop,TResult Function( TransportDto_FromStart value)?  fromStart,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case TransportDto_PlayFile() when playFile != null:
@@ -734,7 +734,8 @@ return resume(_that);case TransportDto_Seek() when seek != null:
 return seek(_that);case TransportDto_Next() when next != null:
 return next(_that);case TransportDto_Previous() when previous != null:
 return previous(_that);case TransportDto_Stop() when stop != null:
-return stop(_that);case _:
+return stop(_that);case TransportDto_FromStart() when fromStart != null:
+return fromStart(_that);case _:
   return orElse();
 
 }
@@ -752,7 +753,7 @@ return stop(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( TransportDto_PlayFile value)  playFile,required TResult Function( TransportDto_Pause value)  pause,required TResult Function( TransportDto_Resume value)  resume,required TResult Function( TransportDto_Seek value)  seek,required TResult Function( TransportDto_Next value)  next,required TResult Function( TransportDto_Previous value)  previous,required TResult Function( TransportDto_Stop value)  stop,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( TransportDto_PlayFile value)  playFile,required TResult Function( TransportDto_Pause value)  pause,required TResult Function( TransportDto_Resume value)  resume,required TResult Function( TransportDto_Seek value)  seek,required TResult Function( TransportDto_Next value)  next,required TResult Function( TransportDto_Previous value)  previous,required TResult Function( TransportDto_Stop value)  stop,required TResult Function( TransportDto_FromStart value)  fromStart,}){
 final _that = this;
 switch (_that) {
 case TransportDto_PlayFile():
@@ -762,7 +763,8 @@ return resume(_that);case TransportDto_Seek():
 return seek(_that);case TransportDto_Next():
 return next(_that);case TransportDto_Previous():
 return previous(_that);case TransportDto_Stop():
-return stop(_that);}
+return stop(_that);case TransportDto_FromStart():
+return fromStart(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -776,7 +778,7 @@ return stop(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( TransportDto_PlayFile value)?  playFile,TResult? Function( TransportDto_Pause value)?  pause,TResult? Function( TransportDto_Resume value)?  resume,TResult? Function( TransportDto_Seek value)?  seek,TResult? Function( TransportDto_Next value)?  next,TResult? Function( TransportDto_Previous value)?  previous,TResult? Function( TransportDto_Stop value)?  stop,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( TransportDto_PlayFile value)?  playFile,TResult? Function( TransportDto_Pause value)?  pause,TResult? Function( TransportDto_Resume value)?  resume,TResult? Function( TransportDto_Seek value)?  seek,TResult? Function( TransportDto_Next value)?  next,TResult? Function( TransportDto_Previous value)?  previous,TResult? Function( TransportDto_Stop value)?  stop,TResult? Function( TransportDto_FromStart value)?  fromStart,}){
 final _that = this;
 switch (_that) {
 case TransportDto_PlayFile() when playFile != null:
@@ -786,7 +788,8 @@ return resume(_that);case TransportDto_Seek() when seek != null:
 return seek(_that);case TransportDto_Next() when next != null:
 return next(_that);case TransportDto_Previous() when previous != null:
 return previous(_that);case TransportDto_Stop() when stop != null:
-return stop(_that);case _:
+return stop(_that);case TransportDto_FromStart() when fromStart != null:
+return fromStart(_that);case _:
   return null;
 
 }
@@ -803,7 +806,7 @@ return stop(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String path)?  playFile,TResult Function()?  pause,TResult Function()?  resume,TResult Function( BigInt ms)?  seek,TResult Function()?  next,TResult Function()?  previous,TResult Function()?  stop,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String path)?  playFile,TResult Function()?  pause,TResult Function()?  resume,TResult Function( BigInt ms)?  seek,TResult Function()?  next,TResult Function()?  previous,TResult Function()?  stop,TResult Function()?  fromStart,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case TransportDto_PlayFile() when playFile != null:
 return playFile(_that.path);case TransportDto_Pause() when pause != null:
@@ -812,7 +815,8 @@ return resume();case TransportDto_Seek() when seek != null:
 return seek(_that.ms);case TransportDto_Next() when next != null:
 return next();case TransportDto_Previous() when previous != null:
 return previous();case TransportDto_Stop() when stop != null:
-return stop();case _:
+return stop();case TransportDto_FromStart() when fromStart != null:
+return fromStart();case _:
   return orElse();
 
 }
@@ -830,7 +834,7 @@ return stop();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String path)  playFile,required TResult Function()  pause,required TResult Function()  resume,required TResult Function( BigInt ms)  seek,required TResult Function()  next,required TResult Function()  previous,required TResult Function()  stop,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String path)  playFile,required TResult Function()  pause,required TResult Function()  resume,required TResult Function( BigInt ms)  seek,required TResult Function()  next,required TResult Function()  previous,required TResult Function()  stop,required TResult Function()  fromStart,}) {final _that = this;
 switch (_that) {
 case TransportDto_PlayFile():
 return playFile(_that.path);case TransportDto_Pause():
@@ -839,7 +843,8 @@ return resume();case TransportDto_Seek():
 return seek(_that.ms);case TransportDto_Next():
 return next();case TransportDto_Previous():
 return previous();case TransportDto_Stop():
-return stop();}
+return stop();case TransportDto_FromStart():
+return fromStart();}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -853,7 +858,7 @@ return stop();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String path)?  playFile,TResult? Function()?  pause,TResult? Function()?  resume,TResult? Function( BigInt ms)?  seek,TResult? Function()?  next,TResult? Function()?  previous,TResult? Function()?  stop,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String path)?  playFile,TResult? Function()?  pause,TResult? Function()?  resume,TResult? Function( BigInt ms)?  seek,TResult? Function()?  next,TResult? Function()?  previous,TResult? Function()?  stop,TResult? Function()?  fromStart,}) {final _that = this;
 switch (_that) {
 case TransportDto_PlayFile() when playFile != null:
 return playFile(_that.path);case TransportDto_Pause() when pause != null:
@@ -862,7 +867,8 @@ return resume();case TransportDto_Seek() when seek != null:
 return seek(_that.ms);case TransportDto_Next() when next != null:
 return next();case TransportDto_Previous() when previous != null:
 return previous();case TransportDto_Stop() when stop != null:
-return stop();case _:
+return stop();case TransportDto_FromStart() when fromStart != null:
+return fromStart();case _:
   return null;
 
 }
@@ -1158,6 +1164,38 @@ int get hashCode => runtimeType.hashCode;
 @override
 String toString() {
     return 'TransportDto.stop()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class TransportDto_FromStart extends TransportDto {
+  const TransportDto_FromStart(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is TransportDto_FromStart);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'TransportDto.fromStart()';
 }
 
 

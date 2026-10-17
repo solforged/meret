@@ -35,6 +35,45 @@ class AnchorDto {
 
 enum ColumnDto { year, length, plays, lastPlayed, added, dr }
 
+class DormantDto {
+  final PlatformInt64 releaseId;
+  final String title;
+  final String? credit;
+  final String? cover;
+  final BigInt plays;
+  final PlatformInt64 lastPlayedMs;
+
+  const DormantDto({
+    required this.releaseId,
+    required this.title,
+    this.credit,
+    this.cover,
+    required this.plays,
+    required this.lastPlayedMs,
+  });
+
+  @override
+  int get hashCode =>
+      releaseId.hashCode ^
+      title.hashCode ^
+      credit.hashCode ^
+      cover.hashCode ^
+      plays.hashCode ^
+      lastPlayedMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DormantDto &&
+          runtimeType == other.runtimeType &&
+          releaseId == other.releaseId &&
+          title == other.title &&
+          credit == other.credit &&
+          cover == other.cover &&
+          plays == other.plays &&
+          lastPlayedMs == other.lastPlayedMs;
+}
+
 class FacetColumnDto {
   final String allQuery;
   final int tracks;
@@ -441,6 +480,69 @@ class LightDto {
 
 enum LightLevelDto { off, accent, accentAndWash }
 
+class ListenDto {
+  final String uid;
+  final PlatformInt64? trackId;
+  final PlatformInt64 recordingId;
+  final PlatformInt64? releaseId;
+  final String title;
+  final String? credit;
+  final String? releaseTitle;
+  final String? cover;
+  final PlatformInt64 startedAtMs;
+  final BigInt playedMs;
+  final BigInt? lengthMs;
+  final bool counted;
+
+  const ListenDto({
+    required this.uid,
+    this.trackId,
+    required this.recordingId,
+    this.releaseId,
+    required this.title,
+    this.credit,
+    this.releaseTitle,
+    this.cover,
+    required this.startedAtMs,
+    required this.playedMs,
+    this.lengthMs,
+    required this.counted,
+  });
+
+  @override
+  int get hashCode =>
+      uid.hashCode ^
+      trackId.hashCode ^
+      recordingId.hashCode ^
+      releaseId.hashCode ^
+      title.hashCode ^
+      credit.hashCode ^
+      releaseTitle.hashCode ^
+      cover.hashCode ^
+      startedAtMs.hashCode ^
+      playedMs.hashCode ^
+      lengthMs.hashCode ^
+      counted.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ListenDto &&
+          runtimeType == other.runtimeType &&
+          uid == other.uid &&
+          trackId == other.trackId &&
+          recordingId == other.recordingId &&
+          releaseId == other.releaseId &&
+          title == other.title &&
+          credit == other.credit &&
+          releaseTitle == other.releaseTitle &&
+          cover == other.cover &&
+          startedAtMs == other.startedAtMs &&
+          playedMs == other.playedMs &&
+          lengthMs == other.lengthMs &&
+          counted == other.counted;
+}
+
 class NowDto {
   final PlatformInt64? trackId;
   final PlatformInt64? releaseId;
@@ -578,6 +680,57 @@ class PersonDto {
           workedWith == other.workedWith;
 }
 
+class PlayedDto {
+  final PlatformInt64 trackId;
+  final PlatformInt64 recordingId;
+  final PlatformInt64 releaseId;
+  final String title;
+  final String? credit;
+  final String releaseTitle;
+  final String? cover;
+  final BigInt plays;
+  final PlatformInt64 lastPlayedMs;
+
+  const PlayedDto({
+    required this.trackId,
+    required this.recordingId,
+    required this.releaseId,
+    required this.title,
+    this.credit,
+    required this.releaseTitle,
+    this.cover,
+    required this.plays,
+    required this.lastPlayedMs,
+  });
+
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      recordingId.hashCode ^
+      releaseId.hashCode ^
+      title.hashCode ^
+      credit.hashCode ^
+      releaseTitle.hashCode ^
+      cover.hashCode ^
+      plays.hashCode ^
+      lastPlayedMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlayedDto &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          recordingId == other.recordingId &&
+          releaseId == other.releaseId &&
+          title == other.title &&
+          credit == other.credit &&
+          releaseTitle == other.releaseTitle &&
+          cover == other.cover &&
+          plays == other.plays &&
+          lastPlayedMs == other.lastPlayedMs;
+}
+
 class QueryDto {
   final QueryKind kind;
   final String canonical;
@@ -708,6 +861,69 @@ class ReleaseDto {
           formats == other.formats &&
           rows == other.rows &&
           credits == other.credits;
+}
+
+class ResumeDto {
+  final PlatformInt64 releaseId;
+  final String title;
+  final String? credit;
+  final String? cover;
+  final PlatformInt64 recordingId;
+  final String recordingTitle;
+  final int disc;
+  final int number;
+  final BigInt positionMs;
+  final BigInt? lengthMs;
+  final String? idiom;
+  final PlatformInt64 updatedAt;
+
+  const ResumeDto({
+    required this.releaseId,
+    required this.title,
+    this.credit,
+    this.cover,
+    required this.recordingId,
+    required this.recordingTitle,
+    required this.disc,
+    required this.number,
+    required this.positionMs,
+    this.lengthMs,
+    this.idiom,
+    required this.updatedAt,
+  });
+
+  @override
+  int get hashCode =>
+      releaseId.hashCode ^
+      title.hashCode ^
+      credit.hashCode ^
+      cover.hashCode ^
+      recordingId.hashCode ^
+      recordingTitle.hashCode ^
+      disc.hashCode ^
+      number.hashCode ^
+      positionMs.hashCode ^
+      lengthMs.hashCode ^
+      idiom.hashCode ^
+      updatedAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ResumeDto &&
+          runtimeType == other.runtimeType &&
+          releaseId == other.releaseId &&
+          title == other.title &&
+          credit == other.credit &&
+          cover == other.cover &&
+          recordingId == other.recordingId &&
+          recordingTitle == other.recordingTitle &&
+          disc == other.disc &&
+          number == other.number &&
+          positionMs == other.positionMs &&
+          lengthMs == other.lengthMs &&
+          idiom == other.idiom &&
+          updatedAt == other.updatedAt;
 }
 
 class RootDto {
@@ -1175,6 +1391,57 @@ class TrailDto {
           meetings == other.meetings;
 }
 
+class TrailSummaryDto {
+  final String uid;
+  final String title;
+  final int stops;
+  final int branches;
+  final PlatformInt64 whenMs;
+  final bool kept;
+  final String? name;
+  final int played;
+  final int wanted;
+
+  const TrailSummaryDto({
+    required this.uid,
+    required this.title,
+    required this.stops,
+    required this.branches,
+    required this.whenMs,
+    required this.kept,
+    this.name,
+    required this.played,
+    required this.wanted,
+  });
+
+  @override
+  int get hashCode =>
+      uid.hashCode ^
+      title.hashCode ^
+      stops.hashCode ^
+      branches.hashCode ^
+      whenMs.hashCode ^
+      kept.hashCode ^
+      name.hashCode ^
+      played.hashCode ^
+      wanted.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TrailSummaryDto &&
+          runtimeType == other.runtimeType &&
+          uid == other.uid &&
+          title == other.title &&
+          stops == other.stops &&
+          branches == other.branches &&
+          whenMs == other.whenMs &&
+          kept == other.kept &&
+          name == other.name &&
+          played == other.played &&
+          wanted == other.wanted;
+}
+
 @freezed
 sealed class TransportDto with _$TransportDto {
   const TransportDto._();
@@ -1187,6 +1454,7 @@ sealed class TransportDto with _$TransportDto {
   const factory TransportDto.next() = TransportDto_Next;
   const factory TransportDto.previous() = TransportDto_Previous;
   const factory TransportDto.stop() = TransportDto_Stop;
+  const factory TransportDto.fromStart() = TransportDto_FromStart;
 }
 
 class UpNextDto {
