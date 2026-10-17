@@ -5,14 +5,17 @@ import '../core/bridge.dart';
 import '../settings/settings_window.dart';
 import '../theme/tokens.dart';
 import 'add_folder.dart';
+import 'front_memory.dart';
 import 'pane.dart';
 
 /// The Front is a flat set of doors the library can actually answer.
 class FrontPane extends StatefulWidget {
-  const FrontPane({super.key, required this.core, required this.onQuery, this.onRelease, this.libraryVersion, this.jobs = const []});
+  const FrontPane({super.key, required this.core, required this.memoryVersion, required this.onQuery, this.onTrail, this.onRelease, this.libraryVersion, this.jobs = const []});
 
   final CoreBridge core;
+  final int memoryVersion;
   final ValueChanged<String> onQuery;
+  final Future<void> Function(String)? onTrail;
   final Future<void> Function(PlatformInt64)? onRelease;
   final BigInt? libraryVersion;
   final List<JobDto> jobs;
@@ -99,7 +102,7 @@ class _FrontPaneState extends State<FrontPane> {
     child: Align(alignment: Alignment.centerLeft, child: FractionallySizedBox(widthFactor: share, heightFactor: 1, child: const ColoredBox(color: Tok.gold2))),
   );
 
-  Widget _door({String? query, required Widget child}) => _Door(
+  Widget _door({String? query, required Widget child}) => FrontDoor(
     onTap: query == null ? null : () => widget.onQuery(query),
     child: child,
   );
@@ -146,7 +149,7 @@ class _FrontPaneState extends State<FrontPane> {
 
   Widget _recent(FrontDto front) => _section('Added lately', [
     for (final recent in front.addedLately)
-      _Door(onTap: widget.onRelease == null ? null : () async {
+      FrontDoor(onTap: widget.onRelease == null ? null : () async {
         try {
           await widget.onRelease!(recent.releaseId);
         } catch (error) {
@@ -196,7 +199,7 @@ class _FrontPaneState extends State<FrontPane> {
     ),
   );
 
-  Widget _suggestion(FolderSuggestionDto suggestion) => _Door(
+  Widget _suggestion(FolderSuggestionDto suggestion) => FrontDoor(
     onTap: _adding ? null : () => _addFolder(suggestion.path),
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
@@ -229,7 +232,7 @@ class _FrontPaneState extends State<FrontPane> {
       if (_suggestions == null && _error == null)
         const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Looking for music folders…', style: Tok.label)),
       for (final suggestion in _suggestions ?? <FolderSuggestionDto>[]) _suggestion(suggestion),
-      _Door(
+      FrontDoor(
         onTap: _adding ? null : _addFolder,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
@@ -241,7 +244,7 @@ class _FrontPaneState extends State<FrontPane> {
         ]),
       ),
       const SizedBox(height: 12),
-      _Door(
+      FrontDoor(
         onTap: () => showSettings(context, section: SettingsSection.sources),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('Connect a service', style: Tok.body.copyWith(color: Tok.gold)),
@@ -306,6 +309,30 @@ class _FrontPaneState extends State<FrontPane> {
     _quietLine('Where you stopped', 'After your first listen, unfinished music will be here.'),
     const SizedBox(height: 20),
     const Text('Nothing to resume yet.', style: Tok.label),
+  ]);
+
+  Widget _quietLeadsAndCrates() => _quietPanel([
+    Text('Leads', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
+    _quietLine('Music to follow', 'People, credits and recordings related to what you add. Every lead will say why it is here.'),
+    const Divider(height: 1, color: Tok.line),
+    _quietLine('Wants', 'Music you mark to hear or own.'),
+    const Divider(height: 1, color: Tok.line),
+    const SizedBox(height: 16),
+    Text('Crates', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
+    _quietLine('Sets you make', 'Put music in a crate.'),
+  ]);
+
+  Widget _memory() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    FrontMemory(
+      key: const ValueKey('front-memory'),
+      core: widget.core,
+      memoryVersion: widget.memoryVersion,
+      libraryVersion: widget.libraryVersion,
+      onTrail: widget.onTrail,
+      onRelease: widget.onRelease,
+    ),
+    const SizedBox(height: 24),
+    _quietLeadsAndCrates(),
   ]);
 
   Widget _emptyFront(double width) {
@@ -379,49 +406,19 @@ class _FrontPaneState extends State<FrontPane> {
         else if (front.roots.isEmpty)
           _emptyFront(box.maxWidth)
         else
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: box.maxWidth >= 1000 ? [
-            _column([_collection(front)]),
-            _column([_formats(front), _recent(front)]),
-            _column([if (front.needsYou.isNotEmpty) _needs(front), _folders(front)], last: true),
+          // Three columns once each gets 400 px; beside a pinned Now that is a 1600 px window.
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: box.maxWidth >= 1200 ? [
+            _column([_collection(front), _formats(front)]),
+            _column([_recent(front), if (front.needsYou.isNotEmpty) _needs(front), _folders(front)]),
+            _column([_memory()], last: true),
           ] : box.maxWidth >= 620 ? [
             _column([_collection(front), _formats(front)]),
-            _column([_recent(front), if (front.needsYou.isNotEmpty) _needs(front), _folders(front)], last: true),
+            _column([_recent(front), if (front.needsYou.isNotEmpty) _needs(front), _folders(front), _memory()], last: true),
           ] : [
-            _column([_collection(front), _formats(front), _recent(front), if (front.needsYou.isNotEmpty) _needs(front), _folders(front)], last: true),
+            _column([_collection(front), _formats(front), _recent(front), if (front.needsYou.isNotEmpty) _needs(front), _folders(front), _memory()], last: true),
           ]),
       ])),
     );
   });
 }
 
-class _Door extends StatefulWidget {
-  const _Door({required this.child, this.onTap});
-  final Widget child;
-  final VoidCallback? onTap;
-
-  @override
-  State<_Door> createState() => _DoorState();
-}
-
-class _DoorState extends State<_Door> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) => MouseRegion(
-    cursor: widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
-    onEnter: (_) => setState(() => _hover = true),
-    onExit: (_) => setState(() => _hover = false),
-    child: Semantics(
-      button: widget.onTap != null,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
-          decoration: BoxDecoration(color: _hover && widget.onTap != null ? Tok.panel2 : Tok.sky, border: const Border(bottom: BorderSide(color: Tok.line))),
-          child: widget.child,
-        ),
-      ),
-    ),
-  );
-}

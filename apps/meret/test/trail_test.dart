@@ -75,6 +75,7 @@ void main() {
     await core.startTrail(const TargetDto.search(query: 'year:1998'));
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pump();
+    await _restoreTrail(tester);
     expect(_titles(tester), ['year:1998']);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.pump();
@@ -88,6 +89,119 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(_titles(tester), ['year:1998']);
     expect(tester.widget<TrailStrip>(find.byType(TrailStrip)).trail.current, 0);
+  });
+
+  testWidgets('command S names and keeps the open trail, then marks its root', (tester) async {
+    _desktop(tester);
+    final core = _KeepingCore();
+    final root = await core.startTrail(const TargetDto.search(query: 'year:1998'));
+    final hit = (await core.search('Iona')).people.first;
+    await core.follow(root.current, TargetDto.person(id: hit.id), ThreadKind.matched);
+    await tester.pumpWidget(MeretApp(core: core));
+    await tester.pumpAndSettle();
+    await _restoreTrail(tester);
+
+    await _command(tester, LogicalKeyboardKey.keyS);
+    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsOneWidget);
+    final field = find.byKey(const ValueKey('trail-name'));
+    expect(tester.widget<TextField>(field).controller!.text, 'year:1998 → ${hit.title}');
+    expect(find.text('Keeping keeps the whole tree. A branch you played or wanted is kept with it.'), findsOneWidget);
+    await tester.enterText(field, 'Music for the evening');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(core.names, ['Music for the evening']);
+    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
+    expect(find.text('◆ Music for the evening'), findsOneWidget);
+    final strip = tester.widget<TrailStrip>(find.byType(TrailStrip));
+    expect(strip.trail.kept, isTrue);
+    expect(strip.trail.stops, hasLength(2));
+    final mark = tester.widget<Text>(find.byKey(const ValueKey('trail-kept')));
+    expect(mark.style, Tok.label.copyWith(color: Tok.gold));
+    expect(tester.getTopLeft(find.byKey(const ValueKey('trail-kept'))).dx,
+      greaterThan(tester.getCenter(find.byKey(const ValueKey('trail-stop-0'))).dx));
+  });
+
+  testWidgets('Escape cancels keeping and the root alone is the suggested name', (tester) async {
+    _desktop(tester);
+    final core = _KeepingCore();
+    await core.startTrail(const TargetDto.search(query: 'Iona'));
+    await tester.pumpWidget(MeretApp(core: core));
+    await tester.pumpAndSettle();
+    await _restoreTrail(tester);
+    await _command(tester, LogicalKeyboardKey.keyS);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('trail-name'))).controller!.text, 'Iona');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
+    expect(core.names, isEmpty);
+    expect(tester.widget<TrailStrip>(find.byType(TrailStrip)).trail.kept, isFalse);
+  });
+
+  testWidgets('command 1 leaves a trail and the strip names its newest memory', (tester) async {
+    _desktop(tester);
+    final core = _KeepingCore();
+    await tester.pumpWidget(MeretApp(core: core));
+    await tester.pumpAndSettle();
+    await _command(tester, LogicalKeyboardKey.keyL);
+    expect(find.byType(TrailStrip), findsOneWidget);
+    final title = (await core.trailHistory(1)).single.title;
+    await _command(tester, LogicalKeyboardKey.digit1);
+    expect(find.byType(TrailStrip), findsNothing);
+    expect(find.byType(NoTrailStrip), findsOneWidget);
+    expect(find.text("no trail open · open anything to start one · [ to resume today's · $title · 1 stops"), findsOneWidget);
+    await _command(tester, LogicalKeyboardKey.keyS);
+    expect(find.text("there's no trail to keep"), findsOneWidget);
+    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
+    expect(core.names, isEmpty);
+  });
+
+  testWidgets('a core with no trail history has only the plain strip line', (tester) async {
+    _desktop(tester);
+    final core = FakeCore.empty();
+    await tester.pumpWidget(MeretApp(core: core));
+    await tester.pumpAndSettle();
+    expect(find.byType(NoTrailStrip), findsOneWidget);
+    expect(find.text('no trail yet · open anything to start one'), findsOneWidget);
+    expect(find.descendant(of: find.byType(NoTrailStrip), matching: find.textContaining('to resume')), findsNothing);
+    await _command(tester, LogicalKeyboardKey.keyS);
+    expect(find.text("there's no trail to keep"), findsOneWidget);
+  });
+
+  testWidgets('no-trail memory refresh uses the kept name and a gold bracket', (tester) async {
+    final core = FakeCore();
+    Widget strip(int version, {CoreBridge? bridge}) => MaterialApp(home: Scaffold(body: SizedBox(
+      height: 64, child: NoTrailStrip(core: bridge ?? core, memoryVersion: version),
+    )));
+    await tester.pumpWidget(strip(0));
+    await tester.pumpAndSettle();
+    expect(find.text('no trail yet · open anything to start one'), findsOneWidget);
+    await core.startTrail(const TargetDto.search(query: 'Iona'));
+    await core.keepTrail(name: 'A kept tree');
+    await tester.pumpWidget(strip(1));
+    await tester.pumpAndSettle();
+    const line = "no trail open · open anything to start one · [ to resume today's · A kept tree · 1 stops";
+    final text = tester.widget<Text>(find.text(line));
+    expect(text.maxLines, 1);
+    expect(text.overflow, TextOverflow.ellipsis);
+    final bracket = (text.textSpan! as TextSpan).children!.whereType<TextSpan>().firstWhere((span) => span.text == '[');
+    expect(bracket.style!.color, Tok.gold);
+    await tester.pumpWidget(strip(1, bridge: FakeCore.empty()));
+    await tester.pumpAndSettle();
+    expect(find.text('no trail yet · open anything to start one'), findsOneWidget);
+  });
+
+  testWidgets('command S does not keep while typing in the query line', (tester) async {
+    _desktop(tester);
+    final core = _KeepingCore();
+    await core.startTrail(const TargetDto.search(query: 'Iona'));
+    await tester.pumpWidget(MeretApp(core: core));
+    await tester.pumpAndSettle();
+    await _restoreTrail(tester);
+    await tester.tap(find.byType(TextField));
+    await _command(tester, LogicalKeyboardKey.keyS);
+    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
+    expect(core.names, isEmpty);
   });
 
   test('fake trail follows loop back instead of appending and keeps newer history', () async {
@@ -155,3 +269,37 @@ Widget _strip(TrailDto trail) => MaterialApp(home: Scaffold(body: Center(child: 
 
 List<String> _titles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children
     .skip(1).cast<Pane>().map((pane) => pane.title).toList();
+
+void _desktop(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1800, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
+Future<void> _command(WidgetTester tester, LogicalKeyboardKey key) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+  await tester.sendKeyEvent(key);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> _restoreTrail(WidgetTester tester) async {
+  await _command(tester, LogicalKeyboardKey.keyL);
+  await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+class _KeepingCore extends FakeCore {
+  final names = <String?>[];
+
+  @override
+  Stream<NowDto> now() => Stream.value(const NowDto(title: '', subtitle: '', path: []));
+
+  @override
+  Future<TrailDto> keepTrail({String? name}) {
+    names.add(name);
+    return super.keepTrail(name: name);
+  }
+}
