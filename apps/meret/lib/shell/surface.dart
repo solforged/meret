@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../draw/constellation.dart';
+import '../now/history_sheet.dart';
 import '../now/now_pane.dart';
+import '../now/now_stage.dart';
 import '../panes/front_pane.dart';
 import '../panes/pane.dart';
 import '../panes/person_pane.dart';
@@ -15,6 +17,7 @@ import '../panes/search_pane.dart';
 import '../settings/settings_window.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
+import 'keep_dialog.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
 import 'status_line.dart';
@@ -31,6 +34,8 @@ class Surface extends StatefulWidget {
   State<Surface> createState() => _SurfaceState();
 }
 
+enum _Stage { undecided, now, front }
+
 class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   late final PlayheadClock _clock = PlayheadClock(this);
   late final AnimationController _slide = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
@@ -41,7 +46,9 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   StatusDto? _status;
   TrailDto? _trail;
   bool _frontOnly = true;
+  _Stage _stage = _Stage.undecided;
   int _navigationVersion = 0;
+  int _memoryVersion = 0;
   String? _navigationError;
   late SettingsDto _settings;
   BuildContext? _settingsContext;
@@ -54,7 +61,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _nowSub = widget.core.now().listen((n) {
       if (!mounted) return;
       _clock.anchor(n.anchor);
-      setState(() => _now = n);
+      setState(() {
+        if (_now?.anchor?.item != n.anchor?.item) _memoryVersion++;
+        _now = n;
+        if (_stage == _Stage.undecided) _stage = n.anchor == null ? _Stage.front : _Stage.now;
+      });
     });
     _statusSub = widget.core.status().listen((s) {
       if (mounted) setState(() => _status = s);
@@ -64,7 +75,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       if (!mounted || version != _navigationVersion) return;
       setState(() {
         _trail = trail;
-        _frontOnly = trail == null;
       });
     });
   }
@@ -87,18 +97,56 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   void _toggle() => widget.core.transport(_clock.playing ? const TransportDto.pause() : const TransportDto.resume());
 
+  Future<void> _keep() async {
+    if (_queryFocus.hasFocus) return;
+    final trail = _trail;
+    if (_frontOnly || trail == null) {
+      setState(() => _navigationError = "there's no trail to keep");
+      return;
+    }
+    final root = trail.stops.firstWhere((stop) => stop.parent == null).title;
+    final leaf = trail.stops.firstWhere((stop) => stop.index == trail.current).title;
+    final version = _navigationVersion;
+    final name = await askTrailName(context, suggested: root == leaf ? root : '$root → $leaf');
+    if (name == null || !mounted || version != _navigationVersion) return;
+    final kept = await widget.core.keepTrail(name: name);
+    if (!mounted || version != _navigationVersion) return;
+    setState(() {
+      _trail = kept;
+      _navigationError = null;
+      _memoryVersion++;
+    });
+  }
+
+  void _fromStart() {
+    if (!_queryFocus.hasFocus) widget.core.transport(const TransportDto.fromStart());
+  }
+
+  void _history() {
+    final context = _settingsContext;
+    if (!_queryFocus.hasFocus && context != null) {
+      showHistorySheet(context, widget.core, (id) => _report(_start(TargetDto.release(id: id))));
+    }
+  }
+
+  void _leaveStage() {
+    if (_stage != _Stage.front) setState(() => _stage = _Stage.front);
+  }
+
   void _animate(int direction) {
     _slide.value = direction.toDouble();
     _slide.animateTo(0, curve: Curves.easeOutCubic);
   }
 
   Future<void> _navigate(Future<TrailDto?> Function() call, {bool frontOnNull = false, int direction = 1}) async {
+    _leaveStage();
     final version = ++_navigationVersion;
     final trail = await call();
     if (!mounted || version != _navigationVersion) return;
     setState(() {
       _navigationError = null;
       if (trail != null) {
+        _memoryVersion++;
         _trail = trail;
         _frontOnly = false;
       } else if (frontOnNull) {
@@ -126,6 +174,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _slide.stop();
     _slide.value = 0;
     setState(() {
+      _stage = _Stage.front;
       _frontOnly = true;
       _navigationError = null;
     });
@@ -148,6 +197,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   };
 
   Future<void> _search(SearchDto search, HitDto? hit) async {
+    _leaveStage();
     if (hit?.kind == HitKind.track) {
       final index = hit!.index;
       if (index == null) throw 'This track has no result index';
@@ -224,19 +274,25 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.slash): _Focus(),
         SingleActivator(LogicalKeyboardKey.space): _Toggle(),
+        SingleActivator(LogicalKeyboardKey.space, alt: true): _FromStart(),
+        SingleActivator(LogicalKeyboardKey.keyH): _History(),
         SingleActivator(LogicalKeyboardKey.bracketLeft): _Move(-1),
         SingleActivator(LogicalKeyboardKey.bracketRight): _Move(1),
         SingleActivator(LogicalKeyboardKey.digit1, meta: true): _Front(),
         SingleActivator(LogicalKeyboardKey.keyL, meta: true): _Table(),
+        SingleActivator(LogicalKeyboardKey.keyS, meta: true): _Keep(),
         SingleActivator(LogicalKeyboardKey.comma, meta: true): _Settings(),
       },
       child: Actions(
         actions: {
           _Focus: CallbackAction<_Focus>(onInvoke: (_) => _queryFocus.requestFocus()),
-          _Toggle: CallbackAction<_Toggle>(onInvoke: (_) => _toggle()),
+          _Toggle: CallbackAction<_Toggle>(onInvoke: (_) { if (!_queryFocus.hasFocus) _toggle(); return null; }),
+          _FromStart: CallbackAction<_FromStart>(onInvoke: (_) => _fromStart()),
+          _History: CallbackAction<_History>(onInvoke: (_) => _history()),
           _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
           _Front: CallbackAction<_Front>(onInvoke: (_) => _showFront()),
           _Table: CallbackAction<_Table>(onInvoke: (_) => _report(_start(const TargetDto.search(query: '')))),
+          _Keep: CallbackAction<_Keep>(onInvoke: (_) => _report(_keep())),
           _Settings: CallbackAction<_Settings>(onInvoke: (_) => _openSettings()),
         },
         child: Focus(
@@ -251,9 +307,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   key: const ValueKey('front'),
                   core: widget.core,
                   libraryVersion: _status?.libraryVersion,
+                  memoryVersion: _memoryVersion,
                   jobs: _status?.jobs ?? const [],
                   onQuery: (query) => _report(_start(TargetDto.search(query: query))),
                   onRelease: (id) => _report(_start(TargetDto.release(id: id))),
+                  onTrail: (uid) => _report(_navigate(() => widget.core.openTrail(uid))),
                 ),
                 if (!_frontOnly && _trail != null)
                   for (final stop in _path(_trail!)) _pane(stop),
@@ -263,20 +321,45 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
                 SizedBox(
                   height: wc == WidthClass.phone ? 44 : 64,
-                  child: _trail == null
-                      ? const NoTrailStrip()
+                  child: _frontOnly || _trail == null
+                      ? NoTrailStrip(core: widget.core, memoryVersion: _memoryVersion)
                       : TrailStrip(trail: _trail!, onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop)))),
                 ),
                 if (_navigationError != null)
                   Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
                 Expanded(
-                  child: Row(children: [
-                    Expanded(child: row),
-                    if (wc.nowWidth case final width?)
-                      SizedBox(width: width, child: NowPane(core: widget.core, now: _now, clock: _clock, onToggle: _toggle)),
-                  ]),
+                  child: _stage == _Stage.now
+                    ? Row(children: [
+                        if (box.maxWidth >= 1000)
+                          SizedBox(
+                            width: (box.maxWidth * 0.4).clamp(0.0, 560.0),
+                            child: Opacity(opacity: 0.8, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                              Container(
+                                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                                color: Tok.sky,
+                                child: const Text('Front · behind Now, one key away ⌘1', style: Tok.label),
+                              ),
+                              Expanded(child: panes.first),
+                            ])),
+                          ),
+                        Expanded(child: NowStage(
+                          core: widget.core, now: _now!, clock: _clock, onToggle: _toggle,
+                          onRelease: (id) => _report(_start(TargetDto.release(id: id))), onLeave: _showFront,
+                        )),
+                      ])
+                    : Row(children: [
+                        Expanded(child: row),
+                        if (wc.nowWidth case final width?)
+                          SizedBox(width: width, child: NowPane(
+                            core: widget.core, now: _now, clock: _clock, onToggle: _toggle,
+                            onRelease: (id) => _report(_start(TargetDto.release(id: id))),
+                          )),
+                      ]),
                 ),
-                if (!wc.pinnedNow) NowBar(core: widget.core, now: _now, clock: _clock, onToggle: _toggle),
+                if (_stage != _Stage.now && !wc.pinnedNow) NowBar(
+                  core: widget.core, now: _now, clock: _clock, onToggle: _toggle,
+                  onRelease: (id) => _report(_start(TargetDto.release(id: id))),
+                ),
                 if (wc != WidthClass.phone)
                   StatusLine(core: widget.core, status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
               ]);
@@ -299,6 +382,10 @@ List<StopDto> _path(TrailDto trail) {
   return path.reversed.toList();
 }
 
+class _Keep extends Intent {
+  const _Keep();
+}
+
 class _Settings extends Intent {
   const _Settings();
 }
@@ -317,6 +404,14 @@ class _Focus extends Intent {
 
 class _Toggle extends Intent {
   const _Toggle();
+}
+
+class _FromStart extends Intent {
+  const _FromStart();
+}
+
+class _History extends Intent {
+  const _History();
 }
 
 class _Move extends Intent {

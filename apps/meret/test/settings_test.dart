@@ -59,6 +59,7 @@ void main() {
     final core = FakeCore();
     final now = await core.now().first;
     await _surface(tester, core);
+    await _command(tester, LogicalKeyboardKey.digit1);
     Light currentLight() => Light.of(tester.element(find.byType(NowPane)));
     expect(currentLight().accent, Color(now.light!.light));
     expect(currentLight().wash, Colors.transparent);
