@@ -289,10 +289,19 @@ void main() {
   });
 
   testWidgets('on a phone, one pane is visible and Now is a bar', (tester) async {
-    await _surface(tester, FakeCore(), size: const Size(400, 860));
+    final core = FakeCore();
+    await _surface(tester, core, size: const Size(400, 860));
     await _commandKey(tester, LogicalKeyboardKey.digit1);
+    await _commandKey(tester, LogicalKeyboardKey.keyL);
+    final hit = (await core.search('Iona')).people.first;
+    await tester.widget<SearchPane>(find.byType(SearchPane)).onFollow!(TargetDto.person(id: hit.id), ThreadKind.matched);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).visible, 1);
+    final row = find.byType(PaneRow);
+    expect(tester.widget<PaneRow>(row).children, hasLength(2));
+    expect(tester.getSize(find.byType(PaneSpine)).width, 46, reason: 'the search folds to a spine');
+    expect(tester.getSize(find.ancestor(of: find.byType(PersonPane), matching: find.byType(Pane))).width, 400 - 46);
     expect(find.byType(NowPane), findsNothing);
     expect(find.text('Small Two of Pieces ~Broken Pieces~'), findsOneWidget);
   });
@@ -410,7 +419,7 @@ void main() {
     final table = tester.widget<TablePane>(find.byType(TablePane));
     expect(table.query, 'idiom:score');
     expect(find.descendant(of: find.ancestor(of: find.byType(SearchPane), matching: find.byType(Pane)), matching: find.text('idiom:score')), findsOneWidget);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
   });
 
   testWidgets('an empty library offers folders and fills after adding', (tester) async {
@@ -445,8 +454,7 @@ void main() {
     final painter = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((widget) => widget.painter).whereType<ConstellationPainter>().single;
     expect(painter.semanticsBuilder(const Size(1000, 64)).single.properties.label, 'idiom:score');
     expect(find.byKey(const ValueKey('query-hits')), findsNothing);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children.skip(1).cast<Pane>().map((pane) => pane.title), ['idiom:score']);
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().map((pane) => pane.title), ['idiom:score']);
   });
 
   testWidgets('the dropdown groups hits, highlights with arrows and closes on Escape', (tester) async {
@@ -521,7 +529,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(SearchPane), findsOneWidget);
     expect(tester.widget<TablePane>(find.byType(TablePane)).query, 'Iona');
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
   });
 
   testWidgets('a highlighted person opens to the right of the rooted search', (tester) async {
@@ -535,7 +543,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.widgetList<TablePane>(find.byType(TablePane)).map((table) => table.query), ['Iona']);
     expect(find.byType(PersonPane), findsOneWidget);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(3));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
     final trail = (await core.trail())!;
     expect(trail.stops.first.target, const TargetDto.search(query: 'Iona'));
     expect(trail.stops.last.target, isA<TargetDto_Person>());
@@ -556,7 +564,7 @@ void main() {
     expect(trail.stops.last.target, TargetDto.release(id: release.id));
     expect(trail.stops.last.title, 'Open Sky');
     expect(trail.stops.last.via, 'matched');
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(3));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
   });
 
   testWidgets('a person in the search strip follows without starting another trail', (tester) async {
@@ -634,24 +642,32 @@ void main() {
     expect(find.byType(TablePane), findsNothing);
   });
 
-  testWidgets('Command-L roots Everything and Command-1 leaves forward navigation on Front', (tester) async {
+  testWidgets('Command-L roots Everything; Command-1 shows the Front over the trail and ] returns', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(find.byType(FrontPane), findsNothing, reason: 'the Front is not a pane beside a trail');
     expect(tester.widget<TablePane>(find.byType(TablePane)).query, '');
     final trail = await core.trail();
     expect(trail!.stops.single.target, const TargetDto.search(query: ''));
 
     await _commandKey(tester, LogicalKeyboardKey.digit1);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(find.byType(FrontPane), findsOneWidget);
+    expect(find.byType(TablePane), findsNothing);
+    expect(find.textContaining('Front · over Everything'), findsOneWidget);
+    expect(find.byType(TrailStrip), findsOneWidget, reason: 'the trail stays open behind the Front');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(find.byType(TablePane), findsOneWidget);
+    expect(find.byType(FrontPane), findsNothing);
     expect(await core.trail(), same(trail));
 
-    await _commandKey(tester, LogicalKeyboardKey.keyL);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    expect(find.byType(FrontPane), findsOneWidget);
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    expect(find.byType(FrontPane), findsNothing, reason: 'Command-1 toggles');
+    expect(tester.widget<TablePane>(find.byType(TablePane)).query, '');
   });
 
   testWidgets('the Front reloads on a library revision but not on an unchanged one', (tester) async {
@@ -940,7 +956,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(core.releasesPlayed, [(row.releaseId.toInt(), 2, 0), (row.releaseId.toInt(), 2, 0)]);
-    await tester.tap(find.widgetWithText(TextButton, 'Play'));
+    await tester.tap(find.byKey(const ValueKey('release-play')));
     await tester.pump();
     expect(core.releasesPlayed.last, (row.releaseId.toInt(), 0, 0));
     expect((await core.trail())!.current, 1);
@@ -989,7 +1005,7 @@ Future<void> _surface(WidgetTester tester, CoreBridge core, {Size size = const S
   await tester.pump();
 }
 
-List<String> _paneTitles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children.skip(1).cast<Pane>().map((pane) => pane.title).toList();
+List<String> _paneTitles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().map((pane) => pane.title).toList();
 
 ConstellationPainter _trailPainter(WidgetTester tester) => tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((widget) => widget.painter).whereType<ConstellationPainter>().single;
 
@@ -1115,6 +1131,8 @@ class _ArtworkCore extends FakeCore {
       formats: release.formats,
       rows: release.rows,
       credits: release.credits,
+      plays: release.plays,
+      lastPlayedMs: release.lastPlayedMs,
     );
   }
 }

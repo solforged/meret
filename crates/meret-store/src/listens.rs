@@ -148,6 +148,22 @@ impl Store {
             }))?.collect()
         })
     }
+
+    /// Counted plays of a release and when it was last played, for its pane's facts.
+    pub fn release_plays(&self, release: ReleaseId) -> Result<(u64, Option<i64>)> {
+        self.read(|c| c.query_row(&format!("SELECT COUNT(*), MAX(l.started_at) FROM listen l {LISTEN_TRACK}
+            WHERE rl.id = ?1 AND {COUNTED}"), [release.0],
+            |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?))))
+    }
+
+    /// Counted plays of a person's recordings and the releases they front.
+    pub fn person_plays(&self, agent: meret_model::AgentId) -> Result<(u64, Option<i64>)> {
+        self.read(|c| c.query_row(&format!("SELECT COUNT(*), MAX(l.started_at) FROM listen l {LISTEN_TRACK}
+            WHERE {COUNTED} AND EXISTS (SELECT 1 FROM credit c WHERE c.agent_id = ?1
+                AND ((c.subject_kind = 2 AND c.subject_id = l.recording_id AND c.role = 'artist')
+                  OR (c.subject_kind = 3 AND c.subject_id = rl.id AND c.role = 'album_artist')))"), [agent.0],
+            |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?))))
+    }
 }
 
 #[cfg(test)]

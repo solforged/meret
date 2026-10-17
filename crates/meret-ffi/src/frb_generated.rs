@@ -1522,6 +1522,8 @@ const _: fn() = || {
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.releases;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.appears_on;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.worked_with;
+        let _: u64 = PersonDto.plays;
+        let _: Option<i64> = PersonDto.last_played_ms;
     }
     {
         let PlayedDto = None::<crate::api::types::PlayedDto>.unwrap();
@@ -1566,6 +1568,8 @@ const _: fn() = || {
         let _: Vec<String> = ReleaseDto.formats;
         let _: Vec<crate::api::types::TrackRowDto> = ReleaseDto.rows;
         let _: Vec<crate::api::types::ThreadDto> = ReleaseDto.credits;
+        let _: u64 = ReleaseDto.plays;
+        let _: Option<i64> = ReleaseDto.last_played_ms;
     }
     {
         let ResumeDto = None::<crate::api::types::ResumeDto>.unwrap();
@@ -2670,6 +2674,8 @@ impl SseDecode for crate::api::types::PersonDto {
         let mut var_releases = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_appearsOn = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_workedWith = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_plays = <u64>::sse_decode(deserializer);
+        let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
         return crate::api::types::PersonDto {
             id: var_id,
             name: var_name,
@@ -2677,6 +2683,8 @@ impl SseDecode for crate::api::types::PersonDto {
             releases: var_releases,
             appears_on: var_appearsOn,
             worked_with: var_workedWith,
+            plays: var_plays,
+            last_played_ms: var_lastPlayedMs,
         };
     }
 }
@@ -2781,6 +2789,8 @@ impl SseDecode for crate::api::types::ReleaseDto {
         let mut var_formats = <Vec<String>>::sse_decode(deserializer);
         let mut var_rows = <Vec<crate::api::types::TrackRowDto>>::sse_decode(deserializer);
         let mut var_credits = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_plays = <u64>::sse_decode(deserializer);
+        let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
         return crate::api::types::ReleaseDto {
             id: var_id,
             title: var_title,
@@ -2795,6 +2805,8 @@ impl SseDecode for crate::api::types::ReleaseDto {
             formats: var_formats,
             rows: var_rows,
             credits: var_credits,
+            plays: var_plays,
+            last_played_ms: var_lastPlayedMs,
         };
     }
 }
@@ -3929,6 +3941,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::PersonDto> 
             self.0.releases.into_into_dart().into_dart(),
             self.0.appears_on.into_into_dart().into_dart(),
             self.0.worked_with.into_into_dart().into_dart(),
+            self.0.plays.into_into_dart().into_dart(),
+            self.0.last_played_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4059,6 +4073,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ReleaseDto>
             self.0.formats.into_into_dart().into_dart(),
             self.0.rows.into_into_dart().into_dart(),
             self.0.credits.into_into_dart().into_dart(),
+            self.0.plays.into_into_dart().into_dart(),
+            self.0.last_played_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5368,6 +5384,8 @@ impl SseEncode for crate::api::types::PersonDto {
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.releases, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.appears_on, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.worked_with, serializer);
+        <u64>::sse_encode(self.plays, serializer);
+        <Option<i64>>::sse_encode(self.last_played_ms, serializer);
     }
 }
 
@@ -5449,6 +5467,8 @@ impl SseEncode for crate::api::types::ReleaseDto {
         <Vec<String>>::sse_encode(self.formats, serializer);
         <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.credits, serializer);
+        <u64>::sse_encode(self.plays, serializer);
+        <Option<i64>>::sse_encode(self.last_played_ms, serializer);
     }
 }
 

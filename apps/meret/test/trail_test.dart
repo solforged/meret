@@ -138,22 +138,24 @@ void main() {
     expect(tester.widget<TrailStrip>(find.byType(TrailStrip)).trail.kept, isFalse);
   });
 
-  testWidgets('command 1 leaves a trail and the strip names its newest memory', (tester) async {
+  testWidgets('command 1 shows the Front over the trail, which stays open and keepable', (tester) async {
     _desktop(tester);
     final core = _KeepingCore();
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pumpAndSettle();
     await _command(tester, LogicalKeyboardKey.keyL);
     expect(find.byType(TrailStrip), findsOneWidget);
-    final title = (await core.trailHistory(1)).single.title;
     await _command(tester, LogicalKeyboardKey.digit1);
-    expect(find.byType(TrailStrip), findsNothing);
-    expect(find.byType(NoTrailStrip), findsOneWidget);
-    expect(find.text("no trail open · open anything to start one · [ to resume today's · $title · 1 stops"), findsOneWidget);
+    expect(find.byType(TrailStrip), findsOneWidget, reason: 'the Front does not end a trail');
+    expect(find.byType(NoTrailStrip), findsNothing);
+    expect(find.byKey(const ValueKey('front-over-trail')), findsOneWidget);
+    expect(find.text('Front · over Everything · ⌘1 or ] back to the trail'), findsOneWidget);
     await _command(tester, LogicalKeyboardKey.keyS);
-    expect(find.text("there's no trail to keep"), findsOneWidget);
-    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
-    expect(core.names, isEmpty);
+    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(core.names, ['Everything']);
+    expect(find.text('◆ Everything'), findsOneWidget);
   });
 
   testWidgets('a core with no trail history has only the plain strip line', (tester) async {
@@ -268,7 +270,7 @@ Widget _strip(TrailDto trail) => MaterialApp(home: Scaffold(body: Center(child: 
 ))));
 
 List<String> _titles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children
-    .skip(1).cast<Pane>().map((pane) => pane.title).toList();
+    .cast<Pane>().map((pane) => pane.title).toList();
 
 void _desktop(WidgetTester tester) {
   tester.view.physicalSize = const Size(1800, 1000);

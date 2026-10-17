@@ -648,6 +648,8 @@ class PersonDto {
   final List<ThreadDto> releases;
   final List<ThreadDto> appearsOn;
   final List<ThreadDto> workedWith;
+  final BigInt plays;
+  final PlatformInt64? lastPlayedMs;
 
   const PersonDto({
     required this.id,
@@ -656,6 +658,8 @@ class PersonDto {
     required this.releases,
     required this.appearsOn,
     required this.workedWith,
+    required this.plays,
+    this.lastPlayedMs,
   });
 
   @override
@@ -665,7 +669,9 @@ class PersonDto {
       tracks.hashCode ^
       releases.hashCode ^
       appearsOn.hashCode ^
-      workedWith.hashCode;
+      workedWith.hashCode ^
+      plays.hashCode ^
+      lastPlayedMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -677,7 +683,9 @@ class PersonDto {
           tracks == other.tracks &&
           releases == other.releases &&
           appearsOn == other.appearsOn &&
-          workedWith == other.workedWith;
+          workedWith == other.workedWith &&
+          plays == other.plays &&
+          lastPlayedMs == other.lastPlayedMs;
 }
 
 class PlayedDto {
@@ -810,6 +818,8 @@ class ReleaseDto {
   final List<String> formats;
   final List<TrackRowDto> rows;
   final List<ThreadDto> credits;
+  final BigInt plays;
+  final PlatformInt64? lastPlayedMs;
 
   const ReleaseDto({
     required this.id,
@@ -825,6 +835,8 @@ class ReleaseDto {
     required this.formats,
     required this.rows,
     required this.credits,
+    required this.plays,
+    this.lastPlayedMs,
   });
 
   @override
@@ -841,7 +853,9 @@ class ReleaseDto {
       lengthMs.hashCode ^
       formats.hashCode ^
       rows.hashCode ^
-      credits.hashCode;
+      credits.hashCode ^
+      plays.hashCode ^
+      lastPlayedMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -860,7 +874,9 @@ class ReleaseDto {
           lengthMs == other.lengthMs &&
           formats == other.formats &&
           rows == other.rows &&
-          credits == other.credits;
+          credits == other.credits &&
+          plays == other.plays &&
+          lastPlayedMs == other.lastPlayedMs;
 }
 
 class ResumeDto {

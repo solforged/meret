@@ -452,6 +452,8 @@ pub struct _ReleaseDto {
     pub formats: Vec<String>,
     pub rows: Vec<TrackRowDto>,
     pub credits: Vec<ThreadDto>,
+    pub plays: u64,
+    pub last_played_ms: Option<i64>,
 }
 
 #[frb(mirror(PersonDto))]
@@ -462,6 +464,8 @@ pub struct _PersonDto {
     pub releases: Vec<ThreadDto>,
     pub appears_on: Vec<ThreadDto>,
     pub worked_with: Vec<ThreadDto>,
+    pub plays: u64,
+    pub last_played_ms: Option<i64>,
 }
 
 #[frb(mirror(ListenDto))]

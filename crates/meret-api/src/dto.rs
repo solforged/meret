@@ -777,6 +777,9 @@ pub struct ReleaseDto {
     pub rows: Vec<TrackRowDto>,
     /// The album artist, then each track artist and where they are.
     pub credits: Vec<ThreadDto>,
+    /// Counted plays of this release, and the newest one (Unix ms).
+    pub plays: u64,
+    pub last_played_ms: Option<i64>,
 }
 
 impl ReleaseDto {
@@ -836,6 +839,8 @@ impl ReleaseDto {
                 .chain((!other_formats.is_empty()).then(|| format!("also {}", other_formats.join(", ")))).collect(),
             rows,
             credits,
+            plays: p.plays,
+            last_played_ms: p.last_played,
         }
     }
 }
@@ -853,6 +858,9 @@ pub struct PersonDto {
     pub appears_on: Vec<ThreadDto>,
     /// People who share releases with them, most shared first.
     pub worked_with: Vec<ThreadDto>,
+    /// Counted plays of their recordings and the releases they front.
+    pub plays: u64,
+    pub last_played_ms: Option<i64>,
 }
 
 impl From<PersonPage> for PersonDto {
@@ -867,6 +875,8 @@ impl From<PersonPage> for PersonDto {
             id: p.agent.0,
             name: p.name,
             tracks: p.tracks,
+            plays: p.plays,
+            last_played_ms: p.last_played,
             releases: p.releases.into_iter().map(|r| release(r, true)).collect(),
             appears_on: p.appears_on.into_iter().map(|r| release(r, false)).collect(),
             worked_with: p
@@ -1086,6 +1096,8 @@ mod cover_tests {
             cover: Some(art(None)),
             tracks: vec![],
             artists: vec![],
+            plays: 0,
+            last_played: None,
         };
         let release = ReleaseDto::from_page(page, Path::new("/tmp/meret/art"));
         assert_eq!(release.cover.as_deref(), Some("/tmp/meret/art/abcd-256.jpg"));
@@ -1102,7 +1114,7 @@ mod cover_tests {
         };
         let page = ReleasePage {
             release: ReleaseId(9), title: "Tyranny".into(), year: None, idiom: None,
-            album_artist: None, album_artists: vec![], cover: None, tracks: vec![track], artists: vec![],
+            album_artist: None, album_artists: vec![], cover: None, tracks: vec![track], artists: vec![], plays: 0, last_played: None,
         };
         let dto = ReleaseDto::from_page(page, Path::new("/tmp/art"));
         assert_eq!(dto.formats, ["FLAC 16/44.1", "also MP3"]);
