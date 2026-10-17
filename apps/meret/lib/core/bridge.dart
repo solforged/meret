@@ -941,6 +941,7 @@ class FakeCore implements CoreBridge {
       idiom: first.albumArtist == 'Yasunori Mitsuda' ? 'Score' : first.albumArtist == 'Bill Evans Trio' ? 'Session' : 'Album',
       tracks: rows.length, discs: rows.map((row) => row.disc).toSet().length,
       lengthMs: length, formats: sortedFormats, rows: rows,
+      plays: BigInt.from(id.toInt() == 1 ? 212 : 0), lastPlayedMs: id.toInt() == 1 ? PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch) : null,
       credits: [
         if (first.albumArtistId != null)
           ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags',
@@ -981,7 +982,8 @@ class FakeCore implements CoreBridge {
       }
     }
     final coworkers = shared.keys.toList()..sort((a, b) => shared[b]!.compareTo(shared[a]!));
-    return PersonDto(id: id, name: name, tracks: tracks, releases: releases, appearsOn: appearsOn, workedWith: [
+    return PersonDto(id: id, name: name, tracks: tracks, releases: releases, appearsOn: appearsOn,
+      plays: BigInt.from(index == 0 ? 1240 : 0), lastPlayedMs: index == 0 ? PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch) : null, workedWith: [
       for (final person in coworkers.take(12))
         ThreadDto(kind: ThreadKind.workedWith, label: 'worked with', source: 'tags',
           to: TargetDto.person(id: person), title: _personNames[person.toInt() - 1],

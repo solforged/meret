@@ -3,6 +3,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 
 import '../core/bridge.dart';
 import '../theme/tokens.dart';
+import 'pane.dart';
 import 'release_pane.dart';
 
 /// Releases and people connected by the library's local credits.
@@ -76,7 +77,7 @@ class _PersonPaneState extends State<PersonPane> {
     if (person == null) return Text(_error ?? 'Reading person…', style: Tok.label.copyWith(color: _error == null ? Tok.faint : Tok.warn));
     return CustomScrollView(slivers: [
       SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('${person.tracks} ${person.tracks == 1 ? 'track' : 'tracks'} in your library · ${person.releases.length} ${person.releases.length == 1 ? 'release' : 'releases'}', style: Tok.label),
+        Text('${person.tracks} ${person.tracks == 1 ? 'track' : 'tracks'} in your library · ${person.releases.length} ${person.releases.length == 1 ? 'release' : 'releases'} · ${playsFact(person.plays, person.lastPlayedMs)}', style: Tok.label),
         if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
       ])),
       ..._section('Releases', person.releases),

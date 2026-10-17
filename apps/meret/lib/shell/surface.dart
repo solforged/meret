@@ -100,7 +100,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   Future<void> _keep() async {
     if (_queryFocus.hasFocus) return;
     final trail = _trail;
-    if (_frontOnly || trail == null) {
+    if (trail == null) {
       setState(() => _navigationError = "there's no trail to keep");
       return;
     }
@@ -165,11 +165,20 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   }
 
   Future<void> _move(int by) async {
-    if (by > 0 && _frontOnly) return;
+    if (by > 0 && _frontOnly) {
+      // `]` from the Front over an open trail returns to it where it was.
+      if (_trail != null) _showTrail();
+      return;
+    }
     await _navigate(by < 0 ? widget.core.trailBack : widget.core.trailForward, frontOnNull: by < 0, direction: by);
   }
 
+  /// `⌘1`: the Front over the trail, and back again. The trail stays open.
   void _showFront() {
+    if (_frontOnly && _trail != null && _stage != _Stage.now) {
+      _showTrail();
+      return;
+    }
     _navigationVersion++;
     _slide.stop();
     _slide.value = 0;
@@ -178,6 +187,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       _frontOnly = true;
       _navigationError = null;
     });
+  }
+
+  void _showTrail() {
+    _navigationVersion++;
+    setState(() {
+      _frontOnly = false;
+      _navigationError = null;
+    });
+    _animate(1);
   }
 
   Future<void> _start(TargetDto to) => _navigate(() => widget.core.startTrail(to));
@@ -251,6 +269,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       source: stop.viaSource,
       body: body,
       showTitle: stop.target is! TargetDto_Release,
+      compact: stop.target is TargetDto_Search,
+      onSpineTap: () => _report(_navigate(() => widget.core.trailGo(stop.index), direction: -1)),
     );
   }
 
@@ -302,26 +322,46 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
             child: LayoutBuilder(builder: (context, box) {
               _settingsContext = context;
               final wc = WidthClass.of(box.maxWidth);
+              final front = FrontPane(
+                key: const ValueKey('front'),
+                core: widget.core,
+                libraryVersion: _status?.libraryVersion,
+                memoryVersion: _memoryVersion,
+                jobs: _status?.jobs ?? const [],
+                onQuery: (query) => _report(_start(TargetDto.search(query: query))),
+                onRelease: (id) => _report(_start(TargetDto.release(id: id))),
+                onTrail: (uid) => _report(_navigate(() => widget.core.openTrail(uid))),
+              );
+              final trailOpen = _trail != null;
+              final path = trailOpen ? _path(_trail!) : const <StopDto>[];
+              // Plate 01: the Front is a page of its own, never a pane beside a trail.
               final panes = <Widget>[
-                FrontPane(
-                  key: const ValueKey('front'),
-                  core: widget.core,
-                  libraryVersion: _status?.libraryVersion,
-                  memoryVersion: _memoryVersion,
-                  jobs: _status?.jobs ?? const [],
-                  onQuery: (query) => _report(_start(TargetDto.search(query: query))),
-                  onRelease: (id) => _report(_start(TargetDto.release(id: id))),
-                  onTrail: (uid) => _report(_navigate(() => widget.core.openTrail(uid))),
-                ),
-                if (!_frontOnly && _trail != null)
-                  for (final stop in _path(_trail!)) _pane(stop),
+                if (_frontOnly || !trailOpen)
+                  trailOpen
+                    ? Column(key: const ValueKey('front-over-trail'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                          color: Tok.sky,
+                          child: Text('Front · over ${_trail!.name ?? path.first.title} · ⌘1 or ] back to the trail', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        Expanded(child: front),
+                      ])
+                    : front
+                else
+                  for (final stop in path) _pane(stop),
               ];
-              final row = PaneRow(slide: _slide, visible: wc.panes.clamp(1, panes.length), children: panes);
+              final row = PaneRow(
+                slide: _slide,
+                children: panes,
+                maxVisible: _frontOnly || !trailOpen ? 1 : wc.panes,
+                minPane: box.maxWidth >= 1000 ? 440 : 300,
+                wide: {for (var i = 0; i < path.length; i++) if (!_frontOnly && path[i].target is TargetDto_Search) i},
+              );
               return Column(children: [
                 QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
                 SizedBox(
                   height: wc == WidthClass.phone ? 44 : 64,
-                  child: _frontOnly || _trail == null
+                  child: !trailOpen
                       ? NoTrailStrip(core: widget.core, memoryVersion: _memoryVersion)
                       : TrailStrip(trail: _trail!, onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop)))),
                 ),
@@ -339,7 +379,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                                 color: Tok.sky,
                                 child: const Text('Front · behind Now, one key away ⌘1', style: Tok.label),
                               ),
-                              Expanded(child: panes.first),
+                              Expanded(child: front),
                             ])),
                           ),
                         Expanded(child: NowStage(
