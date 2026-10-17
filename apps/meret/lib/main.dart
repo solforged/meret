@@ -10,6 +10,8 @@ import 'src/rust/frb_generated.dart';
 import 'theme/tokens.dart';
 
 /// `flutter run --dart-define=MERET_FAKE=true` runs on mock data, without Rust.
+/// `MERET_DATA=/tmp/copy Contents/MacOS/meret` opens a copy of the library
+/// instead of the real one, for smoke runs beside the app you use.
 const _fake = bool.fromEnvironment('MERET_FAKE');
 
 Future<void> main() async {
@@ -17,7 +19,8 @@ Future<void> main() async {
   CoreBridge core = FakeCore();
   if (!_fake) {
     await RustLib.init();
-    final dir = await getApplicationSupportDirectory();
+    final override = Platform.environment['MERET_DATA'];
+    final dir = override == null || override.isEmpty ? await getApplicationSupportDirectory() : Directory(override);
     // CoreAudio on macOS; elsewhere the null output until AAudio, WASAPI
     // and PipeWire land (docs/architecture.md).
     await rust.startCore(dataDir: dir.path, nullOutput: !Platform.isMacOS);
