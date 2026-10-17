@@ -7,6 +7,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 import '../core/bridge.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
+import 'pane.dart';
 
 /// A release's local edition, tracklist and sourced credits.
 class ReleasePane extends StatefulWidget {
@@ -162,6 +163,7 @@ class _ReleasePaneState extends State<ReleasePane> {
       '${release.tracks} ${release.tracks == 1 ? 'track' : 'tracks'}',
       '${release.discs} ${release.discs == 1 ? 'disc' : 'discs'}',
       _time(release.lengthMs),
+      playsFact(release.plays, release.lastPlayedMs),
     ];
     return Focus(
       focusNode: _focus,
@@ -181,9 +183,11 @@ class _ReleasePaneState extends State<ReleasePane> {
               Text(facts.join(' · '), style: Tok.label),
               if (release.formats.isNotEmpty)
                 Text(release.formats.join(' · '), style: Tok.monoSmall.copyWith(color: Tok.muted)),
-              TextButton(
-                onPressed: release.rows.isEmpty ? null : () => _play(0),
-                child: Text('Play', style: Tok.body.copyWith(color: Tok.gold)),
+              const SizedBox(height: 10),
+              PaneActions(
+                primary: 'Play',
+                onPrimary: release.rows.isEmpty ? null : () => _play(0),
+                primaryKey: const ValueKey('release-play'),
               ),
             ])),
           ]),

@@ -28,6 +28,9 @@ pub struct ReleasePage {
     pub tracks: Vec<TrackRow>,
     /// Track artists in order of first appearance, with the tracks they're on.
     pub artists: Vec<TrackCredit>,
+    /// Counted plays of this release, and the newest one.
+    pub plays: u64,
+    pub last_played: Option<i64>,
 }
 
 /// One artist on a release, and where.
@@ -53,6 +56,9 @@ pub struct PersonPage {
     pub appears_on: Vec<PersonRelease>,
     /// People who share releases with them, most shared first.
     pub worked_with: Vec<Colleague>,
+    /// Counted plays of their recordings and the releases they front.
+    pub plays: u64,
+    pub last_played: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -140,11 +146,13 @@ impl Store {
             Ok(())
         })?;
         let cover = self.release_art(&[release])?.remove(&release);
-        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, album_artists, cover, tracks, artists }))
+        let (plays, last_played) = self.release_plays(release)?;
+        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, album_artists, cover, tracks, artists, plays, last_played }))
     }
 
     /// None when the person doesn't exist.
     pub fn person_page(&self, agent: AgentId) -> Result<Option<PersonPage>> {
+        let (plays, last_played) = self.person_plays(agent)?;
         self.read(|c| {
             let Some(name) =
                 c.query_row("SELECT name FROM agent WHERE id = ?1", [agent.0], |r| r.get::<_, String>(0)).optional()?
@@ -203,7 +211,7 @@ impl Store {
             worked_with.truncate(COLLEAGUES);
 
             let tracks = releases.iter().map(|r| r.tracks).sum::<u32>() + appears_on.iter().map(|r| r.theirs).sum::<u32>();
-            Ok(Some(PersonPage { agent, name, tracks, releases, appears_on, worked_with }))
+            Ok(Some(PersonPage { agent, name, tracks, releases, appears_on, worked_with, plays, last_played }))
         })
     }
 

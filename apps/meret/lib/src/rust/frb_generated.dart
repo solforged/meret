@@ -2010,8 +2010,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PersonDto dco_decode_person_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return PersonDto(
       id: dco_decode_i_64(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -2019,6 +2019,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       releases: dco_decode_list_thread_dto(arr[3]),
       appearsOn: dco_decode_list_thread_dto(arr[4]),
       workedWith: dco_decode_list_thread_dto(arr[5]),
+      plays: dco_decode_u_64(arr[6]),
+      lastPlayedMs: dco_decode_opt_box_autoadd_i_64(arr[7]),
     );
   }
 
@@ -2091,8 +2093,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReleaseDto dco_decode_release_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return ReleaseDto(
       id: dco_decode_i_64(arr[0]),
       title: dco_decode_String(arr[1]),
@@ -2107,6 +2109,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       formats: dco_decode_list_String(arr[10]),
       rows: dco_decode_list_track_row_dto(arr[11]),
       credits: dco_decode_list_thread_dto(arr[12]),
+      plays: dco_decode_u_64(arr[13]),
+      lastPlayedMs: dco_decode_opt_box_autoadd_i_64(arr[14]),
     );
   }
 
@@ -3413,6 +3417,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_releases = sse_decode_list_thread_dto(deserializer);
     var var_appearsOn = sse_decode_list_thread_dto(deserializer);
     var var_workedWith = sse_decode_list_thread_dto(deserializer);
+    var var_plays = sse_decode_u_64(deserializer);
+    var var_lastPlayedMs = sse_decode_opt_box_autoadd_i_64(deserializer);
     return PersonDto(
       id: var_id,
       name: var_name,
@@ -3420,6 +3426,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       releases: var_releases,
       appearsOn: var_appearsOn,
       workedWith: var_workedWith,
+      plays: var_plays,
+      lastPlayedMs: var_lastPlayedMs,
     );
   }
 
@@ -3509,6 +3517,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_formats = sse_decode_list_String(deserializer);
     var var_rows = sse_decode_list_track_row_dto(deserializer);
     var var_credits = sse_decode_list_thread_dto(deserializer);
+    var var_plays = sse_decode_u_64(deserializer);
+    var var_lastPlayedMs = sse_decode_opt_box_autoadd_i_64(deserializer);
     return ReleaseDto(
       id: var_id,
       title: var_title,
@@ -3523,6 +3533,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       formats: var_formats,
       rows: var_rows,
       credits: var_credits,
+      plays: var_plays,
+      lastPlayedMs: var_lastPlayedMs,
     );
   }
 
@@ -4780,6 +4792,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_thread_dto(self.releases, serializer);
     sse_encode_list_thread_dto(self.appearsOn, serializer);
     sse_encode_list_thread_dto(self.workedWith, serializer);
+    sse_encode_u_64(self.plays, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastPlayedMs, serializer);
   }
 
   @protected
@@ -4845,6 +4859,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_String(self.formats, serializer);
     sse_encode_list_track_row_dto(self.rows, serializer);
     sse_encode_list_thread_dto(self.credits, serializer);
+    sse_encode_u_64(self.plays, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastPlayedMs, serializer);
   }
 
   @protected
