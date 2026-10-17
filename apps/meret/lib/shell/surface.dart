@@ -273,10 +273,10 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   child: Row(children: [
                     Expanded(child: row),
                     if (wc.pinnedNow)
-                      SizedBox(width: 380, child: NowPane(now: _now, clock: _clock, onToggle: _toggle)),
+                      SizedBox(width: 380, child: NowPane(core: widget.core, now: _now, clock: _clock, onToggle: _toggle)),
                   ]),
                 ),
-                if (!wc.pinnedNow) _NowBar(now: _now, clock: _clock, onToggle: _toggle),
+                if (!wc.pinnedNow) _NowBar(core: widget.core, now: _now, clock: _clock, onToggle: _toggle),
                 if (wc != WidthClass.phone)
                   StatusLine(core: widget.core, status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
               ]);
@@ -326,7 +326,8 @@ class _Move extends Intent {
 
 /// Now as a bar, below the panes, on smaller screens.
 class _NowBar extends StatelessWidget {
-  const _NowBar({required this.now, required this.clock, required this.onToggle});
+  const _NowBar({required this.core, required this.now, required this.clock, required this.onToggle});
+  final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
@@ -347,6 +348,8 @@ class _NowBar extends StatelessWidget {
               Text(now?.subtitle ?? '', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
             ]),
           ),
+          DeviceVolume(core: core, now: now, compact: true),
+          const SizedBox(width: 12),
           SizedBox(
             width: 120,
             height: 2,

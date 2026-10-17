@@ -9,6 +9,14 @@ pub use meret_api::{
 pub use meret_api::LightDto;
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
 pub use meret_api::{FolderKindDto, FolderSuggestionDto, LightLevelDto, OutputDeviceDto, SettingsDto};
+pub use meret_api::VolumeDto;
+
+#[frb(mirror(VolumeDto))]
+pub struct _VolumeDto {
+    pub scalar: Option<f32>,
+    pub settable: bool,
+    pub reason: Option<String>,
+}
 
 #[frb(mirror(LightLevelDto))]
 pub enum _LightLevelDto {
@@ -398,6 +406,7 @@ pub struct _ReleaseDto {
     pub title: String,
     pub cover: Option<String>,
     pub artist: Option<String>,
+    pub artist_links: Vec<ThreadDto>,
     pub year: Option<u16>,
     pub idiom: Option<String>,
     pub tracks: u32,

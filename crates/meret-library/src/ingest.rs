@@ -286,18 +286,21 @@ fn ingest(
 
     let rel = Path::new(&stat.rel_path);
     let title = t.title.clone().unwrap_or_else(|| rel.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+    let title = meret_store::copies::clean_title(&title, t.track.unwrap_or(0));
     let album = t.album.clone().unwrap_or_else(|| {
         rel.parent()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| root_label.to_owned())
     });
-    let artist = t.artist.as_deref().map(|n| agent(tx, n, rev)).transpose()?;
-    let album_artist = match t.album_artist.as_deref() {
-        Some(n) => Some(agent(tx, n, rev)?),
-        None => artist,
+    let artist = crate::splitting::people(t.artist.as_deref(), &t.artists);
+    let album_written = t.album_artist.as_deref().or(t.artist.as_deref());
+    let album_artists = if t.album_artist.is_some() || !t.album_artists.is_empty() {
+        crate::splitting::people(t.album_artist.as_deref(), &t.album_artists)
+    } else {
+        artist.clone()
     };
-    let release = release(tx, &album, album_artist, t.year, rev, provenance)?;
+    let release = release(tx, &album, album_written, &album_artists, t.year, rev, provenance)?;
     set_idiom(tx, release, crate::idiom::signal(&stat.rel_path, &t), rev)?;
     let medium = medium(tx, release, t.disc.unwrap_or(1), rev)?;
     tx.execute(
@@ -328,17 +331,23 @@ fn ingest(
             (source, recording)
         }
         None => {
-            let recording: i64 = tx.query_row(
-                "INSERT INTO recording (title, length_ms, rev) VALUES (?1, ?2, ?3) RETURNING id",
-                params![title, length, rev],
-                |r| r.get(0),
-            )?;
-            let track: i64 = tx.query_row(
-                "INSERT INTO track (medium_id, position, recording_id, title, length_ms, rev)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
-                params![medium, t.track.unwrap_or(0), recording, title, length, rev],
-                |r| r.get(0),
-            )?;
+            let (track, recording) = match meret_store::copies::matching_track(tx, medium, t.track.unwrap_or(0), title, length)? {
+                Some(ids) => ids,
+                None => {
+                    let recording: i64 = tx.query_row(
+                        "INSERT INTO recording (title, length_ms, rev) VALUES (?1, ?2, ?3) RETURNING id",
+                        params![title, length, rev],
+                        |r| r.get(0),
+                    )?;
+                    let track: i64 = tx.query_row(
+                        "INSERT INTO track (medium_id, position, recording_id, title, length_ms, rev)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+                        params![medium, t.track.unwrap_or(0), recording, title, length, rev],
+                        |r| r.get(0),
+                    )?;
+                    (track, recording)
+                }
+            };
             let source: i64 = tx.query_row(
                 "INSERT INTO source (recording_id, track_id, kind, file_id, rev) VALUES (?1, ?2, 'file', ?3, ?4) RETURNING id",
                 params![recording, track, file, rev],
@@ -348,30 +357,21 @@ fn ingest(
         }
     };
     tx.execute(
-        "UPDATE source SET codec = ?2, sample_rate = ?3, bits = ?4, channels = ?5, lossless = ?6, length_ms = ?7, rev = ?8
-         WHERE id = ?1",
-        params![source, t.codec, t.sample_rate, t.bits, t.channels, t.lossless, length, rev],
+        "UPDATE source SET codec = ?2, sample_rate = ?3, bits = ?4, channels = ?5, lossless = ?6, length_ms = ?7, rev = ?8,
+             bitrate_kbps = ?9 WHERE id = ?1",
+        params![source, t.codec, t.sample_rate, t.bits, t.channels, t.lossless, length, rev, t.bitrate_kbps],
     )?;
-    if let Some(a) = artist {
-        credit(tx, EntityKind::Recording, recording, a, "artist", rev, provenance)?;
-    }
+    tx.execute("UPDATE recording SET artist_credit = ?2 WHERE id = ?1", params![recording, t.artist])?;
+    credit_people(tx, EntityKind::Recording, recording, &artist, "artist", rev, provenance)?;
     search::index_recording(tx, recording)
-}
-
-fn agent(tx: &Transaction<'_>, name: &str, rev: i64) -> rusqlite::Result<i64> {
-    if let Some(id) = tx.query_row("SELECT id FROM agent WHERE name = ?1 LIMIT 1", [name], |r| r.get(0)).optional()? {
-        return Ok(id);
-    }
-    let id = tx.query_row("INSERT INTO agent (kind, name, rev) VALUES (0, ?1, ?2) RETURNING id", params![name, rev], |r| r.get(0))?;
-    search::index_agent(tx, id)?;
-    Ok(id)
 }
 
 /// A release is its title and album artist, as tagged.
 fn release(
     tx: &Transaction<'_>,
     title: &str,
-    album_artist: Option<i64>,
+    album_written: Option<&str>,
+    album_artists: &[String],
     year: Option<u16>,
     rev: i64,
     provenance: i64,
@@ -379,28 +379,28 @@ fn release(
     let found: Option<i64> = tx
         .query_row(
             "SELECT rl.id FROM release rl
-             LEFT JOIN credit c ON c.subject_kind = 3 AND c.subject_id = rl.id AND c.role = 'album_artist'
-             WHERE rl.title = ?1 AND c.agent_id IS ?2
-             LIMIT 1",
-            params![title, album_artist],
+             WHERE rl.title = ?1 AND rl.album_artist_credit IS ?2 LIMIT 1",
+            params![title, album_written],
             |r| r.get(0),
         )
         .optional()?;
-    if let Some(id) = found {
+    let id = if let Some(id) = found {
         if year.is_some() {
             tx.execute("UPDATE release SET year = ?2 WHERE id = ?1 AND year IS NULL", params![id, year])?;
         }
-        return Ok(id);
-    }
-    let id: i64 = tx.query_row(
-        "INSERT INTO release (title, year, rev) VALUES (?1, ?2, ?3) RETURNING id",
-        params![title, year, rev],
-        |r| r.get(0),
-    )?;
-    tx.execute("INSERT INTO edition (release_id, is_default, rev) VALUES (?1, 1, ?2)", params![id, rev])?;
-    if let Some(a) = album_artist {
-        credit(tx, EntityKind::Release, id, a, "album_artist", rev, provenance)?;
-    }
+        tx.execute("DELETE FROM credit WHERE subject_kind = 3 AND subject_id = ?1 AND role = 'album_artist' AND provenance_id = ?2",
+            params![id, provenance])?;
+        id
+    } else {
+        let id: i64 = tx.query_row(
+            "INSERT INTO release (title, year, album_artist_credit, rev) VALUES (?1, ?2, ?3, ?4) RETURNING id",
+            params![title, year, album_written, rev],
+            |r| r.get(0),
+        )?;
+        tx.execute("INSERT INTO edition (release_id, is_default, rev) VALUES (?1, 1, ?2)", params![id, rev])?;
+        id
+    };
+    credit_people(tx, EntityKind::Release, id, album_artists, "album_artist", rev, provenance)?;
     search::index_release(tx, id)?;
     Ok(id)
 }
@@ -441,19 +441,24 @@ fn medium(tx: &Transaction<'_>, release: i64, disc: u32, rev: i64) -> rusqlite::
     )
 }
 
-fn credit(
+fn credit_people(
     tx: &Transaction<'_>,
     kind: EntityKind,
     subject: i64,
-    agent: i64,
+    names: &[String],
     role: &str,
     rev: i64,
     provenance: i64,
 ) -> rusqlite::Result<()> {
-    tx.execute(
-        "INSERT INTO credit (subject_kind, subject_id, agent_id, role, provenance_id, rev) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![kind as i64, subject, agent, role, provenance, rev],
-    )?;
+    for (sort, name) in names.iter().enumerate() {
+        let agent = meret_store::credits::agent(tx, name, rev)?;
+        tx.execute(
+            "INSERT INTO credit (subject_kind, subject_id, agent_id, role, sort, provenance_id, rev)
+             SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT EXISTS (
+                SELECT 1 FROM credit WHERE subject_kind = ?1 AND subject_id = ?2 AND agent_id = ?3 AND role = ?4 AND provenance_id = ?6)",
+            params![kind as i64, subject, agent, role, sort as i64, provenance, rev],
+        )?;
+    }
     Ok(())
 }
 
@@ -529,6 +534,40 @@ mod tests {
     }
 
     #[test]
+    fn joint_people_keep_written_display_and_share_facets_pages_and_threads() {
+        let (dir, store) = library();
+        let music = dir.join("music");
+        put(&music, "joint/1.flac", Some(("Joint", "Roger Briggs & Mark Cromer", "Civilization III", 1)));
+        put(&music, "joint/2.flac", Some(("Solo", "Mark Cromer", "Civilization III", 2)));
+        for rel in ["joint/1.flac", "joint/2.flac"] {
+            let path = music.join(rel);
+            let mut file = lofty::read_from_path(&path).unwrap();
+            file.primary_tag_mut().unwrap().insert_text(ItemKey::AlbumArtist, "Roger Briggs & Mark Cromer".into());
+            file.save_to_path(&path, WriteOptions::default()).unwrap();
+        }
+        let root = add_root(&store, &music).unwrap();
+        scan(&store, root, &|_| {}).unwrap();
+        let cols = store.load_columns().unwrap();
+        let rows = store.track_rows(&cols.track).unwrap();
+        assert_eq!(rows[0].artist.as_deref(), Some("Roger Briggs & Mark Cromer"));
+        assert_eq!(rows[0].album_artist.as_deref(), Some("Roger Briggs & Mark Cromer"));
+        assert_eq!(cols.people(0).len(), 2);
+        assert_eq!(cols.people(1).len(), 2, "the same person in both roles counts once");
+        let roger = store.people_hits(&["Roger".into()], 10).unwrap().1.remove(0);
+        let mark = store.people_hits(&["Mark".into()], 10).unwrap().1.remove(0);
+        assert_eq!((roger.tracks, mark.tracks), (2, 2));
+        assert_eq!(store.tracks_by_person("Mark Cromer", None).unwrap().len(), 2);
+        let page = store.release_page(rows[0].release).unwrap().unwrap();
+        assert_eq!(page.album_artists.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>(), ["Roger Briggs", "Mark Cromer"]);
+        assert_eq!(page.artists.iter().map(|a| (a.name.as_str(), a.positions.len())).collect::<Vec<_>>(), [("Roger Briggs", 1), ("Mark Cromer", 2)]);
+        let person = store.person_page(mark.agent).unwrap().unwrap();
+        assert_eq!((person.tracks, person.releases.len(), person.appears_on.len()), (2, 1, 0));
+        assert_eq!(person.worked_with[0].name, "Roger Briggs");
+        assert_eq!(store.read(|c| c.query_row("SELECT COUNT(*) FROM agent WHERE name LIKE '% & %'", [], |r| r.get::<_, u32>(0))).unwrap(), 0);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn a_scan_writes_tracks_in_album_order_and_a_rescan_writes_nothing() {
         let (dir, store) = library();
         let music = dir.join("music");
@@ -555,6 +594,36 @@ mod tests {
         let again = scan(&store, root, &|_| {}).unwrap();
         assert_eq!((again.added, again.changed, again.moved, again.removed, again.unreadable), (1, 0, 0, 0, 1));
         assert_eq!(store.load_columns().unwrap().len(), 3);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn alternate_files_share_track_and_recording_and_rescan_keeps_ids() {
+        let (dir, store) = library();
+        let music = dir.join("music");
+        put(&music, "A/1.flac", Some(("1 - Terratus", "Composer", "Tyranny", 1)));
+        put(&music, "B/1.flac", Some(("TÉRRA-tus!", "Composer", "Tyranny", 1)));
+        put(&music, "B/2.flac", Some(("Terratus", "Composer", "Tyranny", 2)));
+        // Filename fallback has tags for album and track, but no title.
+        put(&music, "C/3 - Ending.flac", Some(("temporary", "Composer", "Tyranny", 3)));
+        let path = music.join("C/3 - Ending.flac");
+        let mut tagged = lofty::read_from_path(&path).unwrap();
+        tagged.primary_tag_mut().unwrap().remove_key(ItemKey::TrackTitle);
+        tagged.save_to_path(&path, WriteOptions::default()).unwrap();
+        let root = add_root(&store, &music).unwrap();
+        let first = scan(&store, root, &|_| {}).unwrap();
+        assert_eq!((first.found, first.added, first.changed), (4, 4, 0));
+        let ids: Vec<(i64, i64, i64)> = store.read(|c| c.prepare("SELECT id, track_id, recording_id FROM source ORDER BY id")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect()).unwrap();
+        assert_eq!(ids.len(), 4);
+        assert_eq!(store.load_columns().unwrap().len(), 3);
+        let rows = store.track_rows(&store.load_columns().unwrap().track).unwrap();
+        assert_eq!(rows[2].title, "Ending");
+        let again = scan(&store, root, &|_| {}).unwrap();
+        assert_eq!((again.found, again.added, again.changed, again.moved, again.removed), (4, 0, 0, 0, 0));
+        let after: Vec<(i64, i64, i64)> = store.read(|c| c.prepare("SELECT id, track_id, recording_id FROM source ORDER BY id")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect()).unwrap();
+        assert_eq!(ids, after);
         std::fs::remove_dir_all(dir).ok();
     }
 

@@ -21,6 +21,8 @@ pub struct ReleasePage {
     pub year: Option<u16>,
     pub idiom: Option<Idiom>,
     pub album_artist: Option<(AgentId, String)>,
+    /// All album artists as individual thread targets, in written order.
+    pub album_artists: Vec<(AgentId, String)>,
     pub cover: Option<Artwork>,
     /// Present tracks, in disc and track order.
     pub tracks: Vec<TrackRow>,
@@ -95,6 +97,15 @@ impl Store {
                     |r| Ok((AgentId(r.get(0)?), r.get::<_, String>(1)?)),
                 )
                 .optional()?;
+            let album_artists = c.prepare(
+                "SELECT DISTINCT a.id, a.name FROM credit c JOIN agent a ON a.id = c.agent_id
+                 WHERE c.subject_kind = 3 AND c.subject_id = ?1 AND c.role = 'album_artist' ORDER BY c.sort, c.id"
+            )?.query_map([release.0], |r| Ok((AgentId(r.get(0)?), r.get(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            let album_artist = match album_artist {
+                Some((id, name)) => Some((id, c.query_row(
+                    "SELECT COALESCE(album_artist_credit, ?2) FROM release WHERE id = ?1", (release.0, name), |r| r.get(0))?)),
+                None => None,
+            };
             let sql = format!(
                 "SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
                  WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY m.position, t.position, t.id"
@@ -104,20 +115,32 @@ impl Store {
                 .query_map([release.0], |r| Ok(TrackId(r.get(0)?)))?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             let idiom = idiom.and_then(|v| Idiom::ALL.into_iter().find(|i| *i as u8 == v));
-            Ok(Some((title, year, idiom, album_artist, tracks)))
+            Ok(Some((title, year, idiom, album_artist, album_artists, tracks)))
         })?;
-        let Some((title, year, idiom, album_artist, tracks)) = found else { return Ok(None) };
+        let Some((title, year, idiom, album_artist, album_artists, tracks)) = found else { return Ok(None) };
         let tracks = self.track_rows(&tracks)?;
         let mut artists: Vec<TrackCredit> = vec![];
-        for t in &tracks {
-            let (Some(agent), Some(name)) = (t.artist_id, &t.artist) else { continue };
-            match artists.iter_mut().find(|a| a.agent == agent) {
-                Some(a) => a.positions.push((t.disc, t.number)),
-                None => artists.push(TrackCredit { agent, name: name.clone(), positions: vec![(t.disc, t.number)] }),
+        self.read(|c| {
+            let sql = format!(
+                "SELECT a.id, a.name, m.position, t.position FROM track t
+                 JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
+                 JOIN credit cr ON cr.subject_kind = 2 AND cr.subject_id = t.recording_id AND cr.role = 'artist'
+                 JOIN agent a ON a.id = cr.agent_id
+                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY m.position, t.position, t.id, cr.sort, cr.id"
+            );
+            for row in c.prepare(&sql)?.query_map([release.0], |r| {
+                Ok((AgentId(r.get(0)?), r.get::<_, String>(1)?, (r.get::<_, u32>(2)?, r.get::<_, u32>(3)?)))
+            })? {
+                let (agent, name, position) = row?;
+                match artists.iter_mut().find(|a| a.agent == agent) {
+                    Some(a) => { if !a.positions.contains(&position) { a.positions.push(position); } }
+                    None => artists.push(TrackCredit { agent, name, positions: vec![position] }),
+                }
             }
-        }
+            Ok(())
+        })?;
         let cover = self.release_art(&[release])?.remove(&release);
-        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, cover, tracks, artists }))
+        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, album_artists, cover, tracks, artists }))
     }
 
     /// None when the person doesn't exist.

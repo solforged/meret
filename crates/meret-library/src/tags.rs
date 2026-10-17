@@ -8,8 +8,11 @@ use lofty::prelude::*;
 pub struct Tags {
     pub title: Option<String>,
     pub artist: Option<String>,
+    /// Explicit ARTISTS or repeated ARTIST values; empty means use the heuristic.
+    pub artists: Vec<String>,
     pub album: Option<String>,
     pub album_artist: Option<String>,
+    pub album_artists: Vec<String>,
     pub composer: Option<String>,
     pub genre: Option<String>,
     pub track: Option<u32>,
@@ -72,10 +75,10 @@ pub fn read_tags(path: &Path) -> Result<Tags, TagError> {
     let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else { return Ok(t) };
     let s = |k: ItemKey| tag.get_string(k).map(str::to_owned);
     t.title = tag.title().map(|c| c.into_owned());
-    t.artist = tag.artist().map(|c| c.into_owned());
+    t.artist = credit_tags(tag, ItemKey::TrackArtist, ItemKey::TrackArtists, &mut t.artists);
     t.album = tag.album().map(|c| c.into_owned());
     t.genre = tag.genre().map(|c| c.into_owned());
-    t.album_artist = s(ItemKey::AlbumArtist);
+    t.album_artist = credit_tags(tag, ItemKey::AlbumArtist, ItemKey::AlbumArtists, &mut t.album_artists);
     t.composer = s(ItemKey::Composer);
     t.track = tag.track();
     t.disc = tag.disk();
@@ -86,9 +89,49 @@ pub fn read_tags(path: &Path) -> Result<Tags, TagError> {
     Ok(t)
 }
 
+fn credit_tags(tag: &lofty::tag::Tag, single: ItemKey, multiple: ItemKey, people: &mut Vec<String>) -> Option<String> {
+    let written: Vec<_> = tag.get_strings(single).filter(|s| !s.trim().is_empty()).collect();
+    *people = tag.get_strings(multiple).filter(|s| !s.trim().is_empty()).map(str::to_owned).collect();
+    if people.is_empty() && written.len() > 1 {
+        *people = written.iter().map(|s| (*s).to_owned()).collect();
+    }
+    if written.is_empty() {
+        (!people.is_empty()).then(|| people.join("; "))
+    } else {
+        Some(written.join("; "))
+    }
+}
+
 fn wavpack_lossless(path: &Path) -> bool {
     use lofty::config::ParseOptions;
     use lofty::file::AudioFile;
     let Ok(mut f) = std::fs::File::open(path) else { return false };
     lofty::wavpack::WavPackFile::read_from(&mut f, ParseOptions::new()).is_ok_and(|w| w.properties().is_lossless())
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lofty::tag::{ItemValue, Tag, TagItem, TagType};
+
+    #[test]
+    fn explicit_artist_lists_and_repeated_frames_have_precedence() {
+        let mut tag = Tag::new(TagType::VorbisComments);
+        tag.insert_text(ItemKey::TrackArtist, "Roger Briggs & Mark Cromer".into());
+        tag.push(TagItem::new(ItemKey::TrackArtists, ItemValue::Text("Roger Briggs".into())));
+        tag.push(TagItem::new(ItemKey::TrackArtists, ItemValue::Text("Mark Cromer".into())));
+        let mut values = vec![];
+        let written = credit_tags(&tag, ItemKey::TrackArtist, ItemKey::TrackArtists, &mut values);
+        assert_eq!(written.as_deref(), Some("Roger Briggs & Mark Cromer"));
+        assert_eq!(values, ["Roger Briggs", "Mark Cromer"]);
+        tag.remove_key(ItemKey::TrackArtists);
+        tag.push(TagItem::new(ItemKey::TrackArtist, ItemValue::Text("Simon & Garfunkel".into())));
+        let written = credit_tags(&tag, ItemKey::TrackArtist, ItemKey::TrackArtists, &mut values);
+        assert_eq!(written.as_deref(), Some("Roger Briggs & Mark Cromer; Simon & Garfunkel"));
+        assert_eq!(crate::splitting::people(written.as_deref(), &values), ["Roger Briggs & Mark Cromer", "Simon & Garfunkel"]);
+        tag.insert_text(ItemKey::AlbumArtists, "Earth, Wind & Fire".into());
+        let album = credit_tags(&tag, ItemKey::AlbumArtist, ItemKey::AlbumArtists, &mut values);
+        assert_eq!(album.as_deref(), Some("Earth, Wind & Fire"));
+        assert_eq!(values, ["Earth, Wind & Fire"]);
+    }
+}
+

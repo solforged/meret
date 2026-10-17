@@ -4,6 +4,7 @@
 //! thread, from tests, and from the FFI layer alike.
 
 pub mod audio;
+pub mod credit;
 pub mod entity;
 pub mod ids;
 pub mod idiom;

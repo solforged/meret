@@ -17,6 +17,7 @@ pub mod art;
 pub mod diff;
 pub mod idiom;
 pub mod ingest;
+pub mod splitting;
 pub mod tags;
 pub mod walk;
 

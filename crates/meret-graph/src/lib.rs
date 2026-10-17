@@ -6,4 +6,4 @@ pub mod leads;
 pub mod trail;
 
 pub use leads::{Evidence, LeadStrength, converge};
-pub use trail::{Action, Branch, Trail, Via};
+pub use trail::{Action, Branch, Trail, TrailHistory, Via};

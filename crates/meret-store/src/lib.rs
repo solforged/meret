@@ -9,6 +9,8 @@
 
 mod art;
 mod columns;
+pub mod copies;
+pub mod credits;
 mod library;
 mod migrate;
 mod pages;
