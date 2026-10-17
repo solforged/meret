@@ -915,6 +915,8 @@ pub struct TrailDto {
     pub current: u32,
     pub stops: Vec<StopDto>,
     pub meetings: Vec<(u32, u32)>,
+    pub kept: bool,
+    pub name: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -958,6 +960,8 @@ impl TrailDto {
             current: t.current() as u32,
             stops,
             meetings: t.meetings().into_iter().map(|(a, b)| (a as u32, b as u32)).collect(),
+            kept: t.kept,
+            name: t.name.clone(),
         }
     }
 }

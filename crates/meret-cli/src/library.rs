@@ -221,6 +221,8 @@ pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[Stri
     settle(api, rt);
     let mut trail = if search == "[" {
         api.trail_back().ok_or_else(|| anyhow!("there's no saved trail"))?
+    } else if let Some(uid) = search.strip_prefix("trail=") {
+        api.open_trail(uid).map_err(anyhow::Error::msg)?
     } else {
         api.start_trail(TargetDto::Search { query: search.into() })
     };
@@ -232,8 +234,10 @@ pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[Stri
             "[" => api.trail_back().ok_or_else(|| anyhow!("there's no previous trail stop"))?,
             "]" => api.trail_forward().ok_or_else(|| anyhow!("there's no next trail stop"))?,
             _ if step.starts_with("search=") => api.start_trail(TargetDto::Search { query: step["search=".len()..].into() }),
+            _ if step.starts_with("trail=") => api.open_trail(&step["trail=".len()..]).map_err(anyhow::Error::msg)?,
+            "keep" => api.keep_trail(None).map_err(anyhow::Error::msg)?,
             _ => {
-                let index: usize = step.parse().map_err(|_| anyhow!("expected a line number, '[', ']', or 'search=QUERY', got {step:?}"))?;
+                let index: usize = step.parse().map_err(|_| anyhow!("expected a line number, '[', ']', 'keep', 'search=QUERY' or 'trail=UID', got {step:?}"))?;
                 let (via, to, _) = lines.get(index).cloned().ok_or_else(|| anyhow!("there's no line {index}"))?;
                 api.follow(trail.current, to, via).map_err(|e| anyhow!(e))?
             }
@@ -247,10 +251,11 @@ pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[Stri
 
 pub fn trails(api: &Api, limit: u32) -> Result<()> {
     for trail in api.trail_history(limit).map_err(anyhow::Error::msg)? {
-        println!("{}  · {} stops · {} branches · {} played · {} wanted{}{}",
+        println!("{}  · {} stops · {} branches · {} played · {} wanted{}{} · {}",
             trail.title, trail.stops, trail.branches, trail.played, trail.wanted,
             if trail.kept { " · kept" } else { "" },
-            trail.name.map(|name| format!(" · {name}")).unwrap_or_default());
+            trail.name.map(|name| format!(" · {name}")).unwrap_or_default(),
+            trail.uid);
     }
     Ok(())
 }
