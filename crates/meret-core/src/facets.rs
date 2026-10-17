@@ -91,13 +91,8 @@ impl Core {
 fn people_counts(cols: &HotColumns, rows: impl Iterator<Item = usize>) -> HashMap<u32, u32> {
     let mut counts = HashMap::new();
     for i in rows {
-        let artist = cols.artist[i];
-        let album_artist = cols.album_artist[i];
-        if artist != 0 {
-            *counts.entry(artist).or_default() += 1;
-        }
-        if album_artist != 0 && album_artist != artist {
-            *counts.entry(album_artist).or_default() += 1;
+        for &person in cols.people(i) {
+            *counts.entry(person).or_default() += 1;
         }
     }
     counts
@@ -161,6 +156,17 @@ mod tests {
     use super::*;
     use crate::{CoreConfig, OutputChoice};
     use meret_store::Row;
+
+    #[test]
+    fn joint_credits_count_each_person_once_across_roles() {
+        let cols = HotColumns::from_rows([
+            Row { track: 1, artist: 1, album_artist: 1, people: vec![1, 2], ..Default::default() },
+            Row { track: 2, artist: 1, album_artist: 3, people: vec![1, 2, 3], ..Default::default() },
+            Row { track: 3, artist: 2, album_artist: 2, ..Default::default() },
+        ]);
+        assert_eq!(people_counts(&cols, 0..3), HashMap::from([(1, 2), (2, 3), (3, 1)]));
+        assert_eq!(people_counts(&cols, [1].into_iter()), HashMap::from([(1, 1), (2, 1), (3, 1)]));
+    }
 
     #[test]
     fn facet_cascade_preserves_base_and_toggles_only_selected_clauses() {

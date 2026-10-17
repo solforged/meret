@@ -42,6 +42,7 @@ impl LocalZone {
                 s.zone.path = Some(path.clone());
                 s.zone.playing = true;
             }
+            EngineEvent::OutputChanged { path } => s.zone.path = Some(path.clone()),
             EngineEvent::Anchor(a) => {
                 s.zone.position_ms = a.position_frames * 1000 / a.sample_rate.max(1) as u64;
                 s.zone.playing = a.rate > 0.0;
@@ -92,8 +93,10 @@ impl Zone for LocalZone {
                 Control::Seek(ms * rate as u64 / 1000)
             }
             ZoneCommand::Stop => Control::Stop,
-            // Bit-perfect output leaves volume to the DAC.
-            ZoneCommand::Volume { .. } => return Err(ZoneError::Other("volume is set on the device".into())),
+            ZoneCommand::Volume { scalar } => {
+                self.engine.set_volume(scalar).map_err(|e| ZoneError::Other(e.to_string()))?;
+                return Ok(());
+            }
         };
         self.engine.send(control);
         Ok(())

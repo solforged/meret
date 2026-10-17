@@ -45,7 +45,8 @@ pub enum ZoneCommand {
     Resume,
     Seek { ms: u64 },
     Stop,
-    Volume { db: f32 },
+    /// Device-native volume scalar, 0 (silent) to 1 (full scale).
+    Volume { scalar: f32 },
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

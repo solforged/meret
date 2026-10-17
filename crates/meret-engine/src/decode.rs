@@ -150,7 +150,9 @@ mod symphonia_impl {
             let spec = StreamSpec {
                 sample_rate: params.sample_rate.ok_or_else(|| DecodeError::Corrupt("no sample rate".into()))?,
                 channels: params.channels.as_ref().map(|c| c.count() as u16).unwrap_or(2),
-                bits: params.bits_per_sample.unwrap_or(16) as u8,
+                // Lossy decoders emit Float32: 24 bits of effective precision,
+                // not a 16-bit PCM source. Preserve real lossless source depth.
+                bits: decoded_bits(codec_of(params.codec), params.bits_per_sample),
                 codec: codec_of(params.codec),
             };
             let decoder = symphonia::default::get_codecs()
@@ -210,6 +212,10 @@ mod symphonia_impl {
         }
     }
 
+    fn decoded_bits(codec: Codec, bits: Option<u32>) -> u8 {
+        if codec.is_lossless() { bits.unwrap_or(16) as u8 } else { 24 }
+    }
+
     fn codec_of(id: symphonia::core::codecs::audio::AudioCodecId) -> Codec {
         match id {
             codecs::CODEC_ID_FLAC => Codec::Flac,
@@ -229,6 +235,20 @@ mod symphonia_impl {
             SymError::IoError(e) => DecodeError::Io(e),
             SymError::Unsupported(s) => DecodeError::Unsupported(s.to_string()),
             other => DecodeError::Corrupt(other.to_string()),
+        }
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn lossy_precision_does_not_masquerade_as_sixteen_bit_pcm() {
+            for codec in [Codec::Mp3, Codec::Aac, Codec::Vorbis, Codec::Opus] {
+                assert_eq!(decoded_bits(codec, None), 24);
+                assert_eq!(decoded_bits(codec, Some(16)), 24);
+            }
+            assert_eq!(decoded_bits(Codec::Flac, Some(16)), 16);
+            assert_eq!(decoded_bits(Codec::Flac, Some(24)), 24);
         }
     }
 }

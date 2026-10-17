@@ -119,11 +119,21 @@ impl Trail {
     fn enter(&mut self, i: usize, now: i64) {
         self.leave_current(now);
         self.current = i;
+        self.stops[i].opened_at = now;
     }
 
     /// Follows a thread from stop `from` (usually a visible pane). If `from`
     /// already leads somewhere, this starts a branch.
     pub fn follow(&mut self, from: usize, entity: EntityRef, via: Via, now: i64) -> usize {
+        // A thread back onto this branch revisits its stop, not a duplicate.
+        let mut ancestor = Some(self.current);
+        while let Some(i) = ancestor {
+            if self.stops[i].entity == entity {
+                self.enter(i, now);
+                return i;
+            }
+            ancestor = self.stops[i].parent;
+        }
         // Following the same thread to the same place again revisits it.
         let existing = self.children(from).find(|&c| self.stops[c].entity == entity);
         if let Some(existing) = existing {
@@ -176,9 +186,9 @@ impl Trail {
         }
     }
 
-    /// `]`: forward to the most recently opened child.
+    /// `]`: forward to the most recently entered child, excluding folded peeks.
     pub fn forward(&mut self, now: i64) -> bool {
-        match self.children(self.current).max_by_key(|&c| self.stops[c].opened_at) {
+        match self.children(self.current).filter(|&c| !self.is_peek(c, now)).max_by_key(|&c| self.stops[c].opened_at) {
             Some(c) => {
                 self.enter(c, now);
                 true
@@ -188,9 +198,9 @@ impl Trail {
     }
 
     /// Clicking a star: stop `i` becomes current, and the panes become its
-    /// path. False for a stop that doesn't exist or was pruned.
+    /// path. False for a stop that doesn't exist, was pruned, or folded away.
     pub fn go(&mut self, i: usize, now: i64) -> bool {
-        if self.stops.get(i).is_none_or(|s| s.pruned) {
+        if self.stops.get(i).is_none_or(|s| s.pruned) || self.is_peek(i, now) {
             return false;
         }
         self.enter(i, now);
@@ -293,6 +303,76 @@ impl Trail {
     }
 }
 
+/// Session-only trail history, oldest first. Navigation never discards a tree.
+#[derive(Default)]
+pub struct TrailHistory {
+    trails: Vec<HistoryEntry>,
+    active: Option<usize>,
+}
+
+struct HistoryEntry {
+    trail: Trail,
+    /// The stop from which the next trail was started.
+    departure: usize,
+}
+
+impl TrailHistory {
+    pub fn current(&self) -> Option<&Trail> {
+        self.active.map(|i| &self.trails[i].trail)
+    }
+
+    pub fn current_mut(&mut self) -> Option<&mut Trail> {
+        self.active.map(|i| &mut self.trails[i].trail)
+    }
+
+    pub fn start(&mut self, trail: Trail, now: i64) -> &Trail {
+        if let Some(i) = self.active {
+            let mut previous = self.trails.remove(i);
+            previous.trail.leave_current(now);
+            previous.departure = previous.trail.current();
+            // Starting from older history keeps that tree immediately before
+            // the new one, without throwing away the newer trees we revisited.
+            self.trails.push(previous);
+        }
+        self.trails.push(HistoryEntry { departure: trail.current(), trail });
+        self.active = Some(self.trails.len() - 1);
+        self.current().expect("the trail just started")
+    }
+
+    pub fn back(&mut self, now: i64) -> bool {
+        let Some(i) = self.active else { return false };
+        if self.trails[i].trail.back(now) {
+            return true;
+        }
+        if i == 0 {
+            return false;
+        }
+        self.trails[i].trail.leave_current(now);
+        self.active = Some(i - 1);
+        let previous = &mut self.trails[i - 1];
+        previous.trail.current = previous.departure;
+        previous.trail.entered_at = now;
+        previous.trail.stops[previous.departure].opened_at = now;
+        true
+    }
+
+    /// At a previous trail's departure stop, `]` returns to the next trail's
+    /// root. Everywhere else it walks visible children within this trail.
+    pub fn forward(&mut self, now: i64) -> bool {
+        let Some(i) = self.active else { return false };
+        if i + 1 < self.trails.len() && self.trails[i].trail.current() == self.trails[i].departure {
+            self.trails[i].trail.leave_current(now);
+            self.active = Some(i + 1);
+            let next = &mut self.trails[i + 1].trail;
+            next.current = 0;
+            next.entered_at = now;
+            next.stops[0].opened_at = now;
+            return true;
+        }
+        self.trails[i].trail.forward(now)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,6 +466,85 @@ mod tests {
         assert_eq!(t.current(), xeno);
         assert!(t.forward(42 * MIN));
         assert_eq!(t.current(), creid, "forward picks the most recent branch");
+    }
+
+    #[test]
+    fn following_back_to_an_ancestor_or_current_reuses_the_stop() {
+        let mut t = Trail::start(EntityRef::Release(ReleaseId(1)), None, 0);
+        let person = t.follow(0, EntityRef::Agent(AgentId(2)), via(ThreadKind::AlbumArtist), MIN);
+        assert_eq!(t.follow(person, EntityRef::Release(ReleaseId(1)), via(ThreadKind::AppearsOn), 2 * MIN), 0);
+        assert_eq!(t.len(), 2);
+        assert_eq!(t.path(), vec![0]);
+        assert_eq!(t.follow(0, EntityRef::Release(ReleaseId(1)), via(ThreadKind::AppearsOn), 3 * MIN), 0);
+        assert_eq!(t.len(), 2);
+        assert_eq!(t.stop(0).opened_at, 3 * MIN);
+    }
+
+    #[test]
+    fn reentering_a_child_refreshes_which_branch_forward_chooses() {
+        let mut t = Trail::start(EntityRef::Release(ReleaseId(1)), None, 0);
+        let first = t.follow(0, EntityRef::Agent(AgentId(2)), via(ThreadKind::By), MIN);
+        let second = t.follow(0, EntityRef::Agent(AgentId(3)), via(ThreadKind::By), 2 * MIN);
+        t.act(first, Action::Played);
+        t.act(second, Action::Played);
+        assert_eq!(t.follow(0, EntityRef::Agent(AgentId(2)), via(ThreadKind::By), 3 * MIN), first);
+        assert_eq!(t.stop(first).opened_at, 3 * MIN);
+        assert!(t.back(4 * MIN));
+        assert!(t.forward(5 * MIN));
+        assert_eq!(t.current(), first);
+        assert_eq!(t.len(), 3);
+    }
+
+    #[test]
+    fn forward_and_star_picks_skip_folded_peeks() {
+        let mut t = Trail::start(EntityRef::Release(ReleaseId(1)), None, 0);
+        let kept = t.follow(0, EntityRef::Agent(AgentId(2)), via(ThreadKind::By), MIN);
+        t.back(2 * MIN);
+        let peek = t.follow(0, EntityRef::Agent(AgentId(3)), via(ThreadKind::By), 3 * MIN);
+        t.back(3 * MIN + 1);
+        assert!(t.is_peek(peek, 4 * MIN));
+        assert!(!t.go(peek, 4 * MIN));
+        assert!(t.forward(4 * MIN));
+        assert_eq!(t.current(), kept);
+        t.back(5 * MIN);
+        t.stops[kept].pruned = true;
+        assert!(!t.forward(6 * MIN));
+    }
+
+    #[test]
+    fn root_back_restores_the_previous_trail_and_forward_returns_to_the_new_root() {
+        let mut history = TrailHistory::default();
+        assert!(!history.back(0));
+        assert!(!history.forward(0));
+        history.start(Trail::start(EntityRef::Release(ReleaseId(1)), None, 0), 0);
+        let person = history.current_mut().unwrap().follow(0, EntityRef::Agent(AgentId(2)), via(ThreadKind::By), MIN);
+        history.start(Trail::start(EntityRef::Release(ReleaseId(3)), None, 2 * MIN), 2 * MIN);
+        assert!(history.back(3 * MIN));
+        assert_eq!(history.current().unwrap().current(), person);
+        assert_eq!(history.current().unwrap().stop(person).dwell_ms, MIN, "time in another trail isn't dwell");
+        assert!(history.back(4 * MIN));
+        assert_eq!(history.current().unwrap().current(), 0);
+        assert!(history.forward(5 * MIN));
+        assert_eq!(history.current().unwrap().current(), person);
+        assert!(history.forward(6 * MIN));
+        assert_eq!(history.current().unwrap().stop(0).entity, EntityRef::Release(ReleaseId(3)));
+        assert_eq!(history.current().unwrap().current(), 0);
+    }
+
+    #[test]
+    fn starting_from_older_history_keeps_all_trees_and_returns_to_that_trail() {
+        let mut history = TrailHistory::default();
+        for id in 1..=2 {
+            history.start(Trail::start(EntityRef::Release(ReleaseId(id)), None, id * MIN), id * MIN);
+        }
+        assert!(history.back(3 * MIN));
+        history.start(Trail::start(EntityRef::Release(ReleaseId(3)), None, 4 * MIN), 4 * MIN);
+        assert_eq!(history.trails.len(), 3);
+        assert!(history.back(5 * MIN));
+        assert_eq!(history.current().unwrap().stop(0).entity, EntityRef::Release(ReleaseId(1)));
+        assert!(history.back(6 * MIN));
+        assert_eq!(history.current().unwrap().stop(0).entity, EntityRef::Release(ReleaseId(2)));
+        assert!(!history.back(7 * MIN));
     }
 
     #[test]

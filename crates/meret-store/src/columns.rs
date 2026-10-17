@@ -19,6 +19,8 @@ pub struct Row {
     /// 0 when there is no credited artist.
     pub artist: u32,
     pub album_artist: u32,
+    /// Distinct recording artists and release album artists.
+    pub people: Vec<u32>,
     pub title_rank: u32,
     pub artist_rank: u32,
     pub album_rank: u32,
@@ -34,6 +36,8 @@ pub struct Row {
     pub idiom: u8,
     /// See `Format` codes in `plan.rs`.
     pub format: u8,
+    /// Format-category bits for every copy, including the MP3 codec bit.
+    pub formats: u8,
     /// `Availability::rank`.
     pub availability: u8,
     pub guessed: bool,
@@ -63,6 +67,8 @@ pub struct HotColumns {
     pub release: Vec<u32>,
     pub artist: Vec<u32>,
     pub album_artist: Vec<u32>,
+    people_offsets: Vec<usize>,
+    people: Vec<u32>,
     pub title_rank: Vec<u32>,
     pub artist_rank: Vec<u32>,
     pub album_rank: Vec<u32>,
@@ -74,6 +80,7 @@ pub struct HotColumns {
     pub dr: Vec<u8>,
     pub idiom: Vec<u8>,
     pub format: Vec<u8>,
+    pub formats: Vec<u8>,
     pub availability: Vec<u8>,
     pub guessed: RoaringBitmap,
 }
@@ -93,6 +100,13 @@ impl HotColumns {
         self.release.push(r.release);
         self.artist.push(r.artist);
         self.album_artist.push(r.album_artist);
+        self.people_offsets.push(self.people.len());
+        if r.people.is_empty() {
+            if r.artist != 0 { self.people.push(r.artist); }
+            if r.album_artist != 0 && r.album_artist != r.artist { self.people.push(r.album_artist); }
+        } else {
+            self.people.extend(r.people);
+        }
         self.title_rank.push(r.title_rank);
         self.artist_rank.push(r.artist_rank);
         self.album_rank.push(r.album_rank);
@@ -104,6 +118,7 @@ impl HotColumns {
         self.dr.push(r.dr);
         self.idiom.push(r.idiom);
         self.format.push(r.format);
+        self.formats.push(if r.formats == 0 { 1 << r.format } else { r.formats });
         self.availability.push(r.availability);
         if r.guessed {
             self.guessed.insert(i);
@@ -116,6 +131,29 @@ impl HotColumns {
 
     pub fn is_empty(&self) -> bool {
         self.track.is_empty()
+    }
+
+    /// Every person credited on this track, once even when both roles apply.
+    pub fn people(&self, row: usize) -> &[u32] {
+        let start = self.people_offsets[row];
+        let end = self.people_offsets.get(row + 1).copied().unwrap_or(self.people.len());
+        &self.people[start..end]
+    }
+
+    /// Builds the flat membership column without allocating a vector per track.
+    pub(crate) fn set_people(&mut self, mut memberships: Vec<(usize, u32)>) {
+        memberships.sort_unstable();
+        memberships.dedup();
+        self.people.clear();
+        self.people_offsets.clear();
+        self.people.reserve(memberships.len());
+        let mut entries = memberships.into_iter().peekable();
+        for row in 0..self.len() {
+            self.people_offsets.push(self.people.len());
+            while entries.peek().is_some_and(|&(i, _)| i == row) {
+                self.people.push(entries.next().expect("peeked member").1);
+            }
+        }
     }
 
     pub fn all(&self) -> RoaringBitmap {
@@ -155,6 +193,12 @@ impl HotColumns {
             col.iter().enumerate().filter_map(|(i, &x)| (x == value).then_some(i as u32)),
         )
         .expect("indices are sorted")
+    }
+
+    pub fn matching_formats(&self, mask: u8) -> RoaringBitmap {
+        RoaringBitmap::from_sorted_iter(self.formats.iter().enumerate().filter_map(|(i, &bits)| {
+            (bits & mask != 0).then_some(i as u32)
+        })).expect("indices are sorted")
     }
 
     /// Facet counts for the idiom column, within a selection.

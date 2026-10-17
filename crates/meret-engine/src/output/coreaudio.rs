@@ -1,7 +1,7 @@
 //! CoreAudio HAL output for macOS.
 //!
 //! Opening a stream:
-//! 1. Find the device (by UID or name, or the system default) and its first
+//! 1. Find the device (by UID, or the system default) and its first
 //!    output stream.
 //! 2. Exclusive: take hog mode, then set the stream's physical format to
 //!    integer PCM at the source rate, at the source's bit depth or the
@@ -32,10 +32,10 @@ use std::time::Duration;
 use objc2_core_audio::{
     AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceIOProcID, AudioDeviceStart, AudioDeviceStop,
     AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectHasProperty, AudioObjectID,
-    AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioObjectSetPropertyData,
+    AudioObjectIsPropertySettable, AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioObjectSetPropertyData,
     AudioStreamRangedDescription, AudioConvertHostTimeToNanos, AudioGetCurrentHostTime,
     kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyHogMode,
-    kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams,
+    kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams, kAudioDevicePropertyVolumeScalar,
     kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices, kAudioObjectPropertyElementMain,
     kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeOutput,
     kAudioObjectSystemObject, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyLatency,
@@ -48,7 +48,7 @@ use objc2_core_audio_types::{
 };
 use objc2_core_foundation::{CFRetained, CFString};
 
-use super::{DeviceInfo, Opened, OutputBackend, OutputError, OutputRequest, OutputStream};
+use super::{DeviceInfo, DeviceVolume, Opened, OutputBackend, OutputError, OutputRequest, OutputStream};
 use crate::clock::{SharedClock, now_ns};
 use crate::ring::RingReader;
 use crate::Sample;
@@ -79,6 +79,22 @@ impl OutputBackend for CoreAudioBackend {
         }).collect())
     }
 
+    fn volume(&self, wanted: Option<&str>) -> Result<DeviceVolume, OutputError> {
+        find_device(wanted)?.volume()
+    }
+
+    fn set_volume(&self, wanted: Option<&str>, scalar: f32) -> Result<DeviceVolume, OutputError> {
+        let device = find_device(wanted)?;
+        let elements = device.volume_elements();
+        if elements.is_empty() {
+            return Err(OutputError::Refused("this device has no settable hardware volume; use its DAC or amplifier".into()));
+        }
+        for element in elements {
+            set_at(device.0, volume_address(element), &scalar).map_err(platform)?;
+        }
+        device.volume()
+    }
+
     fn open(
         &self,
         req: &OutputRequest,
@@ -98,7 +114,7 @@ fn find_device(wanted: Option<&str>) -> Result<Device, OutputError> {
     let ids: Vec<AudioObjectID> = get_vec(SYSTEM, kAudioHardwarePropertyDevices, GLOBAL).map_err(platform)?;
     ids.into_iter()
         .map(Device)
-        .find(|d| d.uid().as_deref() == Some(wanted) || d.name().as_deref() == Some(wanted))
+        .find(|d| d.uid().as_deref() == Some(wanted))
         .ok_or_else(|| OutputError::NoDevice(wanted.into()))
 }
 
@@ -135,6 +151,37 @@ impl Device {
         get(self.0, kAudioDevicePropertyHogMode, GLOBAL).ok()
     }
 
+
+    fn volume_elements(self) -> Vec<u32> {
+        let settable = |element| {
+            let address = volume_address(element);
+            let mut yes = 0u8;
+            unsafe {
+                AudioObjectHasProperty(self.0, NonNull::from(&address))
+                    && AudioObjectIsPropertySettable(self.0, NonNull::from(&address), NonNull::from(&mut yes)) == 0
+                    && yes != 0
+            }
+        };
+        if settable(kAudioObjectPropertyElementMain) {
+            return vec![kAudioObjectPropertyElementMain];
+        }
+        let channels: u32 = self.output_streams().into_iter().filter_map(|stream| {
+            get::<AudioStreamBasicDescription>(stream, kAudioStreamPropertyVirtualFormat, GLOBAL).ok()
+        }).map(|format| format.mChannelsPerFrame).sum();
+        (1..=channels).filter(|&channel| settable(channel)).collect()
+    }
+
+    fn volume(self) -> Result<DeviceVolume, OutputError> {
+        let elements = self.volume_elements();
+        if elements.is_empty() {
+            return Ok(DeviceVolume::unsupported("This output has no device volume control. Use its DAC or amplifier."));
+        }
+        let mut scalar = 0.0f32;
+        for &element in &elements {
+            scalar += get_at::<f32>(self.0, volume_address(element)).map_err(platform)?;
+        }
+        Ok(DeviceVolume { scalar: Some(scalar / elements.len() as f32), settable: true, reason: None })
+    }
     fn info(self) -> Option<DeviceInfo> {
         let streams = self.output_streams();
         let first = *streams.first()?;
@@ -351,6 +398,9 @@ impl CoreAudioStream {
         clock: Arc<SharedClock>,
     ) -> Result<Self, OutputError> {
         let name = device.name().unwrap_or_else(|| "Output".into());
+        let uid = device.uid().unwrap_or_default();
+        let default_before = find_device(None).ok().and_then(Device::uid);
+        tracing::info!(device_uid = %uid, device_name = %name, ?default_before, exclusive = req.exclusive, "opening output");
         let stream = *device.output_streams().first().ok_or_else(|| OutputError::NoDevice(name.clone()))?;
         let rate = req.spec.sample_rate;
         if !device.supports_rate(rate) {
@@ -378,6 +428,8 @@ impl CoreAudioStream {
                 _ => tracing::warn!(device = %name, "another process has the device; playing shared"),
             }
         }
+        let default_after = find_device(None).ok().and_then(Device::uid);
+        tracing::info!(device_uid = %uid, ?default_before, ?default_after, hogged = restore.hogged, "output hog resolved");
 
         // From here on, failures must undo what was changed.
         let mut this = Self {
@@ -385,6 +437,7 @@ impl CoreAudioStream {
             proc_id: None,
             state: ptr::null_mut(),
             opened: Opened {
+                device_uid: uid,
                 device_name: name,
                 sample_rate: rate,
                 bits: 0,
@@ -431,6 +484,7 @@ impl CoreAudioStream {
         }
         let physical: Option<AudioStreamBasicDescription> = get(stream, kAudioStreamPropertyPhysicalFormat, GLOBAL).ok();
         self.opened.bits = physical.as_ref().map(effective_bits).unwrap_or(24);
+        tracing::info!(device_uid = ?self.device.uid(), source_bits = req.spec.bits, physical_bits = self.opened.bits, sample_rate = req.spec.sample_rate, exclusive = self.opened.exclusive, "output format configured");
         Ok(())
     }
 
@@ -529,10 +583,23 @@ impl OutputStream for CoreAudioStream {
         }
         Ok(())
     }
+
+    fn into_source(mut self: Box<Self>) -> RingReader {
+        let _ = self.pause();
+        if self.proc_id.is_some() {
+            unsafe { AudioDeviceDestroyIOProcID(self.device.0, self.proc_id) };
+            self.proc_id = None;
+        }
+        // The callback is stopped and destroyed; only this thread owns state.
+        let state = unsafe { Box::from_raw(self.state) };
+        self.state = ptr::null_mut();
+        state.reader
+    }
 }
 
 impl Drop for CoreAudioStream {
     fn drop(&mut self) {
+        tracing::info!(device_uid = ?self.device.uid(), system_default_uid = ?find_device(None).ok().and_then(Device::uid), hogged = self.restore.hogged, "closing output");
         let _ = self.pause();
         if self.proc_id.is_some() {
             unsafe { AudioDeviceDestroyIOProcID(self.device.0, self.proc_id) };
@@ -567,8 +634,15 @@ fn has(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: Audi
     unsafe { AudioObjectHasProperty(object, NonNull::from(&a)) }
 }
 
+fn volume_address(element: u32) -> AudioObjectPropertyAddress {
+    AudioObjectPropertyAddress { mSelector: kAudioDevicePropertyVolumeScalar, mScope: OUTPUT, mElement: element }
+}
+
 fn get<T: Copy>(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> Result<T, i32> {
-    let a = address(selector, scope);
+    get_at(object, address(selector, scope))
+}
+
+fn get_at<T: Copy>(object: AudioObjectID, a: AudioObjectPropertyAddress) -> Result<T, i32> {
     let mut value = std::mem::MaybeUninit::<T>::zeroed();
     let mut size = size_of::<T>() as u32;
     let status = unsafe {
@@ -605,7 +679,10 @@ fn get_vec<T: Copy>(object: AudioObjectID, selector: AudioObjectPropertySelector
 }
 
 fn set<T>(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope, value: &T) -> Result<(), i32> {
-    let a = address(selector, scope);
+    set_at(object, address(selector, scope), value)
+}
+
+fn set_at<T>(object: AudioObjectID, a: AudioObjectPropertyAddress, value: &T) -> Result<(), i32> {
     let status = unsafe {
         AudioObjectSetPropertyData(object, NonNull::from(&a), 0, ptr::null(), size_of::<T>() as u32, NonNull::from(value).cast())
     };

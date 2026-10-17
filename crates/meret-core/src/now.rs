@@ -53,6 +53,7 @@ pub(crate) fn spawn_pump(core: Arc<Core>) {
                             n.length_ms = described.length_ms;
                         });
                     }
+                    EngineEvent::OutputChanged { path } => core.now.send_modify(|n| n.path = Some(path.clone())),
                     EngineEvent::Anchor(a) => core.now.send_modify(|n| n.anchor = Some(*a)),
                     EngineEvent::Ended { item } => {
                         let mut player = core.player.lock();
