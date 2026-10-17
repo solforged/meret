@@ -2,9 +2,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
 import '../core/playhead.dart';
+import '../core/when.dart';
 import '../draw/body_painter.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
@@ -12,17 +14,17 @@ import '../theme/tokens.dart';
 /// Now: what's playing, the transport, the signal path and the queue.
 /// Pinned at the right from 1400 px; [NowBar] below that.
 class NowPane extends StatelessWidget {
-  const NowPane({super.key, required this.core, required this.now, required this.clock, required this.onToggle});
+  const NowPane({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease});
 
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
+  final Future<void> Function(PlatformInt64)? onRelease;
 
   @override
   Widget build(BuildContext context) {
     final n = now;
-    final length = n?.lengthMs?.toDouble() ?? 1;
     final loaded = n?.anchor != null;
     final light = Light.of(context);
     return Container(
@@ -46,57 +48,278 @@ class NowPane extends StatelessWidget {
         const SizedBox(height: 10),
         Transport(core: core, now: n, clock: clock, onToggle: onToggle),
         SeekBar(core: core, now: n, clock: clock),
-        Expanded(
-          child: GestureDetector(
-            onTap: loaded ? onToggle : null,
-            child: RepaintBoundary(
-              child: Stack(alignment: Alignment.center, children: [
-                CustomPaint(
-                  size: Size.infinite,
-                  // The body summary isn't analysed yet, so the dial is bare:
-                  // minute ticks, the played arc and the hand.
-                  painter: BodyPainter(clock: clock, lengthMs: length, loudness: Uint8List(0), bands: const [], light: light.accent),
-                ),
-                if (n?.cover case final cover?)
-                  ClipOval(child: Image.file(File(cover), width: 96, height: 96, fit: BoxFit.cover, cacheWidth: 256)),
-              ]),
-            ),
-          ),
-        ),
-        const Text('SIGNAL PATH', style: Tok.label),
-        const SizedBox(height: 6),
-        Wrap(spacing: 6, runSpacing: 6, children: [
-          for (final s in n?.path ?? const <StageDto>[]) _Stage(s),
-        ]),
-        const SizedBox(height: 8),
-        if (n?.fidelity case final f?)
-          Text(
-            switch (f) {
-              FidelityDto.bitPerfect => '● Bit-perfect',
-              FidelityDto.altered => '◐ Altered',
-              FidelityDto.lossy => '○ Lossy source',
-            },
-            style: Tok.monoSmall.copyWith(color: f == FidelityDto.bitPerfect ? Tok.ok : Tok.warn),
-          ),
-        if (loaded) ...[
-          const SizedBox(height: 12),
-          UpNext(core: core, now: n),
-        ],
-        const SizedBox(height: 12),
-        DeviceVolume(core: core, now: now),
+        Expanded(flex: 4, child: NowDial(now: n, clock: clock, onToggle: loaded ? onToggle : null)),
+        Expanded(flex: 5, child: SingleChildScrollView(
+          key: const ValueKey('now-details'),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('SIGNAL PATH', style: Tok.label),
+            const SizedBox(height: 6),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final s in n?.path ?? const <StageDto>[]) _Stage(s),
+            ]),
+            const SizedBox(height: 8),
+            if (n?.fidelity != null) NowFidelity(now: n!),
+            if (loaded) ...[
+              const SizedBox(height: 12),
+              UpNext(core: core, now: n),
+            ],
+            const SizedBox(height: 12),
+            NowMemory(core: core, now: n, resumeLimit: 3, historyLimit: 3, onRelease: onRelease),
+            const SizedBox(height: 12),
+            DeviceVolume(core: core, now: now),
+          ]),
+        )),
       ]),
     );
   }
 }
 
+/// The bare dial shared by the stage and the pinned pane.
+class NowDial extends StatelessWidget {
+  const NowDial({super.key, required this.now, required this.clock, this.onToggle});
+  final NowDto? now;
+  final PlayheadClock clock;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onToggle,
+    child: RepaintBoundary(child: Stack(alignment: Alignment.center, children: [
+      CustomPaint(
+        size: Size.infinite,
+        painter: BodyPainter(
+          clock: clock, lengthMs: now?.lengthMs?.toDouble() ?? 1,
+          loudness: Uint8List(0), bands: const [], light: Light.of(context).accent,
+        ),
+      ),
+      if (now?.cover case final cover?)
+        ClipOval(child: Image.file(File(cover), width: 96, height: 96, fit: BoxFit.cover, cacheWidth: 256)),
+    ])),
+  );
+}
+
+class NowFidelity extends StatelessWidget {
+  const NowFidelity({super.key, required this.now});
+  final NowDto now;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    switch (now.fidelity) {
+      FidelityDto.bitPerfect => '● Bit-perfect',
+      FidelityDto.altered => '◐ Altered',
+      FidelityDto.lossy => '○ Lossy source',
+      null => '',
+    },
+    style: Tok.monoSmall.copyWith(color: now.fidelity == FidelityDto.bitPerfect ? Tok.ok : Tok.warn),
+  );
+}
+
+/// Recent listening belongs to Now in both its stage and compact forms.
+class NowMemory extends StatefulWidget {
+  const NowMemory({
+    super.key, required this.core, required this.now, required this.resumeLimit,
+    required this.historyLimit, this.onRelease, this.header, this.expanded = false,
+  });
+  final CoreBridge core;
+  final NowDto? now;
+  final int resumeLimit;
+  final int historyLimit;
+  final Future<void> Function(PlatformInt64)? onRelease;
+  final Widget Function(List<ResumeDto>)? header;
+  final bool expanded;
+
+  @override
+  State<NowMemory> createState() => _NowMemoryState();
+}
+
+class _NowMemoryState extends State<NowMemory> {
+  List<ResumeDto> _resumes = const [];
+  List<ListenDto> _history = const [];
+  String? _error;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(NowMemory old) {
+    super.didUpdateWidget(old);
+    if (old.core != widget.core || old.now?.anchor?.item != widget.now?.anchor?.item ||
+        old.now?.anchor?.rate != widget.now?.anchor?.rate) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final generation = ++_generation;
+    try {
+      final results = await Future.wait<Object>([
+        widget.core.resumePoints(widget.resumeLimit), widget.core.history(widget.historyLimit),
+      ]);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _resumes = results[0] as List<ResumeDto>;
+        _history = results[1] as List<ListenDto>;
+        _error = null;
+      });
+    } catch (error) {
+      if (mounted && generation == _generation) setState(() => _error = error.toString());
+    }
+  }
+
+  Future<void> _pickUp(ResumeDto point) async {
+    try {
+      await widget.core.pickUp(point.releaseId);
+      if (mounted) await _load();
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    if (widget.header != null) widget.header!(_resumes),
+    if (_error != null) Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
+    ),
+    if (_resumes.isNotEmpty) ...[
+      NowSection(
+        title: widget.expanded ? 'Pick up where you left off' : 'Pick up',
+        meta: widget.expanded ? 'each resumes the way its music does' : null,
+      ),
+      for (final point in _resumes)
+        NowDoor(
+          key: ValueKey('now-pick-up-${point.releaseId}'),
+          onTap: () => _pickUp(point),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(point.recordingTitle, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text([point.title, if (point.credit != null) point.credit!].join(' · '), style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 5),
+            Text(_resumeRule(point.idiom), style: Tok.label),
+            const SizedBox(height: 7),
+            LinearProgressIndicator(
+              value: point.lengthMs == null || point.lengthMs! <= BigInt.zero ? 0 :
+                (point.positionMs.toDouble() / point.lengthMs!.toDouble()).clamp(0.0, 1.0),
+              minHeight: 2, color: Light.of(context).accent, backgroundColor: Tok.line,
+            ),
+            const SizedBox(height: 5),
+            Row(children: [
+              Expanded(child: Text('${clockLength(point.positionMs.toInt())} / ${point.lengthMs == null ? '–:––' : clockLength(point.lengthMs!.toInt())}', style: Tok.monoSmall)),
+              Text(dayWord(point.updatedAt.toInt()), style: Tok.label),
+            ]),
+          ]),
+        ),
+      const SizedBox(height: 22),
+    ],
+    if (_history.isNotEmpty) ...[
+      NowSection(title: 'What was that?', meta: widget.expanded ? 'last played, newest first · H for all history' : null),
+      for (final listen in _history)
+        NowDoor(
+          key: ValueKey('now-listen-${listen.uid}'),
+          onTap: widget.onRelease == null || listen.releaseId == null ? null : () => widget.onRelease!(listen.releaseId!),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: Text(listen.title, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 8),
+              Text(clockTime(listen.startedAtMs.toInt()), style: Tok.monoSmall),
+            ]),
+            Text([
+              if (listen.credit != null) listen.credit!,
+              if (listen.releaseTitle != null) listen.releaseTitle!,
+              _listenOutcome(listen, identical(listen, _history.first) ? widget.now : null),
+            ].join(' · '), style: Tok.label),
+          ]),
+        ),
+    ],
+  ]);
+}
+
+String _resumeRule(String? idiom) {
+  final rule = switch (idiom) {
+    'album' => 'from the top of the track',
+    'song' => 'from the top of the song',
+    'work' => 'from the start of the movement',
+    'session' => 'from the top of the take',
+    'score' => 'the cue where it stopped',
+    'set' => 'the exact second',
+    'spoken' => 'five seconds back',
+    _ => 'where it stopped',
+  };
+  return idiom == null || !const ['album', 'song', 'work', 'session', 'score', 'set', 'spoken'].contains(idiom)
+    ? rule : '${idiom[0].toUpperCase()}${idiom.substring(1)} · $rule';
+}
+
+String _listenOutcome(ListenDto listen, NowDto? now) {
+  final anchor = now?.anchor;
+  if (listen.trackId != null && listen.trackId == now?.trackId && anchor != null) {
+    return '${anchor.rate == 0 ? 'paused' : 'playing'} at ${clockLength(anchor.positionMs.round())}';
+  }
+  final length = listen.lengthMs;
+  if (length != null && length > BigInt.zero && listen.playedMs >= length) return 'played through';
+  return '${listen.counted ? 'played for' : 'skipped at'} ${clockLength(listen.playedMs.toInt())}';
+}
+
+class NowSection extends StatelessWidget {
+  const NowSection({super.key, required this.title, this.meta});
+  final String title;
+  final String? meta;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.only(bottom: 7),
+    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
+    child: Wrap(alignment: WrapAlignment.spaceBetween, spacing: 12, runSpacing: 4, children: [
+      Text(title, style: Tok.label),
+      if (meta != null) Text(meta!, style: Tok.label.copyWith(letterSpacing: 0)),
+    ]),
+  );
+}
+
+class NowDoor extends StatefulWidget {
+  const NowDoor({super.key, required this.child, this.onTap});
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  State<NowDoor> createState() => _NowDoorState();
+}
+
+class _NowDoorState extends State<NowDoor> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    cursor: widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
+    onEnter: (_) => setState(() => _hover = true),
+    onExit: (_) => setState(() => _hover = false),
+    child: Semantics(button: widget.onTap != null, child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
+        decoration: BoxDecoration(
+          color: _hover && widget.onTap != null ? Tok.panel2 : Colors.transparent,
+          border: const Border(bottom: BorderSide(color: Tok.line)),
+        ),
+        child: widget.child,
+      ),
+    )),
+  );
+}
+
 /// Now as a bar, below the panes, when the window is too narrow to pin it.
 /// The title opens the full pane as a sheet.
 class NowBar extends StatelessWidget {
-  const NowBar({super.key, required this.core, required this.now, required this.clock, required this.onToggle});
+  const NowBar({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease});
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
+  final Future<void> Function(PlatformInt64)? onRelease;
 
   @override
   Widget build(BuildContext context) {
@@ -141,11 +364,21 @@ class NowBar extends StatelessWidget {
     showDialog<void>(
       context: context,
       barrierColor: Colors.black54,
-      builder: (_) => Dialog(
+      builder: (sheetContext) => Dialog(
         alignment: Alignment.bottomRight,
         insetPadding: const EdgeInsets.fromLTRB(16, 16, 16, 72),
         backgroundColor: Colors.transparent,
-        child: SizedBox(width: 380, height: 640, child: NowPane(core: core, now: now, clock: clock, onToggle: onToggle)),
+        child: StreamBuilder<NowDto>(
+          initialData: now,
+          stream: core.now(),
+          builder: (_, snapshot) => SizedBox(width: 380, height: 640, child: NowPane(
+            core: core, now: snapshot.data, clock: clock, onToggle: onToggle,
+            onRelease: onRelease == null ? null : (id) async {
+              Navigator.of(sheetContext).pop();
+              await onRelease!(id);
+            },
+          )),
+        ),
       ),
     );
   }
@@ -198,7 +431,7 @@ class Transport extends StatelessWidget {
       ListenableBuilder(
         listenable: clock,
         builder: (_, _) => Text(
-          loaded ? '${fmtTime(clock.positionMs)} / ${fmtTime(length ?? 0)}' : '–:–– / –:––',
+          loaded ? '${clockLength(clock.positionMs.round())} / ${clockLength((length ?? 0).round())}' : '–:–– / –:––',
           style: Tok.monoSmall,
         ),
       ),
@@ -257,7 +490,7 @@ class _SeekBarState extends State<SeekBar> {
         final slider = ThinSlider(
           sliderKey: const ValueKey('now-seek'),
           value: enabled ? position / length : 0,
-          semanticFormatterCallback: (value) => 'Seek to ${fmtTime(value * (length ?? 0))}',
+          semanticFormatterCallback: (value) => 'Seek to ${clockLength((value * (length ?? 0)).round())}',
           onChanged: enabled ? (value) => setState(() => _dragging = value * length) : null,
           onChangeEnd: enabled ? (value) => _seek(anchor, value * length) : null,
         );
@@ -265,7 +498,7 @@ class _SeekBarState extends State<SeekBar> {
         return Row(children: [
           Expanded(child: slider),
           const SizedBox(width: 6),
-          Text(enabled ? fmtTime(position) : '–:––', style: Tok.monoSmall),
+          Text(enabled ? clockLength(position.round()) : '–:––', style: Tok.monoSmall),
         ]);
       },
     );
@@ -342,7 +575,7 @@ class _UpNextState extends State<UpNext> {
               Text(item.why ?? item.subtitle, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
             ])),
             const SizedBox(width: 8),
-            Text(item.lengthMs == null ? '' : fmtTime(item.lengthMs!.toDouble()), style: Tok.monoSmall),
+            Text(item.lengthMs == null ? '' : clockLength(item.lengthMs!.toInt()), style: Tok.monoSmall),
           ]),
         ),
       if (more > 0) Padding(padding: const EdgeInsets.only(top: 4), child: Text('$more more', style: Tok.label)),
@@ -350,11 +583,6 @@ class _UpNextState extends State<UpNext> {
   }
 }
 
-/// `3:46`, from milliseconds.
-String fmtTime(double ms) {
-  final s = (ms / 1000).floor();
-  return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
-}
 
 /// The instrument's slider: a 2 px track and a small thumb in the light.
 /// [sliderKey] lands on the `Slider` itself, so tests can read its value.

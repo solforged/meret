@@ -4,10 +4,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
 import '../core/bridge.dart';
+import '../core/when.dart';
 import '../theme/tokens.dart';
 
-class NoTrailStrip extends StatelessWidget {
-  const NoTrailStrip({super.key});
+class NoTrailStrip extends StatefulWidget {
+  const NoTrailStrip({super.key, required this.core, required this.memoryVersion});
+  final CoreBridge core;
+  final int memoryVersion;
+
+  @override
+  State<NoTrailStrip> createState() => _NoTrailStripState();
+}
+
+class _NoTrailStripState extends State<NoTrailStrip> {
+  late Future<List<TrailSummaryDto>> _history;
+
+  @override
+  void initState() {
+    super.initState();
+    _history = widget.core.trailHistory(1);
+  }
+
+  @override
+  void didUpdateWidget(NoTrailStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.core != oldWidget.core || widget.memoryVersion != oldWidget.memoryVersion) {
+      _history = widget.core.trailHistory(1);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -17,7 +41,28 @@ class NoTrailStrip extends StatelessWidget {
       const SizedBox(width: 8),
       Text('Front', style: Tok.body.copyWith(color: Tok.gold)),
       const SizedBox(width: 20),
-      const Expanded(child: Text('no trail yet · open anything to start one', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+      Expanded(child: FutureBuilder<List<TrailSummaryDto>>(
+        future: _history,
+        builder: (context, snapshot) {
+          final trail = snapshot.data?.firstOrNull;
+          return Text.rich(
+            TextSpan(children: [
+              if (snapshot.hasError)
+                TextSpan(text: "couldn't load trails · ${snapshot.error}", style: Tok.label.copyWith(color: Tok.warn))
+              else if (trail == null)
+                const TextSpan(text: 'no trail yet · open anything to start one')
+              else ...[
+                const TextSpan(text: 'no trail open · open anything to start one · '),
+                TextSpan(text: '[', style: Tok.label.copyWith(color: Tok.gold)),
+                TextSpan(text: ' to resume ${dayPossessive(trail.whenMs.toInt())} · ${trail.name ?? trail.title} · ${trail.stops} stops'),
+              ],
+            ]),
+            style: Tok.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
+        },
+      )),
     ]),
   );
 }
@@ -84,6 +129,20 @@ class _TrailStripState extends State<TrailStrip> {
             height: size.height,
             child: Stack(children: [
               Positioned.fill(child: CustomPaint(painter: painter)),
+              if (painter.root case final root? when widget.trail.kept)
+                if (positions[root.index] case final position?)
+                  Positioned(
+                    left: position.dx + painter.rootTitleWidth / 2 + 8,
+                    top: position.dy - 22,
+                    width: painter.keptLabelWidth,
+                    child: Text(
+                      painter.keptLabel,
+                      key: const ValueKey('trail-kept'),
+                      style: Tok.label.copyWith(color: Tok.gold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
               for (final stop in widget.trail.stops)
                 if (positions[stop.index] case final position?)
                   Positioned(
@@ -153,7 +212,13 @@ class ConstellationPainter extends CustomPainter {
 
   Iterable<StopDto> get _visible => trail.stops.where((s) => !s.isPeek || s.onPath);
 
-  double contentWidth(double viewportWidth) => math.max(viewportWidth, (_visible.length + 0.5) * 144);
+  StopDto? get root => trail.stops.where((stop) => stop.parent == null).firstOrNull;
+  String get keptLabel => '◆ ${trail.name ?? root?.title ?? ''}';
+  double get keptLabelWidth => trail.kept ? _text(keptLabel, Tok.label.copyWith(color: Tok.gold)).width : 0;
+  double get _keptSpace => trail.kept ? keptLabelWidth + 8 : 0;
+  double get rootTitleWidth => _text(root?.title ?? '', Tok.body.copyWith(fontSize: 11.5, color: Tok.muted)).width;
+
+  double contentWidth(double viewportWidth) => math.max(viewportWidth, (_visible.length + 0.5) * 144 + _keptSpace);
 
   Map<int, Offset> layoutPositions(Size size) {
     final stops = {for (final stop in _visible) stop.index: stop};
@@ -162,7 +227,7 @@ class ConstellationPainter extends CustomPainter {
       final parent = stops[stop.parent];
       return parent == null ? 0 : depth(parent) + 1;
     });
-    final step = (size.width / (stops.length + 0.5)).clamp(144.0, 220.0);
+    final step = ((size.width - _keptSpace) / (stops.length + 0.5)).clamp(144.0, 220.0);
     final middle = size.height * 0.55;
     final positions = <int, Offset>{};
     // The first branch goes below: titles on the main line sit above it.
@@ -175,7 +240,8 @@ class ConstellationPainter extends CustomPainter {
       final parent = positions[stop.parent];
       final y = stop.onPath ? middle : parent != null && !stops[stop.parent]!.onPath
           ? parent.dy : middle + flip * size.height * 0.28;
-      positions[stop.index] = Offset(step * (column++ + 0.5), y);
+      positions[stop.index] = Offset(step * (column + 0.5) + (column == 0 ? 0 : _keptSpace), y);
+      column++;
       if (!stop.onPath && (parent == null || stops[stop.parent]!.onPath)) flip = -flip;
     }
     return positions;

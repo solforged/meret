@@ -49,7 +49,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: SettingsScope(
       core: core,
       onChanged: (_) {},
-      child: Scaffold(body: FrontPane(core: core, onQuery: (_) {})),
+      child: Scaffold(body: FrontPane(core: core, memoryVersion: 0, onQuery: (_) {})),
     )));
     await tester.pump();
     await tester.pump();

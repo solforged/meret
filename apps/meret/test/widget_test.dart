@@ -12,6 +12,7 @@ import 'package:meret/draw/body_painter.dart';
 import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
+import 'package:meret/now/now_stage.dart';
 import 'package:meret/panes/front_pane.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/search_pane.dart';
@@ -48,8 +49,10 @@ void main() {
   testWidgets('Now reads device volume and sends the slider scalar to the core', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
     await tester.pump();
     final slider = find.byKey(const ValueKey('now-volume'));
+    await tester.ensureVisible(slider);
     expect(tester.widget<Slider>(slider).value, 0.5);
     await tester.drag(slider, const Offset(-70, 0));
     await tester.pump();
@@ -60,6 +63,7 @@ void main() {
 
   testWidgets('Now disables unsupported device volume and explains why', (tester) async {
     await _surface(tester, _FixedVolumeCore());
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
     await tester.pump();
     final slider = tester.widget<Slider>(find.byKey(const ValueKey('now-volume')));
     expect(slider.onChanged, isNull);
@@ -69,6 +73,7 @@ void main() {
   testWidgets('Now lists the queue after the playing row and next moves along it', (tester) async {
     final core = _RecordingCore();
     await _surface(tester, core);
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
     await tester.pump();
     // The fake's opening Now is a loose anchor with no queue behind it.
     expect(find.text('Nothing queued after this.'), findsOneWidget);
@@ -100,6 +105,7 @@ void main() {
   testWidgets('dragging the seek bar sends the position and re-anchors the clock', (tester) async {
     final core = _RecordingCore();
     await _surface(tester, core);
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
     final now = await core.now().first;
     final seek = find.byKey(const ValueKey('now-seek'));
     final width = tester.getSize(seek).width;
@@ -112,6 +118,7 @@ void main() {
 
   testWidgets('Now is pinned from 1400 wide and a bar below', (tester) async {
     await _surface(tester, FakeCore(), size: const Size(1568, 984));
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.byType(NowPane), findsOneWidget);
     expect(find.byType(NowBar), findsNothing);
     expect(tester.getSize(find.byType(NowPane)).width, 360);
@@ -123,18 +130,167 @@ void main() {
     expect(find.byKey(const ValueKey('now-toggle')), findsOneWidget);
   });
 
-  testWidgets('the fake library opens at the Front without a trail', (tester) async {
+  testWidgets('opens to the Now stage when the fake Now is loaded', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
 
+    expect(find.byType(NowStage), findsOneWidget);
     expect(find.byType(FrontPane), findsOneWidget);
-    expect(find.byType(TablePane), findsNothing);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(find.text('Front · behind Now, one key away ⌘1'), findsOneWidget);
+    expect(find.byType(PaneRow), findsNothing);
+    expect(find.byType(NowPane), findsNothing);
+    expect(find.byType(NowBar), findsNothing);
     expect(await core.trail(), isNull);
+  });
+
+  testWidgets('opens to the Front when nothing is loaded and decides only once', (tester) async {
+    final core = FakeCore.empty();
+    await _surface(tester, core);
+    expect(find.byType(NowStage), findsNothing);
+    expect(find.byType(FrontPane), findsOneWidget);
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    await core.addRoot('/New music');
+    await core.playResults('', _libraryView, 0);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(NowStage), findsNothing);
+  });
+
+  testWidgets('Command-1 leaves the Now stage and later playback never re-enters it', (tester) async {
+    final core = FakeCore();
+    await _surface(tester, core);
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    expect(find.byType(NowStage), findsNothing);
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    await core.playResults('', _libraryView, 0);
+    await tester.pump();
+    expect(find.byType(NowStage), findsNothing);
+  });
+
+  testWidgets('Option-Space starts the current piece from the top without opening a trail', (tester) async {
+    final core = _RecordingCore();
+    await _surface(tester, core);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.pump();
+    expect(core.transports.single, const TransportDto.fromStart());
+    expect(find.byType(NowStage), findsOneWidget);
+    expect(await core.trail(), isNull);
+    await tester.tap(find.byType(TextField));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    expect(core.transports, hasLength(1));
+  });
+
+  testWidgets('H opens history and a play opens its release and leaves the stage', (tester) async {
+    final core = _RecordingCore();
+    final listen = (await core.history(200)).first;
+    await _surface(tester, core);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('history-sheet')), findsOneWidget);
+    expect(core.historyLimits, contains(200));
+    await tester.tap(find.byKey(ValueKey('history-listen-${listen.uid}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(core.started.single, TargetDto.release(id: listen.releaseId!));
+    expect(find.byKey(const ValueKey('history-sheet')), findsNothing);
+    expect(find.byType(NowStage), findsNothing);
+    expect(tester.widget<ReleasePane>(find.byType(ReleasePane)).id, listen.releaseId);
+  });
+
+  testWidgets('Escape closes history and H typed in the query never opens it', (tester) async {
+    await _surface(tester, FakeCore());
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('history-sheet')), findsNothing);
+    await tester.tap(find.byType(TextField));
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.enterText(find.byType(TextField), 'h');
+    await tester.pump();
+    expect(find.byKey(const ValueKey('history-sheet')), findsNothing);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'h');
+  });
+
+  testWidgets('a stage Pick up row resumes its release without changing a trail', (tester) async {
+    final core = _RecordingCore();
+    final point = (await core.resumePoints(6)).first;
+    await _surface(tester, core);
+    await tester.pump();
+    final row = find.byKey(ValueKey('now-pick-up-${point.releaseId}'));
+    await tester.ensureVisible(row);
+    await tester.tap(row);
+    await tester.pump();
+    expect(core.pickedUp, [point.releaseId]);
+    expect(find.byType(NowStage), findsOneWidget);
+    expect(await core.trail(), isNull);
+  });
+
+  testWidgets('the bar sheet scrolls its memory and device volume at 360 by 700', (tester) async {
+    final core = _RecordingCore();
+    await _surface(tester, core, size: const Size(360, 700));
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    await tester.tap(find.byKey(const ValueKey('now-bar-title')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(NowPane), findsOneWidget);
+    final pane = find.byType(NowPane);
+    expect(find.descendant(of: pane, matching: find.text('Pick up')), findsOneWidget);
+    expect(find.descendant(of: pane, matching: find.text('What was that?')), findsOneWidget);
+    final memory = tester.widget<NowMemory>(find.byType(NowMemory));
+    expect(memory.resumeLimit, 3);
+    expect(memory.historyLimit, 3);
+    final volume = find.byKey(const ValueKey('now-volume'));
+    await tester.ensureVisible(volume);
+    await tester.pump();
+    expect(volume.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    final point = (await core.resumePoints(3)).first;
+    final pickUp = find.byKey(ValueKey('now-pick-up-${point.releaseId}'));
+    await tester.ensureVisible(pickUp);
+    await tester.tap(pickUp);
+    await tester.pump();
+    await tester.pump();
+    expect(core.pickedUp, [point.releaseId]);
+    expect(tester.widget<NowPane>(find.byType(NowPane)).now!.title, (await core.now().first).title);
+  });
+
+  testWidgets('only the latest history attempt borrows the current pause position', (tester) async {
+    final core = _RepeatedListenCore();
+    await core.transport(const TransportDto.pause());
+    await _surface(tester, core);
+    await tester.pump();
+    final latest = find.byKey(const ValueKey('now-listen-latest'));
+    final older = find.byKey(const ValueKey('now-listen-older'));
+    expect(find.descendant(of: latest, matching: find.textContaining('paused at 3:46')), findsOneWidget);
+    expect(find.descendant(of: older, matching: find.textContaining('skipped at 0:02')), findsOneWidget);
+  });
+
+  testWidgets('the stage stands alone below 1000 and its Front doors leave it', (tester) async {
+    await _surface(tester, FakeCore(), size: const Size(960, 900));
+    expect(find.byType(FrontPane), findsNothing);
+    expect(find.byType(NowStage), findsOneWidget);
+    tester.view.physicalSize = const Size(1200, 900);
+    await tester.pump();
+    await tester.pump();
+    expect(tester.getSize(find.byType(FrontPane)).width, 480);
+    await tester.tap(find.text('Scores'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(NowStage), findsNothing);
+    expect(tester.widget<TablePane>(find.byType(TablePane)).query, 'idiom:score');
   });
 
   testWidgets('on a phone, one pane is visible and Now is a bar', (tester) async {
     await _surface(tester, FakeCore(), size: const Size(400, 860));
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
 
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).visible, 1);
     expect(find.byType(NowPane), findsNothing);
@@ -187,7 +343,9 @@ void main() {
     final now = await core.now().first;
     await core.startTrail(TargetDto.release(id: now.releaseId!));
     await _surface(tester, core);
+    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(now.releaseId!);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     final row = find.byKey(const ValueKey('release-row-2'));
     final box = tester.widgetList<Container>(find.descendant(of: row, matching: find.byType(Container))).single;
@@ -222,7 +380,9 @@ void main() {
     ));
     await core.startTrail(TargetDto.release(id: core.state.releaseId!));
     await _surface(tester, core);
+    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(core.state.releaseId!);
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     for (final pane in [find.byType(ReleasePane), find.byType(NowPane)]) {
       final image = tester.widget<Image>(find.descendant(of: pane, matching: find.byType(Image)));
@@ -249,7 +409,7 @@ void main() {
 
     final table = tester.widget<TablePane>(find.byType(TablePane));
     expect(table.query, 'idiom:score');
-    expect(find.text('idiom:score'), findsOneWidget);
+    expect(find.descendant(of: find.ancestor(of: find.byType(SearchPane), matching: find.byType(Pane)), matching: find.text('idiom:score')), findsOneWidget);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
   });
 
@@ -470,7 +630,7 @@ void main() {
     expect(error, findsNothing);
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect(find.text('The Beginning and the End'), findsOneWidget);
+    expect(tester.widget<NowStage>(find.byType(NowStage)).now.title, 'The Beginning and the End');
     expect(find.byType(TablePane), findsNothing);
   });
 
@@ -496,7 +656,7 @@ void main() {
 
   testWidgets('the Front reloads on a library revision but not on an unchanged one', (tester) async {
     final core = _RecordingCore();
-    Widget front(BigInt version) => MaterialApp(home: Scaffold(body: FrontPane(core: core, libraryVersion: version, onQuery: (_) {})));
+    Widget front(BigInt version) => MaterialApp(home: Scaffold(body: FrontPane(core: core, memoryVersion: 0, libraryVersion: version, onQuery: (_) {})));
     await tester.pumpWidget(front(BigInt.one));
     await tester.pumpAndSettle();
     await tester.pumpWidget(front(BigInt.one));
@@ -510,6 +670,7 @@ void main() {
   testWidgets('scan progress is visible on the empty Front', (tester) async {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: FrontPane(
       core: FakeCore.empty(),
+      memoryVersion: 0,
       jobs: [JobDto(verb: 'reading tags', done: BigInt.from(5), total: BigInt.from(10))],
       onQuery: (_) {},
     ))));
@@ -767,6 +928,7 @@ void main() {
     final row = await _firstTrack(core);
     await core.startTrail(TargetDto.release(id: row.releaseId));
     await _surface(tester, core);
+    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(row.releaseId);
     await tester.pump();
     final credit = (await core.release(row.releaseId)).credits.first;
     await tester.widget<ReleasePane>(find.byType(ReleasePane)).onFollow(credit.to, credit.kind);
@@ -854,9 +1016,32 @@ class _RecordingCore extends FakeCore {
   int frontCalls = 0;
   final releasesPlayed = <(int, int, int?)>[];
   final seeks = <BigInt>[];
+  final transports = <TransportDto>[];
+  final started = <TargetDto>[];
+  final pickedUp = <PlatformInt64>[];
+  final historyLimits = <int>[];
+
+  @override
+  Future<TrailDto> startTrail(TargetDto to) {
+    started.add(to);
+    return super.startTrail(to);
+  }
+
+  @override
+  Future<void> pickUp(PlatformInt64 releaseId) {
+    pickedUp.add(releaseId);
+    return super.pickUp(releaseId);
+  }
+
+  @override
+  Future<List<ListenDto>> history(int limit) {
+    historyLimits.add(limit);
+    return super.history(limit);
+  }
 
   @override
   Future<void> transport(TransportDto cmd) {
+    transports.add(cmd);
     if (cmd case TransportDto_Seek(:final ms)) seeks.add(ms);
     return super.transport(cmd);
   }
@@ -966,4 +1151,20 @@ class _HostState extends State<_Host> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) => const SizedBox();
+}
+
+class _RepeatedListenCore extends FakeCore {
+  @override
+  Future<List<ListenDto>> history(int limit) async {
+    final listen = (await super.history(1)).single;
+    return [
+      for (final (uid, played) in [('latest', 0), ('older', 2000)])
+        ListenDto(
+          uid: uid, trackId: listen.trackId, recordingId: listen.recordingId,
+          releaseId: listen.releaseId, title: listen.title, credit: listen.credit,
+          releaseTitle: listen.releaseTitle, startedAtMs: listen.startedAtMs,
+          playedMs: BigInt.from(played), lengthMs: listen.lengthMs, counted: false,
+        ),
+    ].take(limit).toList();
+  }
 }
