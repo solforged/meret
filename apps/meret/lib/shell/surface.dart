@@ -352,10 +352,10 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               ];
               final row = PaneRow(
                 slide: _slide,
-                children: panes,
                 maxVisible: _frontOnly || !trailOpen ? 1 : wc.panes,
                 minPane: box.maxWidth >= 1000 ? 440 : 300,
                 wide: {for (var i = 0; i < path.length; i++) if (!_frontOnly && path[i].target is TargetDto_Search) i},
+                children: panes,
               );
               return Column(children: [
                 QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),

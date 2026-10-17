@@ -59,6 +59,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LightDto dco_decode_box_autoadd_light_dto(dynamic raw);
 
   @protected
+  PickDto dco_decode_box_autoadd_pick_dto(dynamic raw);
+
+  @protected
   SettingsDto dco_decode_box_autoadd_settings_dto(dynamic raw);
 
   @protected
@@ -188,6 +191,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<OutputDeviceDto> dco_decode_list_output_device_dto(dynamic raw);
 
   @protected
+  List<PickDto> dco_decode_list_pick_dto(dynamic raw);
+
+  @protected
   List<PlayedDto> dco_decode_list_played_dto(dynamic raw);
 
   @protected
@@ -230,6 +236,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UpNextItemDto> dco_decode_list_up_next_item_dto(dynamic raw);
 
   @protected
+  List<ZoneDto> dco_decode_list_zone_dto(dynamic raw);
+
+  @protected
   ListenDto dco_decode_listen_dto(dynamic raw);
 
   @protected
@@ -254,6 +263,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LightDto? dco_decode_opt_box_autoadd_light_dto(dynamic raw);
 
   @protected
+  PickDto? dco_decode_opt_box_autoadd_pick_dto(dynamic raw);
+
+  @protected
   TrailDto? dco_decode_opt_box_autoadd_trail_dto(dynamic raw);
 
   @protected
@@ -270,6 +282,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PersonDto dco_decode_person_dto(dynamic raw);
+
+  @protected
+  PickDto dco_decode_pick_dto(dynamic raw);
 
   @protected
   PlayedDto dco_decode_played_dto(dynamic raw);
@@ -368,6 +383,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VolumeDto dco_decode_volume_dto(dynamic raw);
 
   @protected
+  ZoneDto dco_decode_zone_dto(dynamic raw);
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
@@ -406,6 +424,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LightDto sse_decode_box_autoadd_light_dto(SseDeserializer deserializer);
+
+  @protected
+  PickDto sse_decode_box_autoadd_pick_dto(SseDeserializer deserializer);
 
   @protected
   SettingsDto sse_decode_box_autoadd_settings_dto(SseDeserializer deserializer);
@@ -551,6 +572,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<PickDto> sse_decode_list_pick_dto(SseDeserializer deserializer);
+
+  @protected
   List<PlayedDto> sse_decode_list_played_dto(SseDeserializer deserializer);
 
   @protected
@@ -599,6 +623,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<ZoneDto> sse_decode_list_zone_dto(SseDeserializer deserializer);
+
+  @protected
   ListenDto sse_decode_listen_dto(SseDeserializer deserializer);
 
   @protected
@@ -627,6 +654,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LightDto? sse_decode_opt_box_autoadd_light_dto(SseDeserializer deserializer);
 
   @protected
+  PickDto? sse_decode_opt_box_autoadd_pick_dto(SseDeserializer deserializer);
+
+  @protected
   TrailDto? sse_decode_opt_box_autoadd_trail_dto(SseDeserializer deserializer);
 
   @protected
@@ -643,6 +673,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PersonDto sse_decode_person_dto(SseDeserializer deserializer);
+
+  @protected
+  PickDto sse_decode_pick_dto(SseDeserializer deserializer);
 
   @protected
   PlayedDto sse_decode_played_dto(SseDeserializer deserializer);
@@ -741,6 +774,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VolumeDto sse_decode_volume_dto(SseDeserializer deserializer);
 
   @protected
+  ZoneDto sse_decode_zone_dto(SseDeserializer deserializer);
+
+  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -799,6 +835,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     LightDto self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_pick_dto(PickDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_settings_dto(
@@ -969,6 +1008,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_pick_dto(List<PickDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_played_dto(
     List<PlayedDto> self,
     SseSerializer serializer,
@@ -1044,6 +1086,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_zone_dto(List<ZoneDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_listen_dto(ListenDto self, SseSerializer serializer);
 
   @protected
@@ -1080,6 +1125,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_pick_dto(
+    PickDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_trail_dto(
     TrailDto? self,
     SseSerializer serializer,
@@ -1102,6 +1153,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_person_dto(PersonDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pick_dto(PickDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_played_dto(PlayedDto self, SseSerializer serializer);
@@ -1204,6 +1258,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_volume_dto(VolumeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_zone_dto(ZoneDto self, SseSerializer serializer);
 }
 
 // Section: wire_class

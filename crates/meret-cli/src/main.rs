@@ -158,6 +158,13 @@ enum LibraryCmd {
     },
     /// Print Now, including a restored paused queue, without opening audio.
     Now,
+    /// Print Play something's picks, best first, each with its why.
+    Picks {
+        #[arg(long, default_value_t = 3)]
+        limit: u32,
+    },
+    /// Print Play on's zones with what each does to the sound.
+    Zones,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -256,6 +263,8 @@ fn main() -> Result<()> {
                 }
                 LibraryCmd::Resume { limit } => library::resume(&api, limit),
                 LibraryCmd::Now => library::now(&api),
+                LibraryCmd::Picks { limit } => library::picks(&api, limit),
+                LibraryCmd::Zones => library::zones(&api),
             }
         }
     }

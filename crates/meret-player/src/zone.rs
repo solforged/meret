@@ -12,6 +12,12 @@ pub enum ZoneFidelity {
     BitPerfect,
     /// ● Bit-perfect, through another system ("via Roon").
     BitPerfectVia { system: String },
+    /// ● Bit-perfect, but the device refuses rates above `hz`; Meret has no
+    /// resampler, so those tracks won't play there.
+    RefusesAbove { hz: u32 },
+    /// ◐ The system mixer is in the path (shared mode): other apps' audio
+    /// mixes in and samples pass through the OS as floats.
+    Shared,
     /// ◐ Resampled above a rate ("above 48 kHz resampled").
     ResampledAbove { hz: u32 },
     /// ◐ A fixed format plus delay (AirPlay: 16/44.1, about 2 s).

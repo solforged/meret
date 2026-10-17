@@ -252,6 +252,8 @@ pub struct NowDto {
     pub light: Option<LightDto>,
     pub title: String,
     pub subtitle: String,
+    /// Why this is playing, when something chose it: "Dormant · 2 years: 96 plays, then nothing".
+    pub why: Option<String>,
     pub anchor: Option<AnchorDto>,
     pub length_ms: Option<u64>,
     pub path: Vec<StageDto>,
@@ -269,6 +271,7 @@ impl NowDto {
             light: n.cover.as_ref().and_then(|a| Some(LightDto { light: a.light?, wash: a.light_wash?, dim: a.light_dim? })),
             title: n.title.clone(),
             subtitle: n.subtitle.clone(),
+            why: n.why.clone(),
             // Re-based to "now", so the receiver can treat it as fresh.
             anchor: n.anchor.map(|a| AnchorDto { item: a.item, position_ms: a.seconds_at(now) * 1000.0, rate: a.rate }),
             length_ms: n.length_ms,
@@ -1043,6 +1046,119 @@ impl DormantDto {
             release_id: r.release.0, title: r.title, credit: r.credit,
             cover: memory_cover(r.cover, art_dir), plays: r.plays, last_played_ms: r.last_played,
         }
+    }
+}
+
+/// A Play something pick (plate 09): what, and why, in the core's words.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PickDto {
+    pub release_id: i64,
+    pub title: String,
+    pub credit: Option<String>,
+    pub cover: Option<String>,
+    /// "Dormant · 2 years", "From your latest trail", "Never played".
+    pub label: String,
+    /// "96 plays, then nothing for 2 years."
+    pub reason: String,
+    /// How it will play: "The whole score, in order."
+    pub plan: String,
+    /// "17 tracks · 1 h 12 · AAC"
+    pub meta: String,
+}
+
+impl PickDto {
+    pub fn new(pick: meret_core::Pick, release: ReleaseDto, now_ms: i64) -> Self {
+        let (label, reason) = match pick.why {
+            meret_core::Why::Dormant { plays, last_played_ms } => (
+                format!("Dormant · {}", ago(now_ms - last_played_ms)),
+                format!("{plays} plays, then nothing for {}.", ago(now_ms - last_played_ms)),
+            ),
+            meret_core::Why::FromTrail { trail, latest } => (
+                if latest { "From your latest trail" } else { "From a recent trail" }.into(),
+                format!("You reached it on {trail} and haven't played it through."),
+            ),
+            meret_core::Why::NeverPlayed { added_ms } => (
+                "Never played".into(),
+                match added_ms.filter(|ms| *ms > 0) {
+                    Some(ms) => format!("In your library for {}, never played through.", ago(now_ms - ms)),
+                    None => "In your library, never played through.".into(),
+                },
+            ),
+        };
+        let plan = match release.idiom.as_deref() {
+            Some("Score") => "The whole score, in order.",
+            Some("Session") => "The whole date, in order.",
+            Some("Work") => "The whole work, movement by movement.",
+            Some("Set") => "The whole set, uncut.",
+            Some("Spoken") => "From the first episode.",
+            Some("Song") => "The songs, in order.",
+            _ => "The whole album, in order.",
+        }.into();
+        let mut meta = vec![format!("{} {}", release.tracks, if release.tracks == 1 { "track" } else { "tracks" }), listening(release.length_ms)];
+        if let Some(format) = release.formats.first() {
+            meta.push(format.clone());
+        }
+        Self {
+            release_id: release.id, title: release.title, credit: release.artist, cover: release.cover,
+            label, reason, plan, meta: meta.join(" · "),
+        }
+    }
+
+    /// The line Now shows while the pick plays.
+    pub fn why(&self) -> String {
+        format!("{} · {}", self.label, self.reason.trim_end_matches('.'))
+    }
+}
+
+/// How long ago, in words: "2 years", "7 months", "3 weeks", "5 days", "today".
+fn ago(elapsed_ms: i64) -> String {
+    let days = elapsed_ms.max(0) / 86_400_000;
+    let unit = |n: i64, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
+    if days >= 365 { unit(days / 365, "year") }
+    else if days >= 30 { unit(days / 30, "month") }
+    else if days >= 7 { unit(days / 7, "week") }
+    else if days >= 1 { unit(days, "day") }
+    else { "today".into() }
+}
+
+/// Listening time as people say it: "1 h 12", "48 min", "under a minute".
+fn listening(ms: u64) -> String {
+    let minutes = ms / 60_000;
+    if minutes >= 60 { if minutes.is_multiple_of(60) { format!("{} h", minutes / 60) } else { format!("{} h {:02}", minutes / 60, minutes % 60) } }
+    else if minutes >= 1 { format!("{minutes} min") }
+    else { "under a minute".into() }
+}
+
+/// A zone Play on lists, with what it does to the sound.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ZoneDto {
+    pub id: String,
+    /// "RME ADI-2 DAC", "MacBook Pro Speakers".
+    pub name: String,
+    /// "This Mac · default output"
+    pub detail: String,
+    /// "● bit-perfect", "◐ shared with macOS", "◐ refuses above 48 kHz".
+    pub verdict: String,
+    /// The verdict is a caveat, drawn in the warning colour.
+    pub warn: bool,
+    pub current: bool,
+}
+
+impl From<meret_core::ZoneRow> for ZoneDto {
+    fn from(z: meret_core::ZoneRow) -> Self {
+        use meret_player::ZoneFidelity as F;
+        let khz = |hz: u32| if hz.is_multiple_of(1000) { format!("{} kHz", hz / 1000) } else { format!("{:.1} kHz", hz as f64 / 1000.0) };
+        let (verdict, warn) = match z.info.fidelity {
+            F::BitPerfect => ("● bit-perfect".to_owned(), false),
+            F::BitPerfectVia { system } => (format!("● bit-perfect via {system}"), false),
+            F::RefusesAbove { hz } => (format!("◐ refuses above {}", khz(hz)), true),
+            F::Shared => ("◐ shared with macOS".to_owned(), true),
+            F::ResampledAbove { hz } => (format!("◐ above {} resampled", khz(hz)), true),
+            F::Fixed { description, delay_ms } => (format!("◐ {description} · ~{} s delay", delay_ms.div_ceil(1000)), true),
+            F::Lossy => ("○ lossy".to_owned(), true),
+            F::OwnCopy => ("○ plays its own copy".to_owned(), true),
+        };
+        Self { id: z.info.id, name: z.info.name, detail: z.info.detail, verdict, warn, current: z.current }
     }
 }
 

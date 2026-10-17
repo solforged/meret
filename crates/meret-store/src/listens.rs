@@ -137,7 +137,7 @@ impl Store {
         self.dormant_before(now - DORMANT_MS, limit)
     }
 
-    fn dormant_before(&self, before_ms: i64, limit: u32) -> Result<Vec<Dormant>> {
+    pub fn dormant_before(&self, before_ms: i64, limit: u32) -> Result<Vec<Dormant>> {
         self.read(|c| {
             let mut stmt = c.prepare(&format!("SELECT rl.id, rl.title, {RELEASE_CREDIT}, {COVER}, COUNT(*), MAX(l.started_at)
                 FROM listen l {LISTEN_TRACK} WHERE rl.id IS NOT NULL AND {COUNTED}
@@ -163,6 +163,20 @@ impl Store {
                 AND ((c.subject_kind = 2 AND c.subject_id = l.recording_id AND c.role = 'artist')
                   OR (c.subject_kind = 3 AND c.subject_id = rl.id AND c.role = 'album_artist')))"), [agent.0],
             |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?))))
+    }
+
+    /// Releases with a playable track and no counted play, by id, each with
+    /// when its newest file arrived. Play something rotates through them.
+    pub fn never_played(&self) -> Result<Vec<(ReleaseId, Option<i64>)>> {
+        self.read(|c| {
+            let mut stmt = c.prepare(&format!("SELECT x.id, MAX(f.added_at)
+                FROM release x
+                JOIN edition e ON e.release_id = x.id JOIN medium m ON m.edition_id = e.id JOIN track t ON t.medium_id = m.id
+                JOIN source s ON s.id = {} JOIN file f ON f.id = s.file_id
+                WHERE NOT EXISTS (SELECT 1 FROM listen l {LISTEN_TRACK} WHERE rl.id = x.id AND {COUNTED})
+                GROUP BY x.id ORDER BY x.id", crate::library::PREFERRED_SOURCE))?;
+            stmt.query_map([], |r| Ok((ReleaseId(r.get(0)?), r.get(1)?)))?.collect()
+        })
     }
 }
 
@@ -233,6 +247,24 @@ mod tests {
         assert_eq!((dormant[0].release, dormant[0].plays, dormant[0].last_played), (ReleaseId(1), 5, 5));
         assert!(listen(&store, 1, now - DORMANT_MS, 50_000));
         assert!(store.dormant_before(now - DORMANT_MS, 10).unwrap().is_empty(), "exactly 180 days is not older");
+        drop(store);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn never_played_needs_a_playable_track_and_no_counted_play() {
+        let (store, dir) = fixture();
+        store.writer.write(|tx| tx.execute_batch("
+            INSERT INTO release (id, title, rev) VALUES (2, 'No files', 1);
+            INSERT INTO edition (id, release_id, rev) VALUES (2, 2, 1);
+            INSERT INTO medium (id, edition_id, position) VALUES (2, 2, 1);
+            INSERT INTO track (id, medium_id, position, recording_id, rev) VALUES (5, 2, 1, 2, 1);
+        ")).unwrap();
+        assert_eq!(store.never_played().unwrap(), [(ReleaseId(1), Some(1))], "a release without a present file is not offered");
+        assert!(!listen(&store, 1, 1_000, 49_000));
+        assert_eq!(store.never_played().unwrap().len(), 1, "a skip is not a play");
+        assert!(listen(&store, 1, 2_000, 50_000));
+        assert!(store.never_played().unwrap().is_empty());
         drop(store);
         std::fs::remove_dir_all(dir).unwrap();
     }

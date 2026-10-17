@@ -227,6 +227,26 @@ pub fn dormant(limit: u32) -> Result<Vec<DormantDto>, String> {
     api()?.dormant(limit)
 }
 
+/// Play something's picks, best first, each saying why.
+pub fn picks(limit: u32) -> Result<Vec<PickDto>, String> {
+    api()?.picks(limit)
+}
+
+/// `⇧Space`: plays the first pick and returns it; `None` when nothing is playable.
+pub fn play_something() -> Result<Option<PickDto>, String> {
+    api()?.play_something()
+}
+
+/// Play on: every zone and what it does to the sound.
+pub fn zones() -> Result<Vec<ZoneDto>, String> {
+    api()?.zones()
+}
+
+/// Sends output to a zone; while playing it applies from the next track.
+pub fn play_on(zone: String) -> Result<(), String> {
+    api()?.play_on(zone)
+}
+
 pub fn resume_points(limit: u32) -> Result<Vec<ResumeDto>, String> {
     api()?.resume_points(limit)
 }

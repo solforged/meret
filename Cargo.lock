@@ -1289,6 +1289,7 @@ dependencies = [
  "meret-graph",
  "meret-library",
  "meret-model",
+ "meret-player",
  "meret-query",
  "meret-store",
  "serde",

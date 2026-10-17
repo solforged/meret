@@ -54,6 +54,14 @@ abstract interface class CoreBridge {
   Future<List<DormantDto>> dormant(int limit);
   Future<List<ResumeDto>> resumePoints(int limit);
   Future<void> pickUp(PlatformInt64 releaseId);
+  /// Play something's picks, best first, each saying why.
+  Future<List<PickDto>> picks(int limit);
+  /// `⇧Space`: plays the first pick from the top; null when nothing is playable.
+  Future<PickDto?> playSomething();
+  /// Play on: every zone and what it does to the sound.
+  Future<List<ZoneDto>> zones();
+  /// Sends output to a zone; while playing it applies from the next track.
+  Future<void> playOn(String zone);
 }
 
 class RustCore implements CoreBridge {
@@ -135,6 +143,14 @@ class RustCore implements CoreBridge {
   Future<List<ResumeDto>> resumePoints(int limit) => rust.resumePoints(limit: limit);
   @override
   Future<void> pickUp(PlatformInt64 releaseId) => rust.pickUp(releaseId: releaseId);
+  @override
+  Future<List<PickDto>> picks(int limit) => rust.picks(limit: limit);
+  @override
+  Future<PickDto?> playSomething() => rust.playSomething();
+  @override
+  Future<List<ZoneDto>> zones() => rust.zones();
+  @override
+  Future<void> playOn(String zone) => rust.playOn(zone: zone);
 }
 
 /// The plates' Tuesday evening, as data.
@@ -1040,7 +1056,11 @@ class FakeCore implements CoreBridge {
   int _cursor = 0;
   BigInt _nextToken = BigInt.two;
 
-  void _playQueue(List<TrackRowDto> rows) {
+  /// Why the queue is playing, when Play something chose it; other plays clear it.
+  String? _why;
+
+  void _playQueue(List<TrackRowDto> rows, {String? why}) {
+    _why = why;
     _queue.clear();
     for (final row in rows) {
       _queue.add((_nextToken, row));
@@ -1048,6 +1068,53 @@ class FakeCore implements CoreBridge {
     }
     _cursor = 0;
     _playRow(_queue.first);
+  }
+
+  /// The plates' picks over the fake releases: dormant Evans, Creid from the
+  /// trail, Open Sky never played. Wording follows the core's PickDto.
+  @override
+  Future<List<PickDto>> picks(int limit) async {
+    if (_empty) return [];
+    PickDto pick(int id, String label, String reason, String plan) {
+      final rows = _releaseRows(PlatformInt64Util.from(id));
+      final minutes = rows.fold<int>(0, (sum, row) => sum + (row.lengthMs?.toInt() ?? 0)) ~/ 60000;
+      final length = minutes >= 60 ? '${minutes ~/ 60} h ${(minutes % 60).toString().padLeft(2, '0')}' : '$minutes min';
+      return PickDto(releaseId: PlatformInt64Util.from(id), title: _releases[id - 1].$1, credit: _releases[id - 1].$2,
+        label: label, reason: reason, plan: plan, meta: '${rows.length} tracks · $length · ${rows.first.format}');
+    }
+    return [
+      pick(3, 'Dormant · 2 years', '96 plays, then nothing for 2 years.', 'The whole date, in order.'),
+      pick(8, 'From your latest trail', "You reached it on Corridors of Time → Clannad and haven't played it through.", 'The whole album, in order.'),
+      pick(6, 'Never played', 'In your library for 3 years, never played through.', 'The whole album, in order.'),
+    ].take(limit).toList();
+  }
+
+  @override
+  Future<PickDto?> playSomething() async {
+    final pick = (await picks(1)).firstOrNull;
+    if (pick == null) return null;
+    _playQueue(_releaseRows(pick.releaseId), why: '${pick.label} · ${pick.reason.replaceAll(RegExp(r'\.$'), '')}');
+    return pick;
+  }
+
+  @override
+  Future<List<ZoneDto>> zones() async => [
+    for (final device in await outputDevices())
+      ZoneDto(
+        id: 'local:${device.id}', name: device.name,
+        detail: device.isDefault ? 'This Mac · default output' : 'This Mac',
+        verdict: !_settings.exclusive ? '◐ shared with macOS'
+          : device.sampleRates.last < 176400 ? '◐ refuses above ${device.sampleRates.last ~/ 1000} kHz' : '● bit-perfect',
+        warn: !_settings.exclusive || device.sampleRates.last < 176400,
+        current: _settings.outputDevice == null ? device.isDefault : _settings.outputDevice == device.id,
+      ),
+  ];
+
+  @override
+  Future<void> playOn(String zone) async {
+    final id = zone.replaceFirst('local:', '');
+    if (!(await outputDevices()).any((device) => device.id == id)) throw 'no zone $zone';
+    _settings = SettingsDto(light: _settings.light, outputDevice: id, exclusive: _settings.exclusive);
   }
 
   @override
@@ -1107,6 +1174,7 @@ class FakeCore implements CoreBridge {
       light: _sampleLight,
       title: row.title,
       subtitle: '${row.artist} · ${row.album}',
+      why: _why,
       anchor: AnchorDto(item: token, positionMs: 0, rate: 1),
       lengthMs: row.lengthMs,
       path: [
@@ -1153,6 +1221,7 @@ class FakeCore implements CoreBridge {
         light: _state.light,
         title: _state.title,
         subtitle: _state.subtitle,
+        why: _state.why,
         anchor: a,
         lengthMs: _state.lengthMs,
         path: _state.path,

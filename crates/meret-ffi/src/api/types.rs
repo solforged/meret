@@ -26,6 +26,7 @@ pub struct _TrailSummaryDto {
 }
 pub use meret_api::{DormantDto, ListenDto, PlayedDto};
 pub use meret_api::ResumeDto;
+pub use meret_api::{PickDto, ZoneDto};
 
 #[frb(mirror(VolumeDto))]
 pub struct _VolumeDto {
@@ -220,6 +221,7 @@ pub struct _NowDto {
     pub light: Option<LightDto>,
     pub title: String,
     pub subtitle: String,
+    pub why: Option<String>,
     pub anchor: Option<AnchorDto>,
     pub length_ms: Option<u64>,
     pub path: Vec<StageDto>,
@@ -505,6 +507,28 @@ pub struct _DormantDto {
     pub cover: Option<String>,
     pub plays: u64,
     pub last_played_ms: i64,
+}
+
+#[frb(mirror(PickDto))]
+pub struct _PickDto {
+    pub release_id: i64,
+    pub title: String,
+    pub credit: Option<String>,
+    pub cover: Option<String>,
+    pub label: String,
+    pub reason: String,
+    pub plan: String,
+    pub meta: String,
+}
+
+#[frb(mirror(ZoneDto))]
+pub struct _ZoneDto {
+    pub id: String,
+    pub name: String,
+    pub detail: String,
+    pub verdict: String,
+    pub warn: bool,
+    pub current: bool,
 }
 
 #[frb(mirror(ResumeDto))]

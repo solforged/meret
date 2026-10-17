@@ -499,8 +499,31 @@ pub fn resume(api: &Api, limit: u32) -> Result<()> {
 pub fn now(api: &Api) -> Result<()> {
     let now = api.now();
     let (position, rate) = now.anchor.map(|a| (a.position_ms, a.rate)).unwrap_or_default();
-    println!("{} · {} · {} at {:.0} ms / {:?} ms · track {:?} · release {:?}",
+    println!("{} · {} · {} at {:.0} ms / {:?} ms · track {:?} · release {:?}{}",
         now.title, now.subtitle, if rate > 0.0 { "playing" } else { "paused" },
-        position, now.length_ms, now.track_id, now.release_id);
+        position, now.length_ms, now.track_id, now.release_id,
+        now.why.map(|why| format!(" · because {why}")).unwrap_or_default());
+    Ok(())
+}
+
+/// Play something's picks, as Now lists them: label, title, reason, plan, meta.
+pub fn picks(api: &Api, limit: u32) -> Result<()> {
+    let picks = api.picks(limit).map_err(anyhow::Error::msg)?;
+    for pick in &picks {
+        println!("{} · {}{} · {} {} · {} · release {}",
+            pick.label, pick.title, pick.credit.as_deref().map(|c| format!(" · {c}")).unwrap_or_default(),
+            pick.reason, pick.plan, pick.meta, pick.release_id);
+    }
+    if picks.is_empty() {
+        println!("nothing to play: no release has a playable track");
+    }
+    Ok(())
+}
+
+/// Play on: every zone, the current one starred, with its verdict.
+pub fn zones(api: &Api) -> Result<()> {
+    for zone in api.zones().map_err(anyhow::Error::msg)? {
+        println!("{} {} · {} · {} · {}", if zone.current { "●" } else { " " }, zone.name, zone.detail, zone.verdict, zone.id);
+    }
     Ok(())
 }

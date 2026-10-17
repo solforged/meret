@@ -12,6 +12,7 @@ mod suggestions;
 mod views;
 mod trails;
 mod memory;
+mod picks;
 
 #[cfg(test)]
 mod setup_tests;
@@ -28,7 +29,7 @@ use meret_engine::{Engine, EngineEvent};
 use meret_graph::TrailHistory;
 use meret_jobs::Scheduler;
 use meret_model::{AgentId, Idiom, ReleaseId, RootId, TrackId};
-use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError};
+use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError, ZoneFidelity, ZoneInfo};
 use meret_provider::Registry;
 use meret_query::{Input, Term, parse};
 use meret_store::{HotColumns, LibraryFacts, PersonHit, ReleaseHit, Store, TrackRow};
@@ -39,6 +40,7 @@ use tokio::sync::{broadcast, watch};
 pub use facets::{Facet, FacetColumn, Facets};
 pub use local_zone::{LocalZone, file_uri};
 pub use now::NowState;
+pub use picks::{Pick, Why};
 pub use status::{SourceStatus, StatusState};
 pub use meret_store::{LightLevel, Settings};
 pub use suggestions::{FolderKind, FolderSuggestion};
@@ -51,6 +53,13 @@ pub const MAX_QUEUE: usize = 10_000;
 
 /// Past this, "previous" restarts the playing item instead of leaving it.
 const PREVIOUS_RESTART_MS: u64 = 3_000;
+
+/// A zone Play on lists, and whether output is set to it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ZoneRow {
+    pub info: ZoneInfo,
+    pub current: bool,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
@@ -297,6 +306,46 @@ impl Core {
         return Err(meret_engine::output::OutputError::Unimplemented("output device enumeration").into());
         #[cfg(target_os = "macos")]
         Ok(backend.devices()?)
+    }
+
+    /// Play on (plate 09): every zone, saying what it does to the sound. For
+    /// now the zones are this machine's output devices, judged from the
+    /// settings without opening them; the running device is `current`.
+    pub fn zones(&self) -> Result<Vec<ZoneRow>> {
+        let settings = self.settings();
+        let place = if cfg!(target_os = "macos") { "This Mac" } else { "This device" };
+        Ok(self.output_devices()?.into_iter().map(|d| {
+            let current = settings.output_device.as_deref().map_or(d.is_default, |id| id == d.id);
+            let top = d.sample_rates.iter().copied().max().unwrap_or(0);
+            let fidelity = if !settings.exclusive || !d.can_be_exclusive {
+                ZoneFidelity::Shared
+            } else if top > 0 && top < 176_400 {
+                ZoneFidelity::RefusesAbove { hz: top }
+            } else {
+                ZoneFidelity::BitPerfect
+            };
+            ZoneRow {
+                info: ZoneInfo {
+                    id: format!("local:{}", d.id),
+                    name: d.name,
+                    detail: if d.is_default { format!("{place} · default output") } else { place.into() },
+                    host: "local".into(),
+                    fidelity,
+                    decodes_here: true,
+                },
+                current,
+            }
+        }).collect())
+    }
+
+    /// Switches output to a zone from `zones`; applies as `set_settings` does.
+    pub fn play_on(&self, zone: &str) -> Result<()> {
+        let device = zone.strip_prefix("local:").ok_or_else(|| CoreError::Query(format!("no zone {zone}")))?;
+        if !self.output_devices()?.iter().any(|d| d.id == device) {
+            return Err(CoreError::Query(format!("no zone {zone}")));
+        }
+        let settings = Settings { output_device: Some(device.to_owned()), ..self.settings() };
+        self.set_settings(settings)
     }
 
     pub fn volume(&self) -> Result<meret_engine::output::DeviceVolume> {

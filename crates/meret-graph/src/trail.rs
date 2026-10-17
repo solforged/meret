@@ -351,7 +351,7 @@ impl TrailHistory {
         self.active
     }
 
-    pub fn entries(&self) -> impl Iterator<Item = (&Trail, usize)> {
+    pub fn entries(&self) -> impl DoubleEndedIterator<Item = (&Trail, usize)> {
         self.trails.iter().map(|entry| (&entry.trail, entry.departure))
     }
 
