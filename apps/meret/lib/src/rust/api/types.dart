@@ -550,6 +550,7 @@ class NowDto {
   final LightDto? light;
   final String title;
   final String subtitle;
+  final String? why;
   final AnchorDto? anchor;
   final BigInt? lengthMs;
   final List<StageDto> path;
@@ -563,6 +564,7 @@ class NowDto {
     this.light,
     required this.title,
     required this.subtitle,
+    this.why,
     this.anchor,
     this.lengthMs,
     required this.path,
@@ -578,6 +580,7 @@ class NowDto {
       light.hashCode ^
       title.hashCode ^
       subtitle.hashCode ^
+      why.hashCode ^
       anchor.hashCode ^
       lengthMs.hashCode ^
       path.hashCode ^
@@ -595,6 +598,7 @@ class NowDto {
           light == other.light &&
           title == other.title &&
           subtitle == other.subtitle &&
+          why == other.why &&
           anchor == other.anchor &&
           lengthMs == other.lengthMs &&
           path == other.path &&
@@ -686,6 +690,53 @@ class PersonDto {
           workedWith == other.workedWith &&
           plays == other.plays &&
           lastPlayedMs == other.lastPlayedMs;
+}
+
+class PickDto {
+  final PlatformInt64 releaseId;
+  final String title;
+  final String? credit;
+  final String? cover;
+  final String label;
+  final String reason;
+  final String plan;
+  final String meta;
+
+  const PickDto({
+    required this.releaseId,
+    required this.title,
+    this.credit,
+    this.cover,
+    required this.label,
+    required this.reason,
+    required this.plan,
+    required this.meta,
+  });
+
+  @override
+  int get hashCode =>
+      releaseId.hashCode ^
+      title.hashCode ^
+      credit.hashCode ^
+      cover.hashCode ^
+      label.hashCode ^
+      reason.hashCode ^
+      plan.hashCode ^
+      meta.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PickDto &&
+          runtimeType == other.runtimeType &&
+          releaseId == other.releaseId &&
+          title == other.title &&
+          credit == other.credit &&
+          cover == other.cover &&
+          label == other.label &&
+          reason == other.reason &&
+          plan == other.plan &&
+          meta == other.meta;
 }
 
 class PlayedDto {
@@ -1580,4 +1631,43 @@ class VolumeDto {
           scalar == other.scalar &&
           settable == other.settable &&
           reason == other.reason;
+}
+
+class ZoneDto {
+  final String id;
+  final String name;
+  final String detail;
+  final String verdict;
+  final bool warn;
+  final bool current;
+
+  const ZoneDto({
+    required this.id,
+    required this.name,
+    required this.detail,
+    required this.verdict,
+    required this.warn,
+    required this.current,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      detail.hashCode ^
+      verdict.hashCode ^
+      warn.hashCode ^
+      current.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ZoneDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          detail == other.detail &&
+          verdict == other.verdict &&
+          warn == other.warn &&
+          current == other.current;
 }

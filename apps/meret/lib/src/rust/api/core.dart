@@ -190,6 +190,21 @@ Future<List<PlayedDto>> mostPlayed({required int days, required int limit}) =>
 Future<List<DormantDto>> dormant({required int limit}) =>
     RustLib.instance.api.crateApiCoreDormant(limit: limit);
 
+/// Play something's picks, best first, each saying why.
+Future<List<PickDto>> picks({required int limit}) =>
+    RustLib.instance.api.crateApiCorePicks(limit: limit);
+
+/// `⇧Space`: plays the first pick and returns it; `None` when nothing is playable.
+Future<PickDto?> playSomething() =>
+    RustLib.instance.api.crateApiCorePlaySomething();
+
+/// Play on: every zone and what it does to the sound.
+Future<List<ZoneDto>> zones() => RustLib.instance.api.crateApiCoreZones();
+
+/// Sends output to a zone; while playing it applies from the next track.
+Future<void> playOn({required String zone}) =>
+    RustLib.instance.api.crateApiCorePlayOn(zone: zone);
+
 Future<List<ResumeDto>> resumePoints({required int limit}) =>
     RustLib.instance.api.crateApiCoreResumePoints(limit: limit);
 
