@@ -14,7 +14,7 @@ use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
 use crate::clock::{Anchor, SharedClock, now_ns};
 use crate::decode::Decoder;
 use crate::dsp::Stage;
-use crate::output::{Opened, OutputBackend, OutputRequest, OutputStream};
+use crate::output::{DeviceVolume, Opened, OutputBackend, OutputError, OutputRequest, OutputStream};
 use crate::ring::{RingWriter, ring};
 use crate::Sample;
 
@@ -33,9 +33,10 @@ pub enum Control {
     Play(Load),
     /// What follows the current item, opened early for a gapless join.
     SetNext(Option<Load>),
-    /// Use this output choice from the next track opened. The current stream,
-    /// including pause and resume, stays on its existing output until then.
+    /// Changes apply at the next track while playing, or on resume if paused.
     SetOutput { device: Option<String>, exclusive: bool },
+    Volume(Sender<Result<DeviceVolume, OutputError>>),
+    SetVolume { scalar: f32, reply: Sender<Result<DeviceVolume, OutputError>> },
     Resume,
     Pause,
     Seek(u64),
@@ -48,6 +49,7 @@ pub enum EngineEvent {
     /// `item` became audible. Sent when its first frame reaches the device,
     /// not when it was decoded.
     Started { item: ItemToken, path: SignalPath },
+    OutputChanged { path: SignalPath },
     Anchor(Anchor),
     /// `item` finished: its last frame reached the device.
     Ended { item: ItemToken },
@@ -96,6 +98,21 @@ impl Engine {
     pub fn events(&self) -> &Receiver<EngineEvent> {
         &self.events
     }
+
+    pub fn volume(&self) -> Result<DeviceVolume, OutputError> {
+        let (reply, rx) = crossbeam_channel::bounded(1);
+        self.ctl.send(Control::Volume(reply)).map_err(|_| OutputError::Platform("engine stopped".into()))?;
+        rx.recv().map_err(|_| OutputError::Platform("engine stopped".into()))?
+    }
+
+    pub fn set_volume(&self, scalar: f32) -> Result<DeviceVolume, OutputError> {
+        if !scalar.is_finite() || !(0.0..=1.0).contains(&scalar) {
+            return Err(OutputError::Refused("volume must be between 0 and 1".into()));
+        }
+        let (reply, rx) = crossbeam_channel::bounded(1);
+        self.ctl.send(Control::SetVolume { scalar, reply }).map_err(|_| OutputError::Platform("engine stopped".into()))?;
+        rx.recv().map_err(|_| OutputError::Platform("engine stopped".into()))?
+    }
 }
 
 impl Drop for Engine {
@@ -135,6 +152,9 @@ struct Output {
 struct Worker {
     backend: Arc<dyn OutputBackend>,
     config: EngineConfig,
+    /// System default resolves once per playback session, before taking hog.
+    session_device: Option<String>,
+    reopen_on_resume: bool,
     events: Sender<EngineEvent>,
     clock: Arc<SharedClock>,
     out: Option<Output>,
@@ -158,6 +178,8 @@ impl Worker {
         Self {
             backend,
             config,
+            session_device: None,
+            reopen_on_resume: false,
             events,
             clock: Arc::new(SharedClock::default()),
             out: None,
@@ -213,10 +235,25 @@ impl Worker {
             }
             Control::SetNext(load) => self.next = load,
             Control::SetOutput { device, exclusive } => {
-                self.config.device = device;
-                self.config.exclusive = exclusive;
+                if self.config.device != device || self.config.exclusive != exclusive {
+                    self.config.device = device;
+                    self.config.exclusive = exclusive;
+                    self.session_device = None;
+                    if !self.playing {
+                        self.reopen_on_resume = self.out.is_some();
+                    }
+                }
+            }
+            Control::Volume(reply) => {
+                let _ = reply.send(self.backend.volume(self.volume_device()));
+            }
+            Control::SetVolume { scalar, reply } => {
+                let _ = reply.send(self.backend.set_volume(self.volume_device(), scalar));
             }
             Control::Resume => {
+                if self.reopen_on_resume && !self.reopen_paused() {
+                    return;
+                }
                 self.playing = true;
                 self.resume_output();
             }
@@ -226,6 +263,9 @@ impl Worker {
                     let _ = o.stream.pause();
                 }
                 self.clock.set_playing(false);
+                if self.out.as_ref().is_some_and(|o| o.device != self.config.device || o.exclusive != self.config.exclusive) {
+                    self.reopen_on_resume = true;
+                }
             }
             Control::Seek(frame) => {
                 let Some(cur) = &mut self.current else { return };
@@ -246,12 +286,73 @@ impl Worker {
                 self.next = None;
                 self.playing = false;
                 self.release_output();
+                self.session_device = None;
+                self.reopen_on_resume = false;
                 if let Some(b) = self.audible.take() {
                     let _ = self.events.send(EngineEvent::Ended { item: b.item });
                 }
                 let _ = self.events.send(EngineEvent::Idle);
             }
             Control::Shutdown => unreachable!("handled by run"),
+        }
+    }
+
+    fn volume_device(&self) -> Option<&str> {
+        // Output still playing on the previous setting takes precedence.
+        self.out.as_ref().map(|o| o.stream.opened().device_uid.as_str())
+            .or(self.session_device.as_deref())
+            .or(self.config.device.as_deref())
+    }
+
+    fn resolve_session_device(&mut self) -> Result<String, OutputError> {
+        if let Some(uid) = &self.session_device {
+            return Ok(uid.clone());
+        }
+        let uid = self.backend.resolve_device(self.config.device.as_deref())?;
+        self.session_device = Some(uid.clone());
+        Ok(uid)
+    }
+
+    fn reopen_paused(&mut self) -> bool {
+        let Some(old) = self.out.take() else {
+            self.reopen_on_resume = false;
+            return true;
+        };
+        let spec = old.spec;
+        tracing::info!(reason = "paused output settings changed", ?spec, "reopening output");
+        let source = old.stream.into_source();
+        let opened = self.resolve_session_device().and_then(|uid| {
+            let req = OutputRequest { device: Some(uid), spec, exclusive: self.config.exclusive };
+            self.backend.open(&req, source, self.clock.clone())
+        });
+        match opened {
+            Ok(stream) => {
+                let actual = stream.opened().clone();
+                self.out = Some(Output { stream, writer: old.writer, spec,
+                    device: self.config.device.clone(), exclusive: self.config.exclusive });
+                self.reopen_on_resume = false;
+                // Preserve ring, decode position, pending samples and clock across
+                // the switch, including a gapless boundary already in the ring.
+                for boundary in &mut self.boundaries {
+                    if let Some(stage) = boundary.path.stages.last_mut() {
+                        let path = signal_path(spec, &[], &actual);
+                        *stage = path.stages.last().expect("output stage").clone();
+                    }
+                }
+                if let Some(boundary) = &mut self.audible {
+                    if let Some(stage) = boundary.path.stages.last_mut() {
+                        let path = signal_path(spec, &[], &actual);
+                        *stage = path.stages.last().expect("output stage").clone();
+                    }
+                    let _ = self.events.send(EngineEvent::OutputChanged { path: boundary.path.clone() });
+                }
+                true
+            }
+            Err(error) => {
+                self.error(self.audible.as_ref().map(|b| b.item), error.to_string());
+                self.handle(Control::Stop);
+                false
+            }
         }
     }
 
@@ -300,6 +401,12 @@ impl Worker {
     }
 
     fn open_output(&mut self, spec: StreamSpec) -> bool {
+        let reason = match self.out.as_ref() {
+            None => "idle or first open",
+            Some(old) if old.device != self.config.device || old.exclusive != self.config.exclusive => "output settings changed",
+            Some(_) => "source format changed",
+        };
+        tracing::info!(reason, ?spec, previous_spec = ?self.out.as_ref().map(|o| o.spec), "reopening output");
         // Drop the old stream (and its callback) before opening a new one.
         self.out = None;
         let frames = (spec.sample_rate as usize * self.config.ring_ms as usize / 1000).max(4096);
@@ -308,10 +415,18 @@ impl Worker {
         self.clock.reset();
         self.written = 0;
         self.boundaries.clear();
-        let req = OutputRequest { device: self.config.device.clone(), spec, exclusive: self.config.exclusive };
+        let device = match self.resolve_session_device() {
+            Ok(uid) => uid,
+            Err(error) => {
+                tracing::error!(%error, "output resolution failed");
+                return false;
+            }
+        };
+        let req = OutputRequest { device: Some(device), spec, exclusive: self.config.exclusive };
         match self.backend.open(&req, reader, self.clock.clone()) {
             Ok(stream) => {
-                self.out = Some(Output { stream, writer, spec, device: req.device, exclusive: req.exclusive });
+                self.reopen_on_resume = false;
+                self.out = Some(Output { stream, writer, spec, device: self.config.device.clone(), exclusive: req.exclusive });
                 true
             }
             Err(e) => {
@@ -439,6 +554,8 @@ impl Worker {
             self.draining = false;
             self.last_anchor = None;
             self.release_output();
+            self.session_device = None;
+            self.reopen_on_resume = false;
             return;
         }
         if self.draining && self.current.is_some() {
@@ -541,7 +658,14 @@ mod tests {
     impl OutputBackend for RecordingBackend {
         fn name(&self) -> &'static str { "recording" }
 
-        fn devices(&self) -> Result<Vec<DeviceInfo>, OutputError> { Ok(vec![]) }
+        fn devices(&self) -> Result<Vec<DeviceInfo>, OutputError> {
+            Ok(vec![DeviceInfo { id: "default".into(), name: "Default".into(), is_default: true,
+                sample_rates: vec![], max_bits: 24, can_be_exclusive: true, dop: false }])
+        }
+
+        fn resolve_device(&self, wanted: Option<&str>) -> Result<String, OutputError> {
+            Ok(wanted.unwrap_or("default").into())
+        }
 
         fn open(
             &self,
@@ -555,8 +679,9 @@ mod tests {
             }
             Ok(Box::new(RecordingStream {
                 actions: self.0.clone(),
-                _source: source,
+                source: Some(source),
                 opened: Opened {
+                    device_uid: req.device.clone().unwrap_or_else(|| "default".into()),
                     device_name: req.device.clone().unwrap_or_else(|| "default".into()),
                     sample_rate: req.spec.sample_rate,
                     bits: req.spec.bits,
@@ -570,7 +695,7 @@ mod tests {
 
     struct RecordingStream {
         actions: Sender<OutputAction>,
-        _source: RingReader,
+        source: Option<RingReader>,
         opened: Opened,
     }
 
@@ -585,6 +710,10 @@ mod tests {
         fn pause(&mut self) -> Result<(), OutputError> {
             self.actions.send(OutputAction::Pause).unwrap();
             Ok(())
+        }
+
+        fn into_source(mut self: Box<Self>) -> RingReader {
+            self.source.take().expect("recording source")
         }
     }
 
@@ -602,12 +731,12 @@ mod tests {
     }
 
     #[test]
-    fn output_choice_waits_for_the_current_track_to_drain_even_across_pause_resume() {
+    fn playing_output_choice_waits_for_the_current_track_to_drain() {
         for (device, exclusive) in [(Some("dac"), true), (None, false), (Some("dac"), false)] {
             let (mut worker, actions, _events) = recording_worker();
             worker.handle(Control::Play(load(1, cd(), 0.01)));
             assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
-                OutputAction::Open { device: None, exclusive: true },
+                OutputAction::Open { device: Some("default".into()), exclusive: true },
                 OutputAction::Start,
             ]);
             worker.handle(Control::SetNext(Some(load(2, cd(), 0.01))));
@@ -616,9 +745,6 @@ mod tests {
             assert_eq!(worker.config.device, device);
             assert_eq!(worker.config.exclusive, exclusive);
             assert!(actions.is_empty());
-            worker.handle(Control::Pause);
-            worker.handle(Control::Resume);
-            assert_eq!(actions.try_iter().collect::<Vec<_>>(), [OutputAction::Pause, OutputAction::Start]);
             worker.fill();
             assert!(actions.is_empty());
             assert_eq!(worker.current.as_ref().unwrap().item, 1);
@@ -631,7 +757,7 @@ mod tests {
             worker.fill();
             assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
                 OutputAction::Drop,
-                OutputAction::Open { device, exclusive },
+                OutputAction::Open { device: Some(device.unwrap_or_else(|| "default".into())), exclusive },
                 OutputAction::Start,
             ]);
             assert_eq!(worker.current.as_ref().unwrap().item, 2);
@@ -667,7 +793,7 @@ mod tests {
             worker.handle(Control::Play(load(item, cd(), 0.01)));
             assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
                 OutputAction::Drop,
-                OutputAction::Open { device, exclusive },
+                OutputAction::Open { device: Some(device.unwrap_or_else(|| "default".into())), exclusive },
                 OutputAction::Start,
             ]);
             assert_eq!(worker.current.as_ref().unwrap().item, item);
@@ -697,6 +823,77 @@ mod tests {
         assert_eq!(events.try_iter().collect::<Vec<_>>(), [
             EngineEvent::Error { item: Some(2), message: "the output device could not be opened".into() },
         ]);
+    }
+
+    #[test]
+    fn paused_output_switch_preserves_buffered_audio_and_boundaries_on_resume() {
+        let (mut worker, actions, events) = recording_worker();
+        worker.handle(Control::Play(load(1, cd(), 0.01)));
+        worker.handle(Control::SetNext(Some(load(2, cd(), 0.01))));
+        worker.fill();
+        worker.publish();
+        worker.handle(Control::Pause);
+        let written = worker.written;
+        let clock = worker.clock.clone();
+        let boundaries = worker.boundaries.len();
+        actions.try_iter().for_each(drop);
+        events.try_iter().for_each(drop);
+        worker.handle(Control::SetOutput { device: Some("dac".into()), exclusive: false });
+        assert!(actions.is_empty());
+        worker.handle(Control::Resume);
+        assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
+            OutputAction::Drop,
+            OutputAction::Open { device: Some("dac".into()), exclusive: false },
+            OutputAction::Start,
+        ]);
+        assert!(Arc::ptr_eq(&clock, &worker.clock));
+        assert_eq!(worker.written, written);
+        assert_eq!(worker.boundaries.len(), boundaries);
+        assert_eq!(worker.volume_device(), Some("dac"));
+        assert!(events.try_iter().any(|e| matches!(e, EngineEvent::OutputChanged { path } if path.fidelity() == Fidelity::Altered)));
+    }
+
+    #[test]
+    fn default_uid_is_pinned_across_reopens_until_stop_idle_or_settings_change() {
+        use std::sync::Mutex;
+        struct Defaults { uid: Mutex<String>, recording: RecordingBackend }
+        impl OutputBackend for Defaults {
+            fn name(&self) -> &'static str { "defaults" }
+            fn devices(&self) -> Result<Vec<DeviceInfo>, OutputError> { self.recording.devices() }
+            fn resolve_device(&self, wanted: Option<&str>) -> Result<String, OutputError> {
+                Ok(wanted.map(str::to_owned).unwrap_or_else(|| self.uid.lock().unwrap().clone()))
+            }
+            fn open(&self, req: &OutputRequest, source: RingReader, clock: Arc<SharedClock>) -> Result<Box<dyn OutputStream>, OutputError> {
+                self.recording.open(req, source, clock)
+            }
+        }
+        let (actions_tx, actions) = unbounded();
+        let (events_tx, _) = unbounded();
+        let backend = Arc::new(Defaults { uid: Mutex::new("uid-a".into()), recording: RecordingBackend(actions_tx) });
+        let mut worker = Worker::new(backend.clone(), EngineConfig::default(), events_tx);
+        worker.handle(Control::Play(load(1, StreamSpec { codec: Codec::Mp3, bits: 24, ..cd() }, 0.01)));
+        *backend.uid.lock().unwrap() = "uid-b".into();
+        worker.handle(Control::Play(load(2, cd(), 0.01)));
+        assert_eq!(worker.volume_device(), Some("uid-a"));
+        let opens: Vec<_> = actions.try_iter().filter_map(|a| match a {
+            OutputAction::Open { device, .. } => device, _ => None,
+        }).collect();
+        assert_eq!(opens, ["uid-a", "uid-a"]);
+        worker.handle(Control::Stop);
+        worker.handle(Control::Play(load(3, cd(), 0.01)));
+        assert_eq!(worker.volume_device(), Some("uid-b"));
+        *backend.uid.lock().unwrap() = "uid-c".into();
+        worker.handle(Control::SetOutput { device: None, exclusive: false });
+        worker.handle(Control::Pause);
+        worker.handle(Control::Resume);
+        assert_eq!(worker.volume_device(), Some("uid-c"));
+        worker.clock.advance(worker.written, now_ns());
+        worker.fill();
+        worker.publish();
+        assert!(worker.session_device.is_none());
+        *backend.uid.lock().unwrap() = "uid-d".into();
+        worker.handle(Control::Play(load(4, cd(), 0.01)));
+        assert_eq!(worker.volume_device(), Some("uid-d"));
     }
 
     #[test]

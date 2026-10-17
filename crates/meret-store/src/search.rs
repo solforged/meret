@@ -344,8 +344,9 @@ impl Store {
             let n = params.len() + 1;
             let sql = format!(
                 "SELECT x.id, x.title, x.p, x.year,
-                        (SELECT a.name FROM credit c JOIN agent a ON a.id = c.agent_id
-                         WHERE c.subject_kind = 3 AND c.subject_id = x.id AND c.role = 'album_artist' ORDER BY c.sort LIMIT 1),
+                        COALESCE((SELECT rl.album_artist_credit FROM release rl WHERE rl.id = x.id),
+                            (SELECT a.name FROM credit c JOIN agent a ON a.id = c.agent_id
+                             WHERE c.subject_kind = 3 AND c.subject_id = x.id AND c.role = 'album_artist' ORDER BY c.sort LIMIT 1)),
                         (SELECT COUNT(*) FROM edition e JOIN medium m ON m.edition_id = e.id JOIN track t ON t.medium_id = m.id
                          WHERE e.release_id = x.id AND {present})
                  FROM (SELECT rl.id, rl.title, rl.year, search_fold(rl.title) LIKE ?{n} ESCAPE '\\' AS p {eligible}

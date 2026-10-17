@@ -68,6 +68,19 @@ impl From<meret_engine::output::DeviceInfo> for OutputDeviceDto {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct VolumeDto {
+    pub scalar: Option<f32>,
+    pub settable: bool,
+    pub reason: Option<String>,
+}
+
+impl From<meret_engine::output::DeviceVolume> for VolumeDto {
+    fn from(volume: meret_engine::output::DeviceVolume) -> Self {
+        Self { scalar: volume.scalar, settable: volume.settable, reason: volume.reason }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FolderKindDto {
     Music,
@@ -724,13 +737,15 @@ pub struct ReleaseDto {
     pub cover: Option<String>,
     /// The album artist.
     pub artist: Option<String>,
+    /// Individual album-artist thread targets; `artist` keeps the written credit.
+    pub artist_links: Vec<ThreadDto>,
     pub year: Option<u16>,
     /// "Score", "Album"; None when not sorted yet.
     pub idiom: Option<String>,
     pub tracks: u32,
     pub discs: u32,
     pub length_ms: u64,
-    /// Its files' formats, most tracks first: "FLAC 16/44.1", "MP3".
+    /// Best-copy formats, then other copies: "FLAC 16/44.1", "also MP3".
     pub formats: Vec<String>,
     /// The tracklist; row i plays with `play_release(id, i)`.
     pub rows: Vec<TrackRowDto>,
@@ -740,6 +755,12 @@ pub struct ReleaseDto {
 
 impl ReleaseDto {
     pub fn from_page(p: ReleasePage, art_dir: &Path) -> Self {
+        let best_codecs: Vec<&str> = p.tracks.iter().filter_map(|r| r.codec.as_deref()).collect();
+        let mut other_formats: Vec<String> = p.tracks.iter().flat_map(|r| r.other_formats.iter())
+            .filter(|codec| !best_codecs.iter().any(|best| best.eq_ignore_ascii_case(codec)))
+            .cloned().collect();
+        other_formats.sort();
+        other_formats.dedup();
         let rows: Vec<TrackRowDto> = p.tracks.into_iter().map(TrackRowDto::from).collect();
         let mut discs: Vec<u32> = rows.iter().map(|r| r.disc).collect();
         discs.sort_unstable();
@@ -753,14 +774,14 @@ impl ReleaseDto {
         }
         formats.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
 
-        let mut credits = vec![];
-        if let Some((agent, name)) = &p.album_artist {
-            credits.push(ThreadDto::local(ThreadKind::AlbumArtist, TargetDto::Person { id: agent.0 }, name.clone(), String::new()));
-        }
+        let artist_links: Vec<_> = p.album_artists.iter().map(|(agent, name)| {
+            ThreadDto::local(ThreadKind::AlbumArtist, TargetDto::Person { id: agent.0 }, name.clone(), String::new())
+        }).collect();
+        let mut credits = artist_links.clone();
         for a in p.artists {
             let everywhere = a.positions.len() == rows.len();
             // The album artist on every track is already said.
-            if everywhere && p.album_artist.as_ref().is_some_and(|(id, _)| *id == a.agent) {
+            if everywhere && p.album_artists.iter().any(|(id, _)| *id == a.agent) {
                 continue;
             }
             let detail = if everywhere {
@@ -779,12 +800,14 @@ impl ReleaseDto {
             title: p.title,
             cover: p.cover.as_ref().map(|a| meret_store::cover_file(art_dir, &a.hash, 256).to_string_lossy().into_owned()),
             artist: p.album_artist.map(|(_, name)| name),
+            artist_links,
             year: p.year,
             idiom: p.idiom.map(|i| singular(i).into()),
             tracks: rows.len() as u32,
             discs: discs.len() as u32,
             length_ms: rows.iter().filter_map(|r| r.length_ms).sum(),
-            formats: formats.into_iter().map(|(f, _)| f).collect(),
+            formats: formats.into_iter().map(|(f, _)| f)
+                .chain((!other_formats.is_empty()).then(|| format!("also {}", other_formats.join(", ")))).collect(),
             rows,
             credits,
         }
@@ -942,12 +965,32 @@ mod cover_tests {
             year: None,
             idiom: None,
             album_artist: None,
+            album_artists: vec![],
             cover: Some(art(None)),
             tracks: vec![],
             artists: vec![],
         };
         let release = ReleaseDto::from_page(page, Path::new("/tmp/meret/art"));
         assert_eq!(release.cover.as_deref(), Some("/tmp/meret/art/abcd-256.jpg"));
+    }
+
+    #[test]
+    fn release_formats_distinguish_best_copy_from_alternates_without_extra_rows() {
+        let track = TrackRow {
+            track: TrackId(1), recording: meret_model::RecordingId(1), release: ReleaseId(9),
+            idiom: None, title: "Terratus".into(), artist: None, artist_id: None, album: "Tyranny".into(),
+            album_artist: None, album_artist_id: None, disc: 1, number: 1, year: None, length_ms: Some(10000),
+            codec: Some("FLAC".into()), sample_rate: Some(44100), bits: Some(16),
+            other_formats: vec!["MP3".into()], path: Some("/music/1.flac".into()),
+        };
+        let page = ReleasePage {
+            release: ReleaseId(9), title: "Tyranny".into(), year: None, idiom: None,
+            album_artist: None, album_artists: vec![], cover: None, tracks: vec![track], artists: vec![],
+        };
+        let dto = ReleaseDto::from_page(page, Path::new("/tmp/art"));
+        assert_eq!(dto.formats, ["FLAC 16/44.1", "also MP3"]);
+        assert_eq!((dto.tracks, dto.rows.len(), dto.length_ms), (1, 1, 10000));
+        assert_eq!(dto.rows[0].format, "FLAC 16/44.1", "table rows describe the copy playback chooses");
     }
 }
 

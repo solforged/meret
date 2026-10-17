@@ -13,8 +13,9 @@ import '../theme/tokens.dart';
 /// Now: the playing body, the signal path and, later, the queue.
 /// Pinned at the right on large screens; a bar on phones.
 class NowPane extends StatelessWidget {
-  const NowPane({super.key, required this.now, required this.clock, required this.onToggle});
+  const NowPane({super.key, required this.core, required this.now, required this.clock, required this.onToggle});
 
+  final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
@@ -67,6 +68,8 @@ class NowPane extends StatelessWidget {
             },
             style: Tok.monoSmall.copyWith(color: f == FidelityDto.bitPerfect ? Tok.ok : Tok.warn),
           ),
+        const SizedBox(height: 12),
+        DeviceVolume(core: core, now: now),
       ]),
     );
   }
@@ -86,6 +89,105 @@ class NowPane extends StatelessWidget {
           return v.round();
         }));
       });
+}
+
+/// The output device's own volume; samples stay untouched. [compact] is
+/// the slider alone, for Now as a bar, with the reason as a tooltip.
+class DeviceVolume extends StatefulWidget {
+  const DeviceVolume({super.key, required this.core, required this.now, this.compact = false});
+  final CoreBridge core;
+  final NowDto? now;
+  final bool compact;
+
+  @override
+  State<DeviceVolume> createState() => _DeviceVolumeState();
+}
+
+class _DeviceVolumeState extends State<DeviceVolume> {
+  VolumeDto? _volume;
+  double? _dragging;
+  String? _error;
+  bool _saving = false;
+  int _request = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(DeviceVolume oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.core != widget.core || oldWidget.now != widget.now) _load();
+  }
+
+  Future<void> _load() async {
+    if (_saving || _dragging != null) return;
+    final request = ++_request;
+    try {
+      final volume = await widget.core.volume();
+      if (mounted && request == _request) setState(() { _volume = volume; _error = null; });
+    } catch (error) {
+      if (mounted && request == _request) setState(() => _error = error.toString());
+    }
+  }
+
+  Future<void> _save(double scalar) async {
+    ++_request;
+    setState(() { _saving = true; _error = null; });
+    try {
+      final volume = await widget.core.setVolume(scalar);
+      if (mounted) setState(() => _volume = volume);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() { _saving = false; _dragging = null; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final volume = _volume;
+    final enabled = volume?.settable == true && volume?.scalar != null && !_saving && _error == null;
+    final scalar = (_dragging ?? volume?.scalar ?? 0).clamp(0.0, 1.0);
+    final reason = _error ?? volume?.reason ?? (volume == null ? 'Reading device volume…' : null);
+    final accent = Light.of(context).accent;
+    final slider = SliderTheme(
+      data: SliderThemeData(
+        trackHeight: 2,
+        activeTrackColor: accent,
+        inactiveTrackColor: Tok.line,
+        thumbColor: accent,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+      ),
+      child: Slider(
+        key: const ValueKey('now-volume'),
+        value: scalar,
+        semanticFormatterCallback: (value) => '${(value * 100).round()} percent device volume',
+        onChanged: enabled ? (value) => setState(() => _dragging = value) : null,
+        onChangeEnd: enabled ? _save : null,
+      ),
+    );
+    if (widget.compact) {
+      return Tooltip(
+        message: reason ?? 'Device volume ${(scalar * 100).round()}%',
+        child: SizedBox(width: 168, child: Row(children: [
+          const Text('VOL', style: Tok.label),
+          Expanded(child: slider),
+        ])),
+      );
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Expanded(child: Text('DEVICE VOLUME', style: Tok.label)),
+        Text(volume?.scalar == null ? '—' : '${(scalar * 100).round()}%', style: Tok.monoSmall),
+      ]),
+      slider,
+      if (reason != null) Text(reason, style: Tok.monoSmall.copyWith(color: Tok.muted)),
+    ]);
+  }
 }
 
 class _Stage extends StatelessWidget {

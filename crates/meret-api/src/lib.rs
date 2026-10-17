@@ -93,14 +93,22 @@ impl Api {
         self.core.settings().into()
     }
 
-    /// Persists settings. Output changes apply from the next track opened;
-    /// the currently playing track keeps its device and exclusive mode.
+    /// Persists settings. Output changes wait for the next track while playing;
+    /// when paused they apply on resume, and when idle on the next play.
     pub fn set_settings(&self, settings: SettingsDto) -> Result<(), String> {
         self.core.set_settings(settings.into()).map_err(|e| e.to_string())
     }
 
     pub fn output_devices(&self) -> Result<Vec<OutputDeviceDto>, String> {
         self.core.output_devices().map(|devices| devices.into_iter().map(Into::into).collect()).map_err(|e| e.to_string())
+    }
+
+    pub fn volume(&self) -> Result<VolumeDto, String> {
+        self.core.volume().map(Into::into).map_err(|e| e.to_string())
+    }
+
+    pub fn set_volume(&self, scalar: f32) -> Result<VolumeDto, String> {
+        self.core.set_volume(scalar).map(Into::into).map_err(|e| e.to_string())
     }
 
     pub fn suggest_folders(&self) -> Vec<FolderSuggestionDto> {
@@ -182,17 +190,19 @@ impl Api {
 
     /// The trail strip: every stop and the thread into it.
     pub fn trail(&self) -> Option<TrailDto> {
-        let t = self.core.trail.lock().clone()?;
+        let t = self.core.trail.lock().current()?.clone();
         Some(self.trail_dto(&t))
     }
 
-    /// Ends the current trail and roots a new one at `to`: a search from the
-    /// query line or a door on the Front.
+    /// Keeps the current trail in session history and roots a new one at
+    /// `to`: a search from the query line or a door on the Front.
     pub fn start_trail(&self, to: TargetDto) -> TrailDto {
         let (entity, root_query) = to.entity();
-        let t = meret_graph::Trail::start(entity, root_query, now_ms());
-        // TODO(core): persist the old trail before replacing it.
-        *self.core.trail.lock() = Some(t.clone());
+        let now = now_ms();
+        let t = {
+            let mut history = self.core.trail.lock();
+            history.start(meret_graph::Trail::start(entity, root_query, now), now).clone()
+        };
         self.trail_dto(&t)
     }
 
@@ -209,7 +219,7 @@ impl Api {
         }
         let t = {
             let mut guard = self.core.trail.lock();
-            let trail = guard.as_mut().ok_or("there's no trail to follow from")?;
+            let trail = guard.current_mut().ok_or("there's no trail to follow from")?;
             if from_stop as usize >= trail.len() {
                 return Err(format!("the trail has no stop {from_stop}"));
             }
@@ -220,15 +230,15 @@ impl Api {
         Ok(self.trail_dto(&t))
     }
 
-    /// `[`: one stop back. None at the root, or with no trail.
+    /// `[`: one stop back, or the previous trail's saved stop at the root.
     pub fn trail_back(&self) -> Option<TrailDto> {
-        self.move_along(|t, now| t.back(now))
+        self.move_history(|history, now| history.back(now))
     }
 
-    /// `]`: forward to the newest stop opened from this one. None when
-    /// there's none.
+    /// `]`: the next trail's root at a saved departure stop, otherwise the
+    /// newest child that hasn't folded into a peek.
     pub fn trail_forward(&self) -> Option<TrailDto> {
-        self.move_along(|t, now| t.forward(now))
+        self.move_history(|history, now| history.forward(now))
     }
 
     /// A star on the strip, clicked: that stop becomes current.
@@ -237,13 +247,16 @@ impl Api {
     }
 
     fn move_along(&self, step: impl FnOnce(&mut meret_graph::Trail, i64) -> bool) -> Option<TrailDto> {
+        self.move_history(|history, now| history.current_mut().is_some_and(|trail| step(trail, now)))
+    }
+
+    fn move_history(&self, step: impl FnOnce(&mut meret_graph::TrailHistory, i64) -> bool) -> Option<TrailDto> {
         let t = {
-            let mut guard = self.core.trail.lock();
-            let trail = guard.as_mut()?;
-            if !step(trail, now_ms()) {
+            let mut history = self.core.trail.lock();
+            if !step(&mut history, now_ms()) {
                 return None;
             }
-            trail.clone()
+            history.current()?.clone()
         };
         Some(self.trail_dto(&t))
     }
@@ -284,7 +297,7 @@ impl Api {
     /// so its branch is kept.
     pub fn play_release(&self, id: i64, index: u32, from_stop: Option<u32>) -> Result<(), String> {
         self.core.play_release(ReleaseId(id), index as usize).map_err(|e| e.to_string())?;
-        if let (Some(stop), Some(trail)) = (from_stop, self.core.trail.lock().as_mut())
+        if let (Some(stop), Some(trail)) = (from_stop, self.core.trail.lock().current_mut())
             && (stop as usize) < trail.len()
             && trail.stop(stop as usize).entity == EntityRef::Release(ReleaseId(id))
         {

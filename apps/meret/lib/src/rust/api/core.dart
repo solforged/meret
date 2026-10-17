@@ -49,13 +49,18 @@ Future<void> removeRoot({required PlatformInt64 id}) =>
 
 SettingsDto settings() => RustLib.instance.api.crateApiCoreSettings();
 
-/// Persists settings. Output changes apply from the next track opened;
-/// the currently playing track keeps its device and exclusive mode.
+/// Persists settings. Output changes wait for the next track while playing;
+/// when paused they apply on resume, and when idle on the next play.
 Future<void> setSettings({required SettingsDto s}) =>
     RustLib.instance.api.crateApiCoreSetSettings(s: s);
 
 Future<List<OutputDeviceDto>> outputDevices() =>
     RustLib.instance.api.crateApiCoreOutputDevices();
+
+Future<VolumeDto> volume() => RustLib.instance.api.crateApiCoreVolume();
+
+Future<VolumeDto> setVolume({required double scalar}) =>
+    RustLib.instance.api.crateApiCoreSetVolume(scalar: scalar);
 
 /// Budgeted discovery runs off the UI thread; protected folders aren't walked.
 Future<List<FolderSuggestionDto>> suggestFolders() =>

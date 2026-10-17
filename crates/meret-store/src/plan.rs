@@ -17,6 +17,8 @@ pub mod format_code {
     pub const DSD: u8 = 3;
     pub const CHIPTUNE: u8 = 4;
     pub const LOSSY: u8 = 5;
+    /// A query-only bit, not a best-format category.
+    pub const MP3: u8 = 6;
 
     /// The code for a source, from what its file says about itself.
     pub fn classify(codec: Option<&str>, sample_rate: Option<u32>, bits: Option<u8>, lossless: bool) -> u8 {
@@ -88,13 +90,15 @@ fn columns_answer(term: &Term, c: &HotColumns, now_s: i64) -> Option<RoaringBitm
         }
         Term::Format { format } => {
             use format_code::*;
-            match format {
-                Format::Flac => c.equals_u8(&c.format, FLAC_CD) | c.equals_u8(&c.format, HI_RES),
-                Format::HiRes => c.equals_u8(&c.format, HI_RES),
-                Format::Dsd => c.equals_u8(&c.format, DSD),
-                Format::Chiptune => c.equals_u8(&c.format, CHIPTUNE),
-                Format::Lossy => c.equals_u8(&c.format, LOSSY),
-            }
+            let mask = match format {
+                Format::Flac => (1 << FLAC_CD) | (1 << HI_RES),
+                Format::HiRes => 1 << HI_RES,
+                Format::Dsd => 1 << DSD,
+                Format::Chiptune => 1 << CHIPTUNE,
+                Format::Lossy => 1 << LOSSY,
+                Format::Mp3 => 1 << MP3,
+            };
+            c.matching_formats(mask)
         }
         Term::Flag { flag } => match flag {
             Flag::Owned => c.equals_u8(&c.availability, 0) | c.equals_u8(&c.availability, 1),

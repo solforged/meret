@@ -58,7 +58,7 @@ enum Cmd {
     /// Play a file through the engine.
     Play {
         file: PathBuf,
-        /// Output device, by name or UID. Default: the system's.
+        /// Output device UID. Default: the system's.
         #[arg(long)]
         device: Option<String>,
         /// Share the device instead of taking it (no hog mode).
@@ -93,12 +93,18 @@ enum LibraryCmd {
     Rescan,
     /// Print the Front, as the app's first pane shows it.
     Front,
+    /// Read or set the output device's own volume (0–1), without sample gain.
+    Volume {
+        scalar: Option<f32>,
+        #[command(flatten)]
+        out: OutputArgs,
+    },
     /// Print the query line's hits for a search, timing every prefix of it
     /// as if it were typed.
     Search { input: String },
-    /// Search, then open one numbered line per step: a hit from the search,
-    /// then a thread from each pane. Prints every pane and the trail.
-    Walk { search: String, steps: Vec<usize> },
+    /// Walk numbered hits/threads; '[' and ']' navigate, 'search=QUERY'
+    /// starts another trail. Prints every pane and the current trail.
+    Walk { search: String, steps: Vec<String> },
     /// Print a page of a query's rows ('' for everything).
     Ls {
         #[arg(default_value = "")]
@@ -164,7 +170,7 @@ impl From<Sort> for meret_api::SortKeyDto {
 
 #[derive(Args)]
 struct OutputArgs {
-    /// Output device, by name or UID. Default: the system's.
+    /// Output device UID. Default: the system's.
     #[arg(long)]
     device: Option<String>,
     /// Share the device instead of taking it (no hog mode).
@@ -204,6 +210,7 @@ fn main() -> Result<()> {
             let data = data.unwrap_or_else(library::default_data_dir);
             let output = match &cmd {
                 LibraryCmd::Play { out, .. } => out.choice(),
+                LibraryCmd::Volume { out, .. } => out.choice(),
                 _ => OutputChoice::Null { speed: 1.0 },
             };
             let (api, rt) = library::open(&data, output)?;
@@ -213,6 +220,12 @@ fn main() -> Result<()> {
                 LibraryCmd::Suggest => library::suggest(&api),
                 LibraryCmd::Rescan => library::rescan(&api, &rt),
                 LibraryCmd::Front => library::front(&api, &rt),
+                LibraryCmd::Volume { scalar, .. } => {
+                    let volume = match scalar { Some(value) => api.set_volume(value), None => api.volume() }
+                        .map_err(anyhow::Error::msg)?;
+                    println!("scalar={:?} settable={} reason={:?}", volume.scalar, volume.settable, volume.reason);
+                    Ok(())
+                }
                 LibraryCmd::Search { input } => library::search(&api, &rt, &input),
                 LibraryCmd::Walk { search, steps } => library::walk(&api, &rt, &search, &steps),
                 LibraryCmd::Ls { query, offset, limit, sort, desc, group } => {
@@ -316,7 +329,8 @@ fn devices() -> Result<()> {
     for d in system_backend().devices()? {
         let rates: Vec<String> = d.sample_rates.iter().map(|r| format!("{}", *r as f64 / 1000.0)).collect();
         let hog = if d.can_be_exclusive { "exclusive" } else { "shared only" };
-        println!("{}  ·  {} kHz  ·  {} bit  ·  {hog}\n    {}", d.name, rates.join("/"), d.max_bits, d.id);
+        let default = if d.is_default { " · system default" } else { "" };
+        println!("{}  ·  {} kHz  ·  {} bit  ·  {hog}{default}\n    {}", d.name, rates.join("/"), d.max_bits, d.id);
     }
     Ok(())
 }
@@ -333,6 +347,7 @@ fn play(file: PathBuf, backend: Arc<dyn OutputBackend>, config: EngineConfig) ->
                 let stages: Vec<String> = path.stages.iter().map(|s| format!("{} [{}]", s.name, s.detail)).collect();
                 println!("started: {} → {:?}", stages.join(" → "), path.fidelity());
             }
+            EngineEvent::OutputChanged { .. } => {}
             EngineEvent::Anchor(_) => anchors += 1,
             EngineEvent::Ended { .. } => println!("ended after {:.2?} wall clock", t.elapsed()),
             EngineEvent::Idle => break,

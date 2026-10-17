@@ -37,6 +37,8 @@ abstract interface class CoreBridge {
   SettingsDto settings();
   Future<void> setSettings(SettingsDto s);
   Future<List<OutputDeviceDto>> outputDevices();
+  Future<VolumeDto> volume();
+  Future<VolumeDto> setVolume(double scalar);
   Future<List<FolderSuggestionDto>> suggestFolders();
   Future<RowsDto> rows(String query, ViewDto view, int offset, int limit);
   Future<void> playResults(String query, ViewDto view, int index);
@@ -91,6 +93,10 @@ class RustCore implements CoreBridge {
   @override
   Future<List<OutputDeviceDto>> outputDevices() => rust.outputDevices();
   @override
+  Future<VolumeDto> volume() => rust.volume();
+  @override
+  Future<VolumeDto> setVolume(double scalar) => rust.setVolume(scalar: scalar);
+  @override
   Future<List<FolderSuggestionDto>> suggestFolders() => rust.suggestFolders();
   @override
   Future<RowsDto> rows(String query, ViewDto view, int offset, int limit) =>
@@ -118,6 +124,25 @@ class FakeCore implements CoreBridge {
   BigInt _libraryVersion = BigInt.one;
   TrailDto? _trail;
   final _forward = <int, int>{};
+  final _trailHistory = <({TrailDto trail, Map<int, int> forward, int departure})>[];
+  int? _historyIndex;
+
+  void _saveTrail() {
+    final index = _historyIndex;
+    final trail = _trail;
+    if (index != null && trail != null) {
+      _trailHistory[index] = (trail: trail, forward: Map.of(_forward), departure: _trailHistory[index].departure);
+    }
+  }
+
+  void _loadTrail(int index) {
+    _historyIndex = index;
+    final entry = _trailHistory[index];
+    _trail = entry.trail;
+    _forward
+      ..clear()
+      ..addAll(entry.forward);
+  }
   final _results = <String, List<int>>{};
   final _lists = <(String, ViewDto), (List<int>, List<ItemDto>, int)>{};
   late final _sampleRows = List.generate(_releases.length * 12 * 7, _row);
@@ -309,13 +334,21 @@ class FakeCore implements CoreBridge {
       _ => to,
     };
     final title = await _title(target);
+    _saveTrail();
+    if (_historyIndex case final index?) {
+      final previous = _trailHistory.removeAt(index);
+      _trailHistory.add((trail: previous.trail, forward: previous.forward, departure: previous.trail.current));
+    }
     _forward.clear();
-    return _trail = TrailDto(
+    final trail = TrailDto(
       rootQuery: target is TargetDto_Search ? target.query : null,
       current: 0,
       stops: [StopDto(index: 0, target: target, title: title, onPath: true, isFork: false, isPeek: false)],
       meetings: const [],
     );
+    _trailHistory.add((trail: trail, forward: {}, departure: 0));
+    _historyIndex = _trailHistory.length - 1;
+    return _trail = trail;
   }
 
   String _searchQuery(String query) {
@@ -339,6 +372,8 @@ class FakeCore implements CoreBridge {
       throw 'This thread is not followable yet';
     }
     if (!trail.stops.any((stop) => stop.index == fromStop)) throw 'Unknown trail stop';
+    final onPath = trail.stops.where((stop) => stop.onPath && stop.target == to);
+    if (onPath.isNotEmpty) return trailGo(onPath.first.index);
     final title = await _title(to);
     final existing = trail.stops.where((stop) => stop.parent == fromStop && stop.target == to);
     if (existing.isNotEmpty) {
@@ -352,7 +387,11 @@ class FakeCore implements CoreBridge {
       StopDto(index: index, parent: fromStop, target: to, title: title, via: _threadLabel(via),
         viaSource: via == ThreadKind.matched ? 'your library' : 'tags',
         onPath: false, isFork: false, isPeek: false),
-    ], meetings: trail.meetings);
+    ], meetings: [
+      ...trail.meetings,
+      for (final stop in trail.stops)
+        if (stop.target == to) (stop.index, index),
+    ]);
     return trailGo(index);
   }
 
@@ -376,7 +415,7 @@ class FakeCore implements CoreBridge {
     while (cursor != null) {
       path.add(cursor);
       final parent = byIndex[cursor]!.parent;
-      if (parent != null) _forward[parent] = cursor;
+      if (cursor == stop && parent != null) _forward[parent] = cursor;
       cursor = parent;
     }
     final children = <int, int>{};
@@ -396,14 +435,28 @@ class FakeCore implements CoreBridge {
     final trail = _trail;
     if (trail == null) return null;
     final parent = trail.stops.firstWhere((stop) => stop.index == trail.current).parent;
-    return parent == null ? null : trailGo(parent);
+    if (parent != null) return trailGo(parent);
+    final index = _historyIndex;
+    if (index == null || index == 0) return null;
+    _saveTrail();
+    _loadTrail(index - 1);
+    return trailGo(_trailHistory[index - 1].departure);
   }
 
   @override
   Future<TrailDto?> trailForward() async {
-    final current = _trail?.current;
-    final child = current == null ? null : _forward[current];
-    return child == null ? null : trailGo(child);
+    final trail = _trail;
+    if (trail == null) return null;
+    final index = _historyIndex;
+    if (index != null && index + 1 < _trailHistory.length && trail.current == _trailHistory[index].departure) {
+      _saveTrail();
+      _loadTrail(index + 1);
+      return trailGo(0);
+    }
+    final visible = trail.stops.where((stop) => stop.parent == trail.current && !stop.isPeek).toList();
+    final preferred = _forward[trail.current];
+    final child = visible.where((stop) => stop.index == preferred);
+    return child.isNotEmpty ? trailGo(child.first.index) : visible.isEmpty ? null : trailGo(visible.last.index);
   }
 
   static int _rank(String name, List<String> words) {
@@ -577,6 +630,16 @@ class FakeCore implements CoreBridge {
     OutputDeviceDto(id: 'dac', name: 'RME ADI-2 DAC', isDefault: false,
       canBeExclusive: true, sampleRates: Uint32List.fromList([44100, 48000, 88200, 96000, 192000]), maxBits: 32),
   ];
+
+  double _volume = 0.5;
+  @override
+  Future<VolumeDto> volume() async => VolumeDto(scalar: _volume, settable: true);
+  @override
+  Future<VolumeDto> setVolume(double scalar) async {
+    if (!scalar.isFinite || scalar < 0 || scalar > 1) throw 'Volume must be between 0 and 1';
+    _volume = scalar;
+    return volume();
+  }
 
   @override
   Future<List<FolderSuggestionDto>> suggestFolders() async {
@@ -781,6 +844,10 @@ class FakeCore implements CoreBridge {
     final sortedFormats = formats.keys.toList()..sort((a, b) => formats[b]!.compareTo(formats[a]!));
     return ReleaseDto(
       id: id, title: first.album, cover: null, artist: first.albumArtist, year: first.year,
+      artistLinks: first.albumArtistId == null ? [] : [
+        ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags',
+          to: TargetDto.person(id: first.albumArtistId!), title: first.albumArtist!, detail: ''),
+      ],
       idiom: first.albumArtist == 'Yasunori Mitsuda' ? 'Score' : first.albumArtist == 'Bill Evans Trio' ? 'Session' : 'Album',
       tracks: rows.length, discs: rows.map((row) => row.disc).toSet().length,
       lengthMs: length, formats: sortedFormats, rows: rows,

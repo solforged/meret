@@ -162,7 +162,6 @@ class _ReleasePaneState extends State<ReleasePane> {
       '${release.tracks} ${release.tracks == 1 ? 'track' : 'tracks'}',
       '${release.discs} ${release.discs == 1 ? 'disc' : 'discs'}',
       _time(release.lengthMs),
-      ...release.formats,
     ];
     return Focus(
       focusNode: _focus,
@@ -176,9 +175,12 @@ class _ReleasePaneState extends State<ReleasePane> {
             ],
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(release.title, style: Tok.title),
-              if (release.artist != null) Text(release.artist!, style: Tok.body.copyWith(color: Tok.muted)),
+              if (release.artist case final artist?)
+                WrittenCredit(written: artist, people: release.artistLinks, onFollow: _follow),
               const SizedBox(height: 8),
               Text(facts.join(' · '), style: Tok.label),
+              if (release.formats.isNotEmpty)
+                Text(release.formats.join(' · '), style: Tok.monoSmall.copyWith(color: Tok.muted)),
               TextButton(
                 onPressed: release.rows.isEmpty ? null : () => _play(0),
                 child: Text('Play', style: Tok.body.copyWith(color: Tok.gold)),
@@ -207,6 +209,50 @@ class _ReleasePaneState extends State<ReleasePane> {
         const SliverToBoxAdapter(child: SizedBox(height: 20)),
       ]),
     );
+  }
+}
+
+/// Keeps the tag's punctuation and wording, with one thread per credited person.
+class WrittenCredit extends StatelessWidget {
+  const WrittenCredit({super.key, required this.written, required this.people, required this.onFollow});
+
+  final String written;
+  final List<ThreadDto> people;
+  final void Function(ThreadDto) onFollow;
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = <({int start, int end, ThreadDto person})>[];
+    for (final person in people) {
+      final pattern = person.title.split(RegExp(r'\s+')).map(RegExp.escape).join(r'\s+').replaceAll(',', r'\s*,\s*');
+      final match = RegExp(pattern, caseSensitive: false).firstMatch(written);
+      if (match != null) matches.add((start: match.start, end: match.end, person: person));
+    }
+    matches.sort((a, b) => a.start.compareTo(b.start));
+    final spans = <InlineSpan>[];
+    var offset = 0;
+    for (final match in matches) {
+      if (match.start < offset) continue;
+      if (match.start > offset) spans.add(TextSpan(text: written.substring(offset, match.start)));
+      spans.add(WidgetSpan(
+        alignment: PlaceholderAlignment.baseline,
+        baseline: TextBaseline.alphabetic,
+        child: Semantics(
+          button: true,
+          label: match.person.title,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => onFollow(match.person),
+              child: Text(written.substring(match.start, match.end), style: Tok.body.copyWith(color: Tok.muted)),
+            ),
+          ),
+        ),
+      ));
+      offset = match.end;
+    }
+    if (offset < written.length) spans.add(TextSpan(text: written.substring(offset)));
+    return Text.rich(TextSpan(children: spans), style: Tok.body.copyWith(color: Tok.muted));
   }
 }
 

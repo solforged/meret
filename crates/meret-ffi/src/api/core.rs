@@ -65,14 +65,22 @@ pub fn settings() -> Result<SettingsDto, String> {
     Ok(api()?.settings())
 }
 
-/// Persists settings. Output changes apply from the next track opened;
-/// the currently playing track keeps its device and exclusive mode.
+/// Persists settings. Output changes wait for the next track while playing;
+/// when paused they apply on resume, and when idle on the next play.
 pub fn set_settings(s: SettingsDto) -> Result<(), String> {
     api()?.set_settings(s)
 }
 
 pub fn output_devices() -> Result<Vec<OutputDeviceDto>, String> {
     api()?.output_devices()
+}
+
+pub fn volume() -> Result<VolumeDto, String> {
+    api()?.volume()
+}
+
+pub fn set_volume(scalar: f32) -> Result<VolumeDto, String> {
+    api()?.set_volume(scalar)
 }
 
 /// Budgeted discovery runs off the UI thread; protected folders aren't walked.

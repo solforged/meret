@@ -34,6 +34,16 @@ void main() {
     addTearDown(() => _fixtureDir.delete(recursive: true));
   });
 
+  test('null output reports unsupported device volume and rejects sample gain', () async {
+    final core = RustCore();
+    final volume = await core.volume();
+    expect(volume.settable, isFalse);
+    expect(volume.scalar, isNull);
+    expect(volume.reason, isNotEmpty);
+    await expectLater(core.setVolume(0.5), throwsA(isA<String>()));
+    await expectLater(core.setVolume(double.nan), throwsA(isA<String>()));
+  });
+
   test('the query line parses through Rust', () {
     final core = RustCore();
     final q = core.parse('sung:"Joanne Hogg" not:owned year:1990s');
@@ -171,6 +181,7 @@ void main() {
     final core = RustCore();
     await _scanFixture(core);
     final row = ((await core.rows('', _libraryView, 0, 1)).items.single as ItemDto_Track).row;
+    final previous = await core.startTrail(TargetDto.search(query: row.title));
     final root = await core.startTrail(const TargetDto.search(query: ''));
     final releaseTrail = await core.follow(root.current, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn);
     final releaseStop = releaseTrail.current;
@@ -200,11 +211,20 @@ void main() {
     final back = (await core.trailBack())!;
     expect(back.current, releaseStop);
     expect(back.stops.where((stop) => stop.onPath), hasLength(2));
-    expect((await core.trailForward())!.current, personStop);
+    expect(await core.trailForward(), isNull, reason: 'the briefly opened person is folded away');
     expect((await core.trailGo(root.current)).stops.where((stop) => stop.onPath), hasLength(1));
-    expect(await core.trailBack(), isNull);
+    final previousTrail = (await core.trailBack())!;
+    expect(previousTrail.rootQuery, previous.rootQuery);
+    expect(previousTrail.current, previous.current);
+    expect((await core.trailForward())!.current, root.current);
     expect((await core.trailForward())!.current, releaseStop);
-    await core.trailGo(personStop);
+    final reopened = await core.follow(releaseStop, credit.to, credit.kind);
+    expect(reopened.current, personStop);
+    expect(reopened.stops, hasLength(3));
+    final loop = await core.follow(personStop, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn);
+    expect(loop.current, releaseStop);
+    expect(loop.stops, hasLength(3));
+    await core.follow(releaseStop, credit.to, credit.kind);
 
     try {
       final started = core.now().firstWhere((now) => now.title == row.title && now.path.isNotEmpty);

@@ -27,6 +27,45 @@ const _libraryView = ViewDto(sort: SortKeyDto.library_, descending: false, group
 const _groupedView = ViewDto(sort: SortKeyDto.library_, descending: false, group: true);
 
 void main() {
+  testWidgets('a written joint credit opens each individual thread', (tester) async {
+    final people = [
+      for (final (id, name) in [(1, 'Roger Briggs'), (2, 'Mark Cromer')])
+        ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags',
+          to: TargetDto.person(id: PlatformInt64Util.from(id)), title: name, detail: ''),
+    ];
+    final followed = <ThreadDto>[];
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: WrittenCredit(
+      written: 'Roger Briggs & Mark Cromer', people: people, onFollow: followed.add,
+    ))));
+    expect(find.text('Roger Briggs'), findsOneWidget);
+    expect(find.text('Mark Cromer'), findsOneWidget);
+    expect(find.byWidgetPredicate((widget) => widget is RichText && widget.text.toPlainText().contains(' & ')), findsOneWidget);
+    await tester.tap(find.text('Mark Cromer'));
+    await tester.tap(find.text('Roger Briggs'));
+    expect(followed.map((p) => p.to), [people[1].to, people[0].to]);
+  });
+
+  testWidgets('Now reads device volume and sends the slider scalar to the core', (tester) async {
+    final core = FakeCore();
+    await _surface(tester, core);
+    await tester.pump();
+    final slider = find.byKey(const ValueKey('now-volume'));
+    expect(tester.widget<Slider>(slider).value, 0.5);
+    await tester.drag(slider, const Offset(-70, 0));
+    await tester.pump();
+    final volume = await core.volume();
+    expect(volume.scalar, lessThan(0.5));
+    expect(tester.widget<Slider>(slider).value, closeTo(volume.scalar!, 0.001));
+  });
+
+  testWidgets('Now disables unsupported device volume and explains why', (tester) async {
+    await _surface(tester, _FixedVolumeCore());
+    await tester.pump();
+    final slider = tester.widget<Slider>(find.byKey(const ValueKey('now-volume')));
+    expect(slider.onChanged, isNull);
+    expect(find.text('Use the amplifier on this output.'), findsOneWidget);
+  });
+
   testWidgets('the fake library opens at the Front without a trail', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
@@ -630,10 +669,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['Everything', row.album, credit.title]);
 
-    await tester.tap(find.byKey(ValueKey('table-group-artist-${row.releaseId}')));
+    final other = release.credits.firstWhere((thread) => thread.to != credit.to);
+    await tester.widget<SearchPane>(find.byType(SearchPane)).onFollow!(other.to, other.kind);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_paneTitles(tester), ['Everything', row.artist]);
+    expect(_paneTitles(tester), ['Everything', other.title]);
     expect(find.byType(ReleasePane), findsNothing);
     final trail = (await core.trail())!;
     expect(trail.stops.where((stop) => !stop.onPath), hasLength(2));
@@ -817,6 +857,7 @@ class _ArtworkCore extends FakeCore {
       title: release.title,
       cover: state.cover,
       artist: release.artist,
+      artistLinks: release.artistLinks,
       year: release.year,
       idiom: release.idiom,
       tracks: release.tracks,
@@ -827,6 +868,13 @@ class _ArtworkCore extends FakeCore {
       credits: release.credits,
     );
   }
+}
+
+class _FixedVolumeCore extends FakeCore {
+  @override
+  Future<VolumeDto> volume() async => const VolumeDto(
+    settable: false, reason: 'Use the amplifier on this output.',
+  );
 }
 
 class _Host extends StatefulWidget {

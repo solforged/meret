@@ -216,72 +216,88 @@ pub fn search(api: &Api, rt: &tokio::runtime::Runtime, input: &str) -> Result<()
     Ok(())
 }
 
-/// Walks a trail the way the panes do: a search, then one numbered line
-/// per step. Each pane is printed with its lines numbered for the next step.
-pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[usize]) -> Result<()> {
+/// Walk numbered hits/threads, or navigate between session trails.
+pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[String]) -> Result<()> {
     settle(api, rt);
-    let s = api.search(search).map_err(|e| anyhow!(e))?;
-    let mut trail = api.start_trail(TargetDto::Search { query: s.query.clone() });
-    println!("search {}: {} tracks", s.query, s.tracks);
-    let mut lines: Vec<(ThreadKind, TargetDto, String)> = s
-        .people
-        .iter()
-        .map(|h| (ThreadKind::Matched, TargetDto::Person { id: h.id }, format!("{} · {}", h.title, h.detail)))
-        .chain(s.releases.iter().map(|h| (ThreadKind::Matched, TargetDto::Release { id: h.id }, format!("{} · {}", h.title, h.detail))))
-        .collect();
-    print_lines(&lines);
-    for &step in steps {
-        let (via, to, _) = lines.get(step).cloned().ok_or_else(|| anyhow!("there's no line {step}"))?;
-        let t = Instant::now();
-        trail = api.follow(trail.current, to.clone(), via).map_err(|e| anyhow!(e))?;
-        lines = match to {
-            TargetDto::Release { id } => {
-                let r = api.release(id).map_err(|e| anyhow!(e))?;
-                println!(
-                    "\n{} · {} · {}  ({:.2?})",
-                    r.title,
-                    r.artist.as_deref().unwrap_or("no album artist"),
-                    [r.idiom.clone(), r.year.map(|y| y.to_string()), Some(format!("{} tracks", r.tracks)), Some(r.formats.join(", "))]
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<_>>()
-                        .join(" · "),
-                    t.elapsed()
-                );
-                if let Some(cover) = &r.cover {
-                    println!("    cover {cover}");
-                }
-                for row in &r.rows {
-                    let artist = row.artist.as_deref().filter(|a| Some(*a) != r.artist.as_deref()).unwrap_or("");
-                    println!("    {}-{:02} {:<44.44} {artist}", row.disc, row.number, row.title);
-                }
-                r.credits.iter().map(|c| (c.kind, c.to.clone(), thread_line(&c.label, c))).collect()
+    let mut trail = api.start_trail(TargetDto::Search { query: search.into() });
+    let mut lines = walk_pane(api, &trail.stops[trail.current as usize].target)?;
+    print_strip(&trail);
+    for step in steps {
+        trail = match step.as_str() {
+            "[" => api.trail_back().ok_or_else(|| anyhow!("there's no previous trail stop"))?,
+            "]" => api.trail_forward().ok_or_else(|| anyhow!("there's no next trail stop"))?,
+            _ if step.starts_with("search=") => api.start_trail(TargetDto::Search { query: step["search=".len()..].into() }),
+            _ => {
+                let index: usize = step.parse().map_err(|_| anyhow!("expected a line number, '[', ']', or 'search=QUERY', got {step:?}"))?;
+                let (via, to, _) = lines.get(index).cloned().ok_or_else(|| anyhow!("there's no line {index}"))?;
+                api.follow(trail.current, to, via).map_err(|e| anyhow!(e))?
             }
-            TargetDto::Person { id } => {
-                let p = api.person(id).map_err(|e| anyhow!(e))?;
-                println!("\n{} · {} tracks  ({:.2?})", p.name, p.tracks, t.elapsed());
-                [("releases", &p.releases), ("on", &p.appears_on), ("worked with", &p.worked_with)]
-                    .into_iter()
-                    .flat_map(|(group, list)| {
-                        list.iter().map(move |c| (c.kind, c.to.clone(), thread_line(group, c)))
-                    })
-                    .collect()
-            }
-            TargetDto::Search { .. } => unreachable!("a search is only a root"),
         };
-        print_lines(&lines);
+        let target = &trail.stops.iter().find(|stop| stop.index == trail.current).expect("current stop").target;
+        lines = walk_pane(api, target)?;
+        print_strip(&trail);
     }
-    let strip: Vec<String> = trail
-        .stops
-        .iter()
-        .filter(|s| s.on_path)
+    Ok(())
+}
+
+fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<(ThreadKind, TargetDto, String)>> {
+    let t = Instant::now();
+    let lines: Vec<_> = match target {
+        TargetDto::Search { query } => {
+            let s = api.search(query).map_err(|e| anyhow!(e))?;
+            println!("\nsearch {}: {} tracks", s.query, s.tracks);
+            s.people
+                .iter()
+                .map(|h| (ThreadKind::Matched, TargetDto::Person { id: h.id }, format!("{} · {}", h.title, h.detail)))
+                .chain(s.releases.iter().map(|h| (ThreadKind::Matched, TargetDto::Release { id: h.id }, format!("{} · {}", h.title, h.detail))))
+                .collect()
+        }
+        TargetDto::Release { id } => {
+            let r = api.release(*id).map_err(|e| anyhow!(e))?;
+            println!(
+                "\n{} · {} · {}  ({:.2?})",
+                r.title,
+                r.artist.as_deref().unwrap_or("no album artist"),
+                [r.idiom.clone(), r.year.map(|y| y.to_string()), Some(format!("{} tracks", r.tracks)), Some(r.formats.join(", "))]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" · "),
+                t.elapsed()
+            );
+            if let Some(cover) = &r.cover {
+                println!("    cover {cover}");
+            }
+            for row in &r.rows {
+                let artist = row.artist.as_deref().filter(|a| Some(*a) != r.artist.as_deref()).unwrap_or("");
+                println!("    {}-{:02} {:<44.44} {artist}", row.disc, row.number, row.title);
+            }
+            r.credits.iter().map(|c| (c.kind, c.to.clone(), thread_line(&c.label, c))).collect()
+        }
+        TargetDto::Person { id } => {
+            let p = api.person(*id).map_err(|e| anyhow!(e))?;
+            println!("\n{} · {} tracks  ({:.2?})", p.name, p.tracks, t.elapsed());
+            [("releases", &p.releases), ("on", &p.appears_on), ("worked with", &p.worked_with)]
+                .into_iter()
+                .flat_map(|(group, list)| list.iter().map(move |c| (c.kind, c.to.clone(), thread_line(group, c))))
+                .collect()
+        }
+    };
+    print_lines(&lines);
+    Ok(lines)
+}
+
+fn print_strip(trail: &meret_api::TrailDto) {
+    let mut path: Vec<_> = trail.stops.iter().filter(|s| s.on_path).collect();
+    path.sort_by_key(|s| s.index);
+    let strip: Vec<String> = path
+        .into_iter()
         .map(|s| match &s.via {
             Some(via) => format!("—{via}→ {}", s.title),
             None => s.title.clone(),
         })
         .collect();
-    println!("\ntrail: {}", strip.join(" "));
-    Ok(())
+    println!("\ntrail: {}  ({} stops total; current {})", strip.join(" "), trail.stops.len(), trail.current);
 }
 
 fn thread_line(label: &str, c: &ThreadDto) -> String {
@@ -388,6 +404,7 @@ pub fn play(api: &Api, rt: &tokio::runtime::Runtime, query: &str, opts: PlayOpti
                     break;
                 }
                 EngineEvent::Error { item, message } => println!("! {item:?}: {message}"),
+                EngineEvent::OutputChanged { .. } => {}
             }
         }
     });

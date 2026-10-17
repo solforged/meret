@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 2104030836;
+  int get rustContentHash => 2088149629;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -139,6 +139,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiCoreSetSettings({required SettingsDto s});
 
+  Future<VolumeDto> crateApiCoreSetVolume({required double scalar});
+
   SettingsDto crateApiCoreSettings();
 
   Future<void> crateApiCoreStartCore({
@@ -159,6 +161,8 @@ abstract class RustLibApi extends BaseApi {
   Future<TrailDto> crateApiCoreTrailGo({required int stop});
 
   Future<void> crateApiCoreTransport({required TransportDto cmd});
+
+  Future<VolumeDto> crateApiCoreVolume();
 
   Stream<NowDto> crateApiCoreWatchNow();
 
@@ -688,12 +692,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "set_settings", argNames: ["s"]);
 
   @override
+  Future<VolumeDto> crateApiCoreSetVolume({required double scalar}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(scalar, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_volume_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiCoreSetVolumeConstMeta,
+        argValues: [scalar],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreSetVolumeConstMeta =>
+      const TaskConstMeta(debugName: "set_volume", argNames: ["scalar"]);
+
+  @override
   SettingsDto crateApiCoreSettings() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_settings_dto,
@@ -723,7 +755,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 20,
             port: port_,
           );
         },
@@ -753,7 +785,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -780,7 +812,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -807,7 +839,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -834,7 +866,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 24,
             port: port_,
           );
         },
@@ -861,7 +893,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -889,7 +921,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -917,7 +949,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -936,6 +968,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "transport", argNames: ["cmd"]);
 
   @override
+  Future<VolumeDto> crateApiCoreVolume() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_volume_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiCoreVolumeConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCoreVolumeConstMeta =>
+      const TaskConstMeta(debugName: "volume", argNames: []);
+
+  @override
   Stream<NowDto> crateApiCoreWatchNow() {
     final sink = RustStreamSink<NowDto>();
     unawaited(
@@ -947,7 +1006,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 27,
+              funcId: 29,
               port: port_,
             );
           },
@@ -979,7 +1038,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 28,
+              funcId: 30,
               port: port_,
             );
           },
@@ -1046,6 +1105,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnchorDto dco_decode_box_autoadd_anchor_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_anchor_dto(raw);
+  }
+
+  @protected
+  double dco_decode_box_autoadd_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
   }
 
   @protected
@@ -1130,6 +1195,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ColumnDto dco_decode_column_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return ColumnDto.values[raw as int];
+  }
+
+  @protected
+  double dco_decode_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
   }
 
   @protected
@@ -1519,6 +1590,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double? dco_decode_opt_box_autoadd_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_32(raw);
+  }
+
+  @protected
   FidelityDto? dco_decode_opt_box_autoadd_fidelity_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_fidelity_dto(raw);
@@ -1642,21 +1719,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReleaseDto dco_decode_release_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return ReleaseDto(
       id: dco_decode_i_64(arr[0]),
       title: dco_decode_String(arr[1]),
       cover: dco_decode_opt_String(arr[2]),
       artist: dco_decode_opt_String(arr[3]),
-      year: dco_decode_opt_box_autoadd_u_16(arr[4]),
-      idiom: dco_decode_opt_String(arr[5]),
-      tracks: dco_decode_u_32(arr[6]),
-      discs: dco_decode_u_32(arr[7]),
-      lengthMs: dco_decode_u_64(arr[8]),
-      formats: dco_decode_list_String(arr[9]),
-      rows: dco_decode_list_track_row_dto(arr[10]),
-      credits: dco_decode_list_thread_dto(arr[11]),
+      artistLinks: dco_decode_list_thread_dto(arr[4]),
+      year: dco_decode_opt_box_autoadd_u_16(arr[5]),
+      idiom: dco_decode_opt_String(arr[6]),
+      tracks: dco_decode_u_32(arr[7]),
+      discs: dco_decode_u_32(arr[8]),
+      lengthMs: dco_decode_u_64(arr[9]),
+      formats: dco_decode_list_String(arr[10]),
+      rows: dco_decode_list_track_row_dto(arr[11]),
+      credits: dco_decode_list_thread_dto(arr[12]),
     );
   }
 
@@ -1927,6 +2005,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  VolumeDto dco_decode_volume_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return VolumeDto(
+      scalar: dco_decode_opt_box_autoadd_f_32(arr[0]),
+      settable: dco_decode_bool(arr[1]),
+      reason: dco_decode_opt_String(arr[2]),
+    );
+  }
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_String(deserializer);
@@ -1979,6 +2070,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AnchorDto sse_decode_box_autoadd_anchor_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_anchor_dto(deserializer));
+  }
+
+  @protected
+  double sse_decode_box_autoadd_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_32(deserializer));
   }
 
   @protected
@@ -2072,6 +2169,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return ColumnDto.values[inner];
+  }
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat32();
   }
 
   @protected
@@ -2618,6 +2721,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   FidelityDto? sse_decode_opt_box_autoadd_fidelity_dto(
     SseDeserializer deserializer,
   ) {
@@ -2786,6 +2900,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_title = sse_decode_String(deserializer);
     var var_cover = sse_decode_opt_String(deserializer);
     var var_artist = sse_decode_opt_String(deserializer);
+    var var_artistLinks = sse_decode_list_thread_dto(deserializer);
     var var_year = sse_decode_opt_box_autoadd_u_16(deserializer);
     var var_idiom = sse_decode_opt_String(deserializer);
     var var_tracks = sse_decode_u_32(deserializer);
@@ -2799,6 +2914,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       title: var_title,
       cover: var_cover,
       artist: var_artist,
+      artistLinks: var_artistLinks,
       year: var_year,
       idiom: var_idiom,
       tracks: var_tracks,
@@ -3117,6 +3233,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  VolumeDto sse_decode_volume_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_scalar = sse_decode_opt_box_autoadd_f_32(deserializer);
+    var var_settable = sse_decode_bool(deserializer);
+    var var_reason = sse_decode_opt_String(deserializer);
+    return VolumeDto(
+      scalar: var_scalar,
+      settable: var_settable,
+      reason: var_reason,
+    );
+  }
+
+  @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
     SseSerializer serializer,
@@ -3186,6 +3315,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_anchor_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self, serializer);
   }
 
   @protected
@@ -3297,6 +3432,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_column_dto(ColumnDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat32(self);
   }
 
   @protected
@@ -3732,6 +3873,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_32(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_fidelity_dto(
     FidelityDto? self,
     SseSerializer serializer,
@@ -3878,6 +4029,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.title, serializer);
     sse_encode_opt_String(self.cover, serializer);
     sse_encode_opt_String(self.artist, serializer);
+    sse_encode_list_thread_dto(self.artistLinks, serializer);
     sse_encode_opt_box_autoadd_u_16(self.year, serializer);
     sse_encode_opt_String(self.idiom, serializer);
     sse_encode_u_32(self.tracks, serializer);
@@ -4092,5 +4244,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_sort_key_dto(self.sort, serializer);
     sse_encode_bool(self.descending, serializer);
     sse_encode_bool(self.group, serializer);
+  }
+
+  @protected
+  void sse_encode_volume_dto(VolumeDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_f_32(self.scalar, serializer);
+    sse_encode_bool(self.settable, serializer);
+    sse_encode_opt_String(self.reason, serializer);
   }
 }

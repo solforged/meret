@@ -22,7 +22,7 @@ use meret_engine::engine::EngineConfig;
 use meret_engine::output::OutputBackend;
 use meret_engine::output::null::NullBackend;
 use meret_engine::{Engine, EngineEvent};
-use meret_graph::Trail;
+use meret_graph::TrailHistory;
 use meret_jobs::Scheduler;
 use meret_model::{AgentId, Idiom, ReleaseId, RootId, TrackId};
 use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError};
@@ -124,7 +124,7 @@ pub struct Core {
     pub columns: RwLock<HotColumns>,
     pub registry: Registry,
     pub scheduler: Mutex<Scheduler>,
-    pub trail: Mutex<Option<Trail>>,
+    pub trail: Mutex<TrailHistory>,
     pub engine: Arc<Engine>,
     pub local: Arc<LocalZone>,
     pub player: Mutex<Player>,
@@ -176,6 +176,7 @@ impl Core {
         if has_saved && matches!(config.output, OutputChoice::System { .. }) {
             config.output = OutputChoice::System { device: settings.output_device.clone(), exclusive: settings.exclusive };
         }
+        tracing::debug!(has_saved, ?settings, output = ?config.output, "configuring local output");
 
         // TODO(core): load hot columns from a snapshot file first; the scan
         // worker loads them from SQLite after start-up.
@@ -214,7 +215,7 @@ impl Core {
             columns,
             registry,
             scheduler: Mutex::new(Scheduler::default()),
-            trail: Mutex::new(None),
+            trail: Mutex::new(TrailHistory::default()),
             engine,
             player: Mutex::new(Player::new(local.clone())),
             local,
@@ -258,8 +259,8 @@ impl Core {
         self.settings.lock().clone()
     }
 
-    /// Persists settings; output changes apply from the next track opened.
-    /// The currently playing track keeps its device and exclusive mode.
+    /// Persists settings. While playing, output changes wait for the next track;
+    /// when paused they take effect on resume, and when idle on the next play.
     pub fn set_settings(&self, settings: Settings) -> Result<()> {
         let mut current = self.settings.lock();
         self.store.set_settings(settings.clone())?;
@@ -279,6 +280,15 @@ impl Core {
         return Err(meret_engine::output::OutputError::Unimplemented("output device enumeration").into());
         #[cfg(target_os = "macos")]
         Ok(backend.devices()?)
+    }
+
+    pub fn volume(&self) -> Result<meret_engine::output::DeviceVolume> {
+        Ok(self.engine.volume()?)
+    }
+
+    pub fn set_volume(&self, scalar: f32) -> Result<meret_engine::output::DeviceVolume> {
+        self.local.command(ZoneCommand::Volume { scalar })?;
+        self.volume()
     }
 
     /// Budgeted disk discovery; protected locations are never walked.

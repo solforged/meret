@@ -119,9 +119,6 @@ void main() {
     await _surface(tester, core);
     showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.playback);
     await _settle(tester);
-    expect(find.text('Not offered'), findsOneWidget);
-    expect(find.text('Always on'), findsOneWidget);
-    expect(find.text('Output and exclusive-mode changes apply to the next track opened.'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('settings-output')));
     await _settle(tester);

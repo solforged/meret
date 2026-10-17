@@ -648,6 +648,7 @@ class ReleaseDto {
   final String title;
   final String? cover;
   final String? artist;
+  final List<ThreadDto> artistLinks;
   final int? year;
   final String? idiom;
   final int tracks;
@@ -662,6 +663,7 @@ class ReleaseDto {
     required this.title,
     this.cover,
     this.artist,
+    required this.artistLinks,
     this.year,
     this.idiom,
     required this.tracks,
@@ -678,6 +680,7 @@ class ReleaseDto {
       title.hashCode ^
       cover.hashCode ^
       artist.hashCode ^
+      artistLinks.hashCode ^
       year.hashCode ^
       idiom.hashCode ^
       tracks.hashCode ^
@@ -696,6 +699,7 @@ class ReleaseDto {
           title == other.title &&
           cover == other.cover &&
           artist == other.artist &&
+          artistLinks == other.artistLinks &&
           year == other.year &&
           idiom == other.idiom &&
           tracks == other.tracks &&
@@ -1205,4 +1209,24 @@ class ViewDto {
           sort == other.sort &&
           descending == other.descending &&
           group == other.group;
+}
+
+class VolumeDto {
+  final double? scalar;
+  final bool settable;
+  final String? reason;
+
+  const VolumeDto({this.scalar, required this.settable, this.reason});
+
+  @override
+  int get hashCode => scalar.hashCode ^ settable.hashCode ^ reason.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VolumeDto &&
+          runtimeType == other.runtimeType &&
+          scalar == other.scalar &&
+          settable == other.settable &&
+          reason == other.reason;
 }

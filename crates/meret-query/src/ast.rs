@@ -145,6 +145,7 @@ pub enum Format {
     Dsd,
     Chiptune,
     Lossy,
+    Mp3,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -303,6 +304,7 @@ names!(Format {
     Dsd => "dsd",
     Chiptune => "chiptune" | "native",
     Lossy => "lossy",
+    Mp3 => "mp3",
 });
 
 names!(NameField {

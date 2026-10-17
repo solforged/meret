@@ -39,6 +39,7 @@ impl OutputBackend for NullBackend {
         clock: Arc<SharedClock>,
     ) -> Result<Box<dyn OutputStream>, OutputError> {
         let opened = Opened {
+            device_uid: "null".into(),
             device_name: "Nowhere".into(),
             sample_rate: req.spec.sample_rate,
             bits: req.spec.bits,
@@ -81,6 +82,7 @@ impl OutputBackend for NullBackend {
                         deadline = now;
                     }
                 }
+                source
             })
             .map_err(|e| OutputError::Platform(e.to_string()))?;
 
@@ -92,7 +94,7 @@ struct NullStream {
     opened: Opened,
     running: Arc<AtomicBool>,
     alive: Arc<AtomicBool>,
-    handle: Option<JoinHandle<()>>,
+    handle: Option<JoinHandle<RingReader>>,
 }
 
 impl OutputStream for NullStream {
@@ -108,6 +110,11 @@ impl OutputStream for NullStream {
     fn pause(&mut self) -> Result<(), OutputError> {
         self.running.store(false, Ordering::Release);
         Ok(())
+    }
+
+    fn into_source(mut self: Box<Self>) -> RingReader {
+        self.alive.store(false, Ordering::Release);
+        self.handle.take().expect("null callback exists").join().expect("null callback stopped")
     }
 }
 
