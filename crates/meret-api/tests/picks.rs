@@ -74,6 +74,8 @@ fn picks_rank_dormant_then_the_trail_then_never_played_by_the_day() {
     api.start_trail(TargetDto::Search { query: "newer".into() });
     assert_eq!(core.picks(5, now).unwrap()[1].why, Why::FromTrail { trail: "reached".into(), latest: false });
 
+    assert_eq!(api.play_pick(99).unwrap_err(), "that pick is gone", "only a shown pick can be clicked");
+
     // Playing the trail's release through retires it from the picks.
     listen(&core, 2, now, 60_000);
     assert_eq!(core.picks(5, now).unwrap().iter().map(|p| p.release.0).collect::<Vec<_>>(), [1, 3, 4]);
