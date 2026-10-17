@@ -10,6 +10,9 @@ publish.workspace = true
 [dependencies]
 meret-model.workspace = true
 meret-query.workspace = true
+meret-graph.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 crossbeam-channel.workspace = true
 parking_lot.workspace = true
 roaring.workspace = true

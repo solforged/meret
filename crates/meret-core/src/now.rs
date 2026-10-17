@@ -30,12 +30,20 @@ pub struct NowState {
     pub error: Option<String>,
 }
 
-pub(crate) fn spawn_pump(core: Arc<Core>) {
+pub(crate) fn spawn_pump(core: Arc<Core>) -> std::thread::JoinHandle<()> {
     thread::Builder::new()
         .name("meret-now".into())
         .spawn(move || {
             let events = core.engine.events().clone();
-            while let Ok(e) = events.recv() {
+            loop {
+                let e = match events.recv_timeout(std::time::Duration::from_secs(10)) {
+                    Ok(e) => e,
+                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                        crate::memory::on_tick(&core);
+                        continue;
+                    }
+                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
+                };
                 core.local.observe(&e);
                 match &e {
                     EngineEvent::Started { item, path } => {
@@ -52,15 +60,23 @@ pub(crate) fn spawn_pump(core: Arc<Core>) {
                             n.subtitle = described.subtitle;
                             n.length_ms = described.length_ms;
                         });
+                        crate::listens::on_started(&core, *item);
+                        crate::memory::on_started(&core, *item);
                     }
                     EngineEvent::OutputChanged { path } => core.now.send_modify(|n| n.path = Some(path.clone())),
-                    EngineEvent::Anchor(a) => core.now.send_modify(|n| n.anchor = Some(*a)),
+                    EngineEvent::Anchor(a) => {
+                        core.now.send_modify(|n| n.anchor = Some(*a));
+                        crate::memory::on_anchor(&core, a);
+                    }
                     EngineEvent::Ended { item } => {
                         let mut player = core.player.lock();
                         player.ended(*item);
                         if let Some(error) = player.take_error() {
                             core.now.send_modify(|n| n.error = Some(error));
                         }
+                        drop(player);
+                        crate::listens::on_ended(&core, *item);
+                        crate::memory::on_ended(&core, *item);
                     }
                     EngineEvent::Idle => {
                         let mut player = core.player.lock();
@@ -68,19 +84,24 @@ pub(crate) fn spawn_pump(core: Arc<Core>) {
                         let error = player.take_error();
                         core.now.send_modify(|n| {
                             if let Some(a) = &mut n.anchor {
+                                a.position_frames = (a.seconds_at(meret_engine::clock::now_ns()) * a.sample_rate as f64) as u64;
+                                a.at_ns = meret_engine::clock::now_ns();
                                 a.rate = 0.0;
                             }
                             if let Some(error) = error {
                                 n.error = Some(error);
                             }
                         });
+                        drop(player);
+                        crate::listens::on_idle(&core);
+                        crate::memory::on_idle(&core);
                     }
                     EngineEvent::Error { message, .. } => core.now.send_modify(|n| n.error = Some(message.clone())),
                 }
                 let _ = core.events.send(e);
             }
         })
-        .expect("spawn now pump");
+        .expect("spawn now pump")
 }
 
 /// Library metadata for a track, or the file name for a loose file.
@@ -91,6 +112,10 @@ fn describe(core: &Core, token: u64) -> NowState {
         q.position_of(token).map(|i| q.items[i].clone())
     };
     let Some(item) = item else { return Default::default() };
+    describe_item(core, &item)
+}
+
+pub(crate) fn describe_item(core: &Core, item: &meret_player::QueueItem) -> NowState {
     if let Some(track) = item.track
         && let Ok(rows) = core.store.track_rows(&[track])
         && let Some(r) = rows.into_iter().next()

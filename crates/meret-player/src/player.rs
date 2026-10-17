@@ -33,7 +33,7 @@ impl Player {
 
     /// Replaces the queue once a Play succeeds, skipping anything the zone
     /// can't open. An empty replacement stops playback.
-    pub fn play(&mut self, items: Vec<QueueItem>, start: usize) -> Result<Option<&QueueItem>, ZoneError> {
+    pub fn play(&mut self, items: Vec<QueueItem>, start: usize, start_ms: u64) -> Result<Option<&QueueItem>, ZoneError> {
         let mut replacement = self.queue.successor(items);
         if replacement.items.is_empty() {
             self.stop()?;
@@ -43,7 +43,8 @@ impl Player {
         replacement.cursor = start.min(replacement.items.len() - 1);
         loop {
             let item = replacement.current().expect("cursor is in range");
-            match self.zone.command(ZoneCommand::Play { item: item.token, uri: item.uri.clone(), start_ms: 0 }) {
+            let position = if replacement.cursor == start { start_ms } else { 0 };
+            match self.zone.command(ZoneCommand::Play { item: item.token, uri: item.uri.clone(), start_ms: position }) {
                 Ok(()) => break,
                 Err(e @ ZoneError::CannotPlay(_)) => {
                     self.last_error = Some(e.to_string());
@@ -94,7 +95,7 @@ impl Player {
 
     /// Skips to the first playable item after the cursor. At the end of the
     /// queue playback stops and the cursor stays; Ok(None) says so.
-    pub fn next(&mut self) -> Result<Option<&QueueItem>, ZoneError> {
+    pub fn skip_next(&mut self) -> Result<Option<&QueueItem>, ZoneError> {
         if self.queue.cursor + 1 >= self.queue.items.len() {
             self.stop()?;
             return Ok(None);
@@ -105,7 +106,7 @@ impl Player {
     /// Plays the item before the cursor from its start; at the first item,
     /// the current one from its start. The caller decides when "previous"
     /// means "restart this one" instead.
-    pub fn previous(&mut self) -> Result<Option<&QueueItem>, ZoneError> {
+    pub fn skip_previous(&mut self) -> Result<Option<&QueueItem>, ZoneError> {
         self.jump(self.queue.cursor.saturating_sub(1), -1)
     }
 
@@ -236,7 +237,7 @@ mod tests {
     #[test]
     fn keeps_the_next_item_loaded_as_each_one_ends() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b", "c"]), 1).unwrap();
+        p.play(items(&["a", "b", "c"]), 1, 0).unwrap();
         assert_eq!(log(&z), ["play 2", "next 3"]);
         assert_eq!(p.ended(2).map(|i| i.token), Some(3));
         assert!(log(&z).is_empty(), "nothing after the last item");
@@ -247,8 +248,8 @@ mod tests {
     #[test]
     fn an_end_from_a_replaced_queue_moves_nothing() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b"]), 0).unwrap();
-        p.play(items(&["c", "d"]), 0).unwrap();
+        p.play(items(&["a", "b"]), 0, 0).unwrap();
+        p.play(items(&["c", "d"]), 0, 0).unwrap();
         log(&z);
         // The engine reports the old first item ending when the new one starts.
         assert_eq!(p.ended(1), None);
@@ -259,7 +260,7 @@ mod tests {
     #[test]
     fn items_the_zone_cannot_open_are_skipped() {
         let (mut p, z) = player();
-        p.play(items(&["bad", "a", "bad", "b"]), 0).unwrap();
+        p.play(items(&["bad", "a", "bad", "b"]), 0, 0).unwrap();
         assert_eq!(log(&z), ["play 2", "next 4"]);
         assert!(p.take_error().is_some());
         assert_eq!(p.ended(2).map(|i| i.token), Some(4));
@@ -268,7 +269,7 @@ mod tests {
     #[test]
     fn stopping_ends_the_queue() {
         let (mut p, _) = player();
-        p.play(items(&["a", "b"]), 0).unwrap();
+        p.play(items(&["a", "b"]), 0, 0).unwrap();
         p.stop().unwrap();
         // The engine reports the stopped item as ended.
         assert_eq!(p.ended(1), None);
@@ -278,40 +279,40 @@ mod tests {
     #[test]
     fn next_and_previous_move_the_cursor_and_reload_what_follows() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b", "c"]), 0).unwrap();
+        p.play(items(&["a", "b", "c"]), 0, 0).unwrap();
         log(&z);
-        assert_eq!(p.next().unwrap().map(|i| i.token), Some(2));
+        assert_eq!(p.skip_next().unwrap().map(|i| i.token), Some(2));
         assert_eq!(log(&z), ["play 2", "next 3"]);
-        assert_eq!(p.previous().unwrap().map(|i| i.token), Some(1));
+        assert_eq!(p.skip_previous().unwrap().map(|i| i.token), Some(1));
         assert_eq!(log(&z), ["play 1", "next 2"]);
         // The engine reports the replaced item ending; the cursor doesn't move.
         assert_eq!(p.ended(2), None);
         assert_eq!(p.queue().cursor, 0);
         // At the first item, previous restarts it.
-        assert_eq!(p.previous().unwrap().map(|i| i.token), Some(1));
+        assert_eq!(p.skip_previous().unwrap().map(|i| i.token), Some(1));
         assert_eq!(log(&z), ["play 1", "next 2"]);
     }
 
     #[test]
     fn next_past_the_end_stops_and_skips_what_cannot_open() {
         let (mut p, z) = player();
-        p.play(items(&["a", "bad", "b"]), 0).unwrap();
+        p.play(items(&["a", "bad", "b"]), 0, 0).unwrap();
         log(&z);
-        assert_eq!(p.next().unwrap().map(|i| i.token), Some(3));
+        assert_eq!(p.skip_next().unwrap().map(|i| i.token), Some(3));
         assert_eq!(log(&z), ["play 3"]);
         assert!(p.take_error().is_some());
-        assert_eq!(p.next().unwrap(), None);
+        assert_eq!(p.skip_next().unwrap(), None);
         assert_eq!(log(&z), ["stop"]);
         assert_eq!(p.queue().cursor, 2);
         // Previous from the last item steps over the bad one too.
-        assert_eq!(p.previous().unwrap().map(|i| i.token), Some(1));
+        assert_eq!(p.skip_previous().unwrap().map(|i| i.token), Some(1));
         assert_eq!(log(&z), ["play 1", "next 3"]);
     }
 
     #[test]
     fn idle_starts_an_item_whose_preload_missed_the_join() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b", "c", "d"]), 0).unwrap();
+        p.play(items(&["a", "b", "c", "d"]), 0, 0).unwrap();
         p.started(1);
         p.ended(1);
         p.started(2);
@@ -330,7 +331,7 @@ mod tests {
     #[test]
     fn idle_does_not_restart_an_item_that_started() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b"]), 0).unwrap();
+        p.play(items(&["a", "b"]), 0, 0).unwrap();
         p.started(1);
         p.ended(1);
         p.started(2);
@@ -345,7 +346,7 @@ mod tests {
     #[test]
     fn idle_does_not_restart_a_stopped_preload() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b", "c"]), 0).unwrap();
+        p.play(items(&["a", "b", "c"]), 0, 0).unwrap();
         p.started(1);
         p.ended(1);
         log(&z);
@@ -358,10 +359,10 @@ mod tests {
     #[test]
     fn idle_from_a_replaced_queue_does_not_restart_the_replacement() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b"]), 0).unwrap();
+        p.play(items(&["a", "b"]), 0, 0).unwrap();
         p.started(1);
         p.ended(1);
-        p.play(items(&["c", "d"]), 0).unwrap();
+        p.play(items(&["c", "d"]), 0, 0).unwrap();
         log(&z);
         p.started(2);
         assert_eq!(p.ended(2), None);
@@ -373,10 +374,10 @@ mod tests {
     #[test]
     fn an_unplayable_replacement_keeps_the_old_queue_and_preload() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b", "c"]), 0).unwrap();
+        p.play(items(&["a", "b", "c"]), 0, 0).unwrap();
         p.started(1);
         log(&z);
-        assert!(matches!(p.play(items(&["bad", "bad"]), 0), Err(ZoneError::CannotPlay(_))));
+        assert!(matches!(p.play(items(&["bad", "bad"]), 0, 0), Err(ZoneError::CannotPlay(_))));
         assert_eq!(p.queue().current().map(|i| i.token), Some(1));
         assert_eq!(p.queue().items.len(), 3);
         assert!(log(&z).is_empty());
@@ -385,22 +386,22 @@ mod tests {
         p.started(2);
         assert_eq!(p.ended(2).map(|i| i.token), Some(3));
         // Failed replacements reserve their tokens too.
-        assert_eq!(p.play(items(&["d"]), 0).unwrap().map(|i| i.token), Some(6));
+        assert_eq!(p.play(items(&["d"]), 0, 0).unwrap().map(|i| i.token), Some(6));
         assert_eq!(log(&z), ["play 6"]);
     }
 
     #[test]
     fn an_empty_replacement_stops_and_empties_the_queue() {
         let (mut p, z) = player();
-        p.play(items(&["a", "b"]), 0).unwrap();
+        p.play(items(&["a", "b"]), 0, 0).unwrap();
         p.started(1);
         p.ended(1);
         log(&z);
-        assert_eq!(p.play(vec![], 0).unwrap(), None);
+        assert_eq!(p.play(vec![], 0, 0).unwrap(), None);
         assert!(p.queue().items.is_empty());
         assert_eq!(p.ended(2), None);
         p.idle();
         assert_eq!(log(&z), ["stop"]);
-        assert_eq!(p.play(items(&["c"]), 0).unwrap().map(|i| i.token), Some(3));
+        assert_eq!(p.play(items(&["c"]), 0, 0).unwrap().map(|i| i.token), Some(3));
     }
 }
