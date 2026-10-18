@@ -123,6 +123,14 @@ class _QueryLineState extends State<QueryLine> {
     _syncOverlay();
   }
 
+  void _escape() {
+    if (_showHits) {
+      _dismiss();
+    } else {
+      widget.focus.unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
+    }
+  }
+
   Future<void> _submit({HitDto? hit, bool all = false}) async {
     if (_submitting) return;
     final input = _text.text;
@@ -249,18 +257,29 @@ class _QueryLineState extends State<QueryLine> {
                     bindings: {
                       const SingleActivator(LogicalKeyboardKey.arrowDown): () => _move(1),
                       const SingleActivator(LogicalKeyboardKey.arrowUp): () => _move(-1),
-                      const SingleActivator(LogicalKeyboardKey.escape): _dismiss,
+                      const SingleActivator(LogicalKeyboardKey.escape): _escape,
                       const SingleActivator(LogicalKeyboardKey.enter): _submit,
                     },
-                    child: TextField(
-                      controller: _text,
-                      focusNode: widget.focus,
-                      style: Tok.monoSmall.copyWith(color: Tok.ink, fontSize: 12.5),
-                      cursorColor: Tok.gold,
-                      decoration: const InputDecoration.collapsed(hintText: ''),
-                      onChanged: _changed,
-                      onEditingComplete: () {},
-                      onSubmitted: (_) => _submit(),
+                    child: Shortcuts(
+                      shortcuts: const {
+                        SingleActivator(LogicalKeyboardKey.slash): DoNothingAndStopPropagationTextIntent(),
+                        SingleActivator(LogicalKeyboardKey.bracketLeft): DoNothingAndStopPropagationTextIntent(),
+                        SingleActivator(LogicalKeyboardKey.bracketRight): DoNothingAndStopPropagationTextIntent(),
+                        SingleActivator(LogicalKeyboardKey.keyH): DoNothingAndStopPropagationTextIntent(),
+                        SingleActivator(LogicalKeyboardKey.space): DoNothingAndStopPropagationTextIntent(),
+                        SingleActivator(LogicalKeyboardKey.space, shift: true): DoNothingAndStopPropagationTextIntent(),
+                        SingleActivator(LogicalKeyboardKey.space, alt: true): DoNothingAndStopPropagationTextIntent(),
+                      },
+                      child: TextField(
+                        controller: _text,
+                        focusNode: widget.focus,
+                        style: Tok.monoSmall.copyWith(color: Tok.ink, fontSize: 12.5),
+                        cursorColor: Tok.gold,
+                        decoration: const InputDecoration.collapsed(hintText: ''),
+                        onChanged: _changed,
+                        onEditingComplete: () {},
+                        onSubmitted: (_) => _submit(),
+                      ),
                     ),
                   ),
                 ),

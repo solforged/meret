@@ -38,8 +38,9 @@ enum _Stage { undecided, now, front }
 
 class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   late final PlayheadClock _clock = PlayheadClock(this);
-  late final AnimationController _slide = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+  late final AnimationController _slide = AnimationController(vsync: this, value: 0, lowerBound: -1, duration: const Duration(milliseconds: 260));
   final _queryFocus = FocusNode();
+  final _surfaceFocus = FocusNode(debugLabel: 'surface');
   StreamSubscription<NowDto>? _nowSub;
   StreamSubscription<StatusDto>? _statusSub;
   NowDto? _now;
@@ -58,6 +59,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _settings = widget.core.settings();
+    _queryFocus.addListener(_queryFocusChanged);
     WindowChrome.instance.onSettings = _openSettings;
     _nowSub = widget.core.now().listen((n) {
       if (!mounted) return;
@@ -86,10 +88,20 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _statusSub?.cancel();
     _clock.dispose();
     _slide.dispose();
+    _queryFocus.removeListener(_queryFocusChanged);
     _queryFocus.dispose();
+    _surfaceFocus.dispose();
     _settingsChanges.dispose();
     WindowChrome.instance.onSettings = null;
     super.dispose();
+  }
+
+  /// When the query line lets focus go and nothing else takes it, the
+  /// surface does, so `[` `]` `h` and Space work without a click first.
+  void _queryFocusChanged() {
+    if (_queryFocus.hasFocus) return;
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null || primary is FocusScopeNode) _surfaceFocus.requestFocus();
   }
 
   void _openSettings() {
@@ -121,7 +133,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     final version = _navigationVersion;
     final name = await askTrailName(context, suggested: root == leaf ? root : '$root → $leaf');
     if (name == null || !mounted || version != _navigationVersion) return;
-    final kept = await widget.core.keepTrail(name: name);
+    final kept = await widget.core.keepTrail(name: name.name);
     if (!mounted || version != _navigationVersion) return;
     setState(() {
       _trail = kept;
@@ -155,6 +167,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     final version = ++_navigationVersion;
     final trail = await call();
     if (!mounted || version != _navigationVersion) return;
+    final moved = trail != null && (trail.current != _trail?.current || trail.stops.length != _trail?.stops.length);
     setState(() {
       _navigationError = null;
       if (trail != null) {
@@ -165,7 +178,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         _frontOnly = true;
       }
     });
-    _animate(direction);
+    if (moved) _animate(direction);
   }
 
   Future<void> _report(Future<void> call) async {
@@ -308,9 +321,9 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       child: LightScope(light: light, child: Shortcuts(
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.slash): _Focus(),
-        SingleActivator(LogicalKeyboardKey.space): _Toggle(),
-        SingleActivator(LogicalKeyboardKey.space, shift: true): _PlaySomething(),
-        SingleActivator(LogicalKeyboardKey.space, alt: true): _FromStart(),
+        SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): _Toggle(),
+        SingleActivator(LogicalKeyboardKey.space, shift: true, includeRepeats: false): _PlaySomething(),
+        SingleActivator(LogicalKeyboardKey.space, alt: true, includeRepeats: false): _FromStart(),
         SingleActivator(LogicalKeyboardKey.keyH): _History(),
         SingleActivator(LogicalKeyboardKey.bracketLeft): _Move(-1),
         SingleActivator(LogicalKeyboardKey.bracketRight): _Move(1),
@@ -333,6 +346,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           _Settings: CallbackAction<_Settings>(onInvoke: (_) => _openSettings()),
         },
         child: Focus(
+          focusNode: _surfaceFocus,
           autofocus: true,
           child: ColoredBox(
             color: Tok.void_,
@@ -385,8 +399,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 if (_navigationError != null)
                   Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
                 Expanded(
-                  child: _stage == _Stage.now
-                    ? Row(children: [
+                  // Install after the initial Now snapshot, without a launch transition.
+                  child: _stage == _Stage.undecided ? const SizedBox.expand() : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [
+                      ...previous,
+                      ?current,
+                    ]),
+                    child: _stage == _Stage.now
+                    ? Row(key: const ValueKey('stage-now'), children: [
                         if (box.maxWidth >= 1000)
                           SizedBox(
                             width: (box.maxWidth * 0.4).clamp(0.0, 560.0),
@@ -405,15 +426,19 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                           onRelease: (id) => _report(_start(TargetDto.release(id: id))), onLeave: _showFront,
                         )),
                       ])
-                    : Row(children: [
+                    : Row(key: const ValueKey('stage-trail'), children: [
                         Expanded(child: row),
-                        if (wc.nowWidth case final width?)
-                          SizedBox(width: width, child: NowPane(
+                        // Retain loaded details: async remounts clamp a restored scroll offset.
+                        Visibility(
+                          visible: wc.pinnedNow, maintainState: true, maintainAnimation: false, maintainSize: false,
+                          child: SizedBox(width: wc.nowWidth ?? 360, child: NowPane(
                             core: widget.core, now: _now, clock: _clock, onToggle: _toggle,
                             settingsChanges: _settingsChanges,
                             onRelease: (id) => _report(_start(TargetDto.release(id: id))),
                           )),
+                        ),
                       ]),
+                  ),
                 ),
                 if (_stage != _Stage.now && !wc.pinnedNow) NowBar(
                   core: widget.core, now: _now, clock: _clock, onToggle: _toggle,

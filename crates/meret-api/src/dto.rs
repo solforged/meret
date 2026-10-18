@@ -10,7 +10,7 @@ use meret_model::signal::Fidelity;
 use meret_model::thread::source_label;
 use meret_model::{AgentId, EntityRef, Idiom, ReleaseId};
 use meret_query::{NameField, Term};
-use meret_store::{TrackRow, format_code};
+use meret_store::TrackRow;
 
 pub use meret_model::ThreadKind;
 
@@ -636,22 +636,15 @@ impl From<Front> for FrontDto {
         });
         idioms.retain(|l| l.releases > 0);
 
-        use format_code::*;
-        let by = |code: u8| f.tracks_by_format[code as usize];
         let line = |label: &str, count, note: &str, query: Option<&str>| FrontLineDto {
             label: label.into(),
             count,
             note: note.into(),
             query: query.map(Into::into),
         };
-        let mut formats = vec![
-            line("Lossless, up to 16/48", by(FLAC_CD), "FLAC, ALAC, WAV, AIFF", Some("format:flac -format:hires")),
-            line("Hi-res", by(HI_RES), "over 16 bit or 48 kHz", Some("format:hires")),
-            line("DSD", by(DSD), "", Some("format:dsd")),
-            line("Native chiptune", by(CHIPTUNE), "SPC, NSF, VGM", Some("format:chiptune")),
-            line("Lossy", by(LOSSY), "MP3, AAC, Ogg, Opus", Some("format:lossy")),
-            line("Unknown format", by(UNKNOWN), "", None),
-        ];
+        let mut formats: Vec<_> = f.formats.into_iter()
+            .map(|f| line(f.label, f.count, f.note, f.query))
+            .collect();
         formats.retain(|l| l.count > 0);
         formats.sort_by_key(|l| std::cmp::Reverse(l.count));
 

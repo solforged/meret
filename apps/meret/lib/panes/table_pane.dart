@@ -234,7 +234,7 @@ class _TablePaneState extends State<TablePane> {
   }
 
   KeyEventResult _key(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.enter && _selected != null) {
       if (HardwareKeyboard.instance.isMetaPressed) {
         _open(_selected!);

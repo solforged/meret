@@ -90,7 +90,7 @@ class _ReleasePaneState extends State<ReleasePane> {
   }
 
   KeyEventResult _key(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.enter && _selected != null) {
       _play(_selected!);
       return KeyEventResult.handled;
