@@ -4,9 +4,12 @@ import FlutterMacOS
 /// The window has no native title bar: the query line takes its place, with
 /// the window buttons inset at its left. `meret/window` lets the query line
 /// move and zoom the window, and tells it when full screen hides the buttons.
+/// Closing hides the window; the music, the menu bar item and the media
+/// keys go on without it (`AppDelegate`).
 class MainFlutterWindow: NSWindow {
   private var channel: FlutterMethodChannel?
   private var settingsVisible = false
+  private var outside: Outside?
 
   @IBAction func showSettings(_ sender: Any?) {
     channel?.invokeMethod("showSettings", arguments: nil)
@@ -15,8 +18,10 @@ class MainFlutterWindow: NSWindow {
   override func performClose(_ sender: Any?) {
     if settingsVisible {
       channel?.invokeMethod("closeSettings", arguments: nil)
+    } else if styleMask.contains(.fullScreen) {
+      toggleFullScreen(nil)
     } else {
-      super.performClose(sender)
+      orderOut(sender)
     }
   }
 
@@ -25,6 +30,7 @@ class MainFlutterWindow: NSWindow {
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
+    isReleasedWhenClosed = false
 
     styleMask.insert(.fullSizeContentView)
     titlebarAppearsTransparent = true
@@ -67,6 +73,11 @@ class MainFlutterWindow: NSWindow {
     }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+
+    outside = Outside(messenger: flutterViewController.engine.binaryMessenger) { [weak self] in
+      NSApp.activate(ignoringOtherApps: true)
+      self?.makeKeyAndOrderFront(nil)
+    }
 
     super.awakeFromNib()
   }
