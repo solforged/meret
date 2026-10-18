@@ -18,6 +18,7 @@ import '../settings/settings_window.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'keep_dialog.dart';
+import 'outside.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
 import 'status_line.dart';
@@ -41,6 +42,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   late final AnimationController _slide = AnimationController(vsync: this, value: 0, lowerBound: -1, duration: const Duration(milliseconds: 260));
   final _queryFocus = FocusNode();
   final _surfaceFocus = FocusNode(debugLabel: 'surface');
+  late final Outside _outside = Outside(widget.core);
   StreamSubscription<NowDto>? _nowSub;
   StreamSubscription<StatusDto>? _statusSub;
   NowDto? _now;
@@ -64,6 +66,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _nowSub = widget.core.now().listen((n) {
       if (!mounted) return;
       _clock.anchor(n.anchor);
+      _outside.now(n);
       setState(() {
         if (_now?.anchor?.item != n.anchor?.item) _memoryVersion++;
         _now = n;
@@ -93,6 +96,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _surfaceFocus.dispose();
     _settingsChanges.dispose();
     WindowChrome.instance.onSettings = null;
+    _outside.dispose();
     super.dispose();
   }
 
