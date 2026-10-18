@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/tokens.dart';
 
-Future<String?> askTrailName(BuildContext context, {required String suggested}) => showDialog<String>(
+Future<({String? name})?> askTrailName(BuildContext context, {required String suggested}) => showDialog<({String? name})>(
   context: context,
   barrierColor: const Color(0xBD02040A),
   builder: (context) => _KeepDialog(suggested: suggested),
@@ -27,7 +27,7 @@ class _KeepDialogState extends State<_KeepDialog> {
     super.dispose();
   }
 
-  void _keep() => Navigator.of(context).pop(_name.text);
+  void _keep() => Navigator.of(context).pop((name: _name.text.trim().isEmpty ? null : _name.text));
 
   @override
   Widget build(BuildContext context) => Shortcuts(

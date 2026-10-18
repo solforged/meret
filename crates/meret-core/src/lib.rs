@@ -19,7 +19,7 @@ mod setup_tests;
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, LazyLock, OnceLock};
 
 use crossbeam_channel::Sender;
 use meret_engine::engine::EngineConfig;
@@ -103,11 +103,29 @@ pub struct Front {
     pub tracks: u64,
     /// Indexed by `Idiom as u8`; 0 is unknown.
     pub tracks_by_idiom: [u32; 8],
-    /// Indexed by `meret_store::format_code`.
-    pub tracks_by_format: [u64; 6],
+    /// Counts of the format doors' queries; tracks can appear in several doors.
+    pub formats: [FrontFormatLine; 6],
     pub facts: LibraryFacts,
     pub roots: Vec<meret_library::Root>,
 }
+
+#[derive(Clone, Debug)]
+pub struct FrontFormatLine {
+    pub label: &'static str,
+    pub count: u64,
+    pub note: &'static str,
+    pub query: Option<&'static str>,
+}
+
+/// Label, note and query for each format door, shared by its count and the UI.
+const FRONT_FORMATS: [(&str, &str, Option<&str>); 6] = [
+    ("Lossless, up to 16/48", "FLAC, ALAC, WAV, AIFF", Some("format:flac -format:hires")),
+    ("Hi-res", "over 16 bit or 48 kHz", Some("format:hires")),
+    ("DSD", "", Some("format:dsd")),
+    ("Native chiptune", "SPC, NSF, VGM", Some("format:chiptune")),
+    ("Lossy", "MP3, AAC, Ogg, Opus", Some("format:lossy")),
+    ("Unknown format", "", None),
+];
 
 /// How long a list stays fresh when the library hasn't changed.
 const LIST_TTL_S: i64 = 60;
@@ -475,20 +493,34 @@ impl Core {
     /// What the Front shows about the library. Counts come from the hot
     /// columns; the rest is a few small reads, once per library change.
     pub fn front(&self) -> Result<Front> {
-        let (tracks, tracks_by_idiom, tracks_by_format) = {
+        static QUERIES: LazyLock<[Option<meret_query::Query>; 6]> = LazyLock::new(|| FRONT_FORMATS.map(|(_, _, query)| {
+            query.map(|query| {
+                let Input::Search(q) = parse(query).expect("valid Front format query") else {
+                    panic!("Front format doors must be searches");
+                };
+                q
+            })
+        }));
+        let (tracks, tracks_by_idiom, formats) = {
             let cols = self.columns.read();
-            let mut by_format = [0u64; 6];
-            for &f in &cols.format {
-                if let Some(n) = by_format.get_mut(f as usize) {
-                    *n += 1;
-                }
-            }
-            (cols.len() as u64, cols.idiom_counts(&cols.all()), by_format)
+            let formats = std::array::from_fn(|i| {
+                let (label, note, query) = FRONT_FORMATS[i];
+                let count = if let Some(parsed) = &QUERIES[i] {
+                    // Format predicates are timeless and entirely column-backed.
+                    let planned = meret_store::plan(parsed, &cols, 0);
+                    assert!(planned.residual.is_empty(), "Front format doors must use hot columns");
+                    planned.rows.expect("format queries have a bitmap").len()
+                } else {
+                    cols.format.iter().filter(|&&f| f == meret_store::format_code::UNKNOWN).count() as u64
+                };
+                FrontFormatLine { label, count, note, query }
+            });
+            (cols.len() as u64, cols.idiom_counts(&cols.all()), formats)
         };
         Ok(Front {
             tracks,
             tracks_by_idiom,
-            tracks_by_format,
+            formats,
             facts: self.store.library_facts(6)?,
             roots: meret_library::roots(&self.store)?,
         })
