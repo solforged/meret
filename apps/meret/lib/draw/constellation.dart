@@ -54,7 +54,7 @@ class _NoTrailStripState extends State<NoTrailStrip> {
               else ...[
                 const TextSpan(text: 'no trail open · open anything to start one · '),
                 TextSpan(text: '[', style: Tok.label.copyWith(color: Tok.gold)),
-                TextSpan(text: ' to resume ${dayPossessive(trail.whenMs.toInt())} · ${trail.name ?? trail.title} · ${trail.stops} stops'),
+                TextSpan(text: ' to resume ${dayPossessive(trail.whenMs.toInt())} · ${trail.name ?? trail.title} · ${trail.stops} ${trail.stops == 1 ? 'stop' : 'stops'}'),
               ],
             ]),
             style: Tok.label,

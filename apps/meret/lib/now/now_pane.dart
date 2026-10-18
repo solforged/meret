@@ -57,7 +57,7 @@ class NowPane extends StatelessWidget {
         SeekBar(core: core, now: n, clock: clock),
         Expanded(flex: 4, child: NowDial(now: n, clock: clock, onToggle: loaded ? onToggle : null)),
         Expanded(flex: 5, child: SingleChildScrollView(
-          key: const ValueKey('now-details'),
+          key: const PageStorageKey('now-pane'),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const Text('SIGNAL PATH', style: Tok.label),
             const SizedBox(height: 6),

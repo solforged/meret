@@ -182,7 +182,7 @@ void main() {
     await core.keepTrail(name: 'A kept tree');
     await tester.pumpWidget(strip(1));
     await tester.pumpAndSettle();
-    const line = "no trail open · open anything to start one · [ to resume today's · A kept tree · 1 stops";
+    const line = "no trail open · open anything to start one · [ to resume today's · A kept tree · 1 stop";
     final text = tester.widget<Text>(find.text(line));
     expect(text.maxLines, 1);
     expect(text.overflow, TextOverflow.ellipsis);

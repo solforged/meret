@@ -72,3 +72,60 @@ fn saved_settings_override_startup_output_but_absent_settings_keep_host_defaults
     drop(core);
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn front_format_counts_match_any_copy_queries() {
+    let dir = directory("front-formats");
+    let (scans, _) = crossbeam_channel::unbounded();
+    let core = Core::new(CoreConfig { data_dir: dir.clone(), output: OutputChoice::Null { speed: 1.0 }, contact: "test".into() }, scans).unwrap();
+    core.store.writer.write(|tx| {
+        tx.execute_batch(
+            "INSERT INTO release(id,title,rev) VALUES(1,'Mixed copies',1);
+             INSERT INTO edition(id,release_id,rev) VALUES(1,1,1);
+             INSERT INTO medium(id,edition_id,position) VALUES(1,1,1);
+             INSERT INTO recording(id,title,rev) VALUES
+                 (1,'FLAC and MP3',1),(2,'CD and hi-res',1),(3,'DSD',1),
+                 (4,'Chiptune',1),(5,'Lossy',1),(6,'Unknown',1);
+             INSERT INTO track(id,medium_id,recording_id,position,rev) VALUES
+                 (1,1,1,1,1),(2,1,2,2,1),(3,1,3,3,1),
+                 (4,1,4,4,1),(5,1,5,5,1),(6,1,6,6,1);
+             INSERT INTO root(id,label,path,kind) VALUES(1,'test','/test','local');
+             INSERT INTO file(id,root_id,rel_path,size,mtime_ns,rev) VALUES
+                 (1,1,'1.flac',1,1,1),(2,1,'1.mp3',1,1,1),(3,1,'1.unknown',1,1,1),
+                 (4,1,'2.flac',1,1,1),(5,1,'2-hires.flac',1,1,1),(6,1,'3.dsd',1,1,1),
+                 (7,1,'4.spc',1,1,1),(8,1,'5.mp3',1,1,1),(9,1,'6.unknown',1,1,1);
+             INSERT INTO source(track_id,kind,file_id,codec,sample_rate,bits,lossless,rev) VALUES
+                 (1,'file',1,'FLAC',44100,16,1,1),(1,'file',2,'MP3',44100,NULL,0,1),
+                 (1,'file',3,NULL,NULL,NULL,0,1),
+                 (2,'file',4,'FLAC',44100,16,1,1),(2,'file',5,'FLAC',96000,24,1,1),
+                 (3,'file',6,'DSD',2822400,1,1,1),(4,'file',7,'SPC',32000,16,1,1),
+                 (5,'file',8,'MP3',44100,NULL,0,1),(6,'file',9,NULL,NULL,NULL,0,1);"
+        )?;
+        Ok(())
+    }).unwrap();
+    *core.columns.write() = core.store.load_columns().unwrap();
+    let front = core.front().unwrap();
+    let lossy_matches = core.list("format:lossy", &View::default()).unwrap().tracks.len() as u64;
+    assert_eq!(lossy_matches, 2);
+    let count = |query| front.formats.iter().find(|f| f.query == query).unwrap().count;
+    assert_eq!(count(Some("format:lossy")), lossy_matches,
+        "Lossy includes the MP3 copy even when playback chooses FLAC");
+    for (query, expected) in [
+        ("format:flac -format:hires", 1),
+        ("format:hires", 1),
+        ("format:dsd", 1),
+        ("format:chiptune", 1),
+        ("format:lossy", 2),
+    ] {
+        let count = count(Some(query));
+        assert_eq!(count, expected, "{query}");
+        assert_eq!(count, core.list(query, &View::default()).unwrap().tracks.len() as u64, "{query}");
+    }
+    assert_eq!(count(None), 1,
+        "Unknown format counts only the best copy, not the unknown extra copy of track 1");
+    assert_eq!(front.tracks, 6);
+    assert_eq!(front.formats.iter().map(|f| f.count).sum::<u64>(), 7,
+        "format doors overlap rather than partitioning the collection");
+    drop(core);
+    std::fs::remove_dir_all(dir).unwrap();
+}

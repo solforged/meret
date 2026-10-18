@@ -69,7 +69,7 @@ class _ActionButton extends StatelessWidget {
 
 /// What every pane shows at the top: the thread that brought you, the kind
 /// of thing, its name. Folds to a vertical spine when narrow.
-class Pane extends StatelessWidget {
+class Pane extends StatefulWidget {
   const Pane({
     super.key, required this.kind, required this.title, this.via, this.source, this.body,
     this.showTitle = true, this.compact = false, this.onSpineTap,
@@ -94,38 +94,83 @@ class Pane extends StatelessWidget {
   final VoidCallback? onSpineTap;
 
   @override
+  State<Pane> createState() => _PaneState();
+}
+
+class _PaneState extends State<Pane> {
+  final _focus = FocusNode();
+  FocusNode? _foldedFocus;
+  bool _folded = false;
+  double _fullWidth = 440;
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, box) {
-      if (box.maxWidth < 60) return PaneSpine(title: title, meta: via ?? kind, onTap: onSpineTap);
-      return Container(
-        decoration: const BoxDecoration(color: Tok.sky, border: Border(right: BorderSide(color: Tok.line))),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (via != null)
-            Row(children: [
-              Text(via!, style: Tok.label.copyWith(color: Tok.gold, fontStyle: FontStyle.italic, letterSpacing: 0)),
-              const SizedBox(width: 12),
-              if (source != null)
-                Expanded(
-                  child: Text(source!, style: Tok.label, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis),
-                ),
-            ]),
-          SizedBox(height: compact ? 6 : 10),
-          if (compact)
-            Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-              Text(kind, style: Tok.label),
-              const SizedBox(width: 10),
-              Expanded(child: Text(title, style: Tok.body.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            ])
-          else ...[
-            Text(kind, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            if (showTitle) Text(title, style: Tok.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ],
-          SizedBox(height: compact ? 8 : 12),
-          Expanded(child: body ?? const SizedBox()),
-        ]),
-      );
+      final folded = box.maxWidth < 60;
+      if (folded != _folded) {
+        if (folded) {
+          _foldedFocus = _focus.hasFocus ? FocusManager.instance.primaryFocus : null;
+        } else {
+          final focus = _foldedFocus;
+          _foldedFocus = null;
+          if (focus != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_folded && focus.context != null) focus.requestFocus();
+            });
+          }
+        }
+        _folded = folded;
+      }
+      if (!folded) _fullWidth = box.maxWidth;
+      final Pane(:kind, :title, :via, :source, :body, :compact, :showTitle, :onSpineTap) = widget;
+      return Stack(fit: StackFit.expand, children: [
+        Visibility(
+          visible: !folded, maintainState: true,
+          // Keep a hidden body at its last full width, not the spine's 46 px.
+          child: OverflowBox(
+            alignment: Alignment.topLeft, minWidth: _fullWidth, maxWidth: _fullWidth,
+            child: Focus(
+              focusNode: _focus, canRequestFocus: false, descendantsAreFocusable: !folded,
+              child: Container(
+                decoration: const BoxDecoration(color: Tok.sky, border: Border(right: BorderSide(color: Tok.line))),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (via != null)
+                    Row(children: [
+                      Text(via, style: Tok.label.copyWith(color: Tok.gold, fontStyle: FontStyle.italic, letterSpacing: 0)),
+                      const SizedBox(width: 12),
+                      if (source != null)
+                        Expanded(
+                          child: Text(source, style: Tok.label, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                    ]),
+                  SizedBox(height: compact ? 6 : 10),
+                  if (compact)
+                    Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                      Text(kind, style: Tok.label),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(title, style: Tok.body.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    ])
+                  else ...[
+                    Text(kind, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    if (showTitle) Text(title, style: Tok.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ],
+                  SizedBox(height: compact ? 8 : 12),
+                  Expanded(child: body ?? const SizedBox()),
+                ]),
+              ),
+            ),
+          ),
+        ),
+        if (folded) PaneSpine(title: title, meta: via ?? kind, onTap: onSpineTap),
+      ]);
     });
   }
 }

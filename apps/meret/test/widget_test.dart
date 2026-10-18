@@ -1252,6 +1252,7 @@ Future<void> _surface(WidgetTester tester, CoreBridge core, {Size size = const S
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MeretApp(core: core));
   await tester.pump();
+  await tester.pump();
 }
 
 List<String> _paneTitles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().map((pane) => pane.title).toList();

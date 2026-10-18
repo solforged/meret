@@ -20,7 +20,7 @@ class PaneRow extends StatelessWidget {
 
   final List<Widget> children;
 
-  /// 0 when settled; animates from 1 to 0 as a new pane arrives.
+  /// 0 when settled; eases from 1 for forward or -1 for reverse navigation.
   final Animation<double> slide;
 
   /// The width class's cap on panes shown at full width.
@@ -114,7 +114,7 @@ class _PaneFlow extends FlowDelegate {
     final shift = slide.value * (widths.isEmpty ? 0 : widths.last);
     var x = 0.0;
     for (var i = 0; i < context.childCount; i++) {
-      // Spines stay put; full panes slide in from the right.
+      // Spines stay put; full panes slide from the direction of navigation.
       final dx = i < spines ? x : x + shift;
       context.paintChild(i, transform: Matrix4.translationValues(dx, 0, 0));
       x += widths[i];
