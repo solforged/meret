@@ -429,7 +429,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
                 items: [
                   const DropdownMenuItem(value: '', child: Text('System default')),
                   for (final device in devices) DropdownMenuItem(value: device.id, child: Text(device.name, overflow: TextOverflow.ellipsis)),
-                  if (deviceId != null && !knownDevice) DropdownMenuItem(value: deviceId, child: const Text('Unavailable output')),
+                  if (deviceId != null && !knownDevice) DropdownMenuItem(value: deviceId, child: const Text('Chosen output (away)')),
                 ],
                 onChanged: _saving ? null : (value) => _save(outputDevice: value == '' ? null : value, changeDevice: true),
               ))),
@@ -442,7 +442,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
             : 'Meret takes the output while playing, when the device supports it.',
           Switch(value: settings.exclusive && selected?.canBeExclusive != false, onChanged: _saving || selected?.canBeExclusive == false ? null : (value) => _save(exclusive: value))),
         const SizedBox(height: 16),
-        _note('While playing, output changes apply to the next track. When paused, they apply on resume; when idle, on the next play. System default stays on the same device until playback stops or this setting changes.'),
+        _note('While playing, output changes apply to the next track. When paused, they apply on resume; when idle, on the next play. System default stays on the same device until playback stops or this setting changes. When the chosen output is away, playback uses the system default until it returns.'),
       ],
       const SizedBox(height: 12),
       _settingRow('Device volume', 'Now controls the output device’s own volume when available. Otherwise use your DAC or amplifier. Meret never scales the samples.', const Text('On the device', style: Tok.monoSmall)),

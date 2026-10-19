@@ -328,12 +328,17 @@ impl Core {
 
     /// Play on (plate 09): every zone, saying what it does to the sound. For
     /// now the zones are this machine's output devices, judged from the
-    /// settings without opening them; the running device is `current`.
+    /// settings without opening them. `current` is the device a session is
+    /// playing on, else the chosen one; while that is absent, the system
+    /// default that would stand in for it.
     pub fn zones(&self) -> Result<Vec<ZoneRow>> {
         let settings = self.settings();
         let place = if cfg!(target_os = "macos") { "This Mac" } else { "This device" };
-        Ok(self.output_devices()?.into_iter().map(|d| {
-            let current = settings.output_device.as_deref().map_or(d.is_default, |id| id == d.id);
+        let devices = self.output_devices()?;
+        let present = |uid: Option<String>| uid.filter(|uid| devices.iter().any(|d| &d.id == uid));
+        let current_uid = present(self.engine.output_device()).or_else(|| present(settings.output_device.clone()));
+        Ok(devices.into_iter().map(|d| {
+            let current = current_uid.as_deref().map_or(d.is_default, |id| id == d.id);
             let top = d.sample_rates.iter().copied().max().unwrap_or(0);
             let fidelity = if !settings.exclusive || !d.can_be_exclusive {
                 ZoneFidelity::Shared
