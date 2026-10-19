@@ -19,8 +19,7 @@ pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
 }
 
-/// Starts the process-wide core, or attaches to the running one. On macOS
-/// the app delegate may already have started it for the menu bar.
+/// Starts the process-wide core, or attaches to the running one.
 pub fn start_core(data_dir: String, null_output: bool) -> Result<(), String> {
     let output = if null_output {
         OutputChoice::Null { speed: 1.0 }
