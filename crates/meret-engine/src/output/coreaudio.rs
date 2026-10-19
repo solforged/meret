@@ -26,6 +26,7 @@
 use std::ffi::c_void;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -60,6 +61,12 @@ const OUTPUT: AudioObjectPropertyScope = kAudioObjectPropertyScopeOutput;
 const HOST_TIME_VALID: u32 = 1 << 1;
 /// The largest IOProc buffer handled in one pass; bigger ones loop.
 const SCRATCH_FRAMES: usize = 8192;
+/// Gain ramp at a discontinuity: start, resume, a flushed ring, an underrun,
+/// and before a stop. Short enough to be inaudible as a fade, long enough
+/// that a step edge mid-waveform no longer clicks.
+const RAMP_MS: f64 = 8.0;
+/// How long a pause waits for the ramp down before stopping the device.
+const RAMP_WAIT: Duration = Duration::from_millis(60);
 const STANDARD_RATES: [u32; 8] = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000, 352_800, 384_000];
 
 pub struct CoreAudioBackend;
@@ -264,11 +271,30 @@ impl Encoding {
     }
 }
 
+/// The gain ramp, shared by the stream (engine thread) and the IOProc.
+/// `gain` is the ramp's position as f32 bits; the IOProc owns it while the
+/// device runs, the stream resets it to zero while the device is stopped.
+struct Fade {
+    gain: AtomicU32,
+    /// The stream asks for a ramp down; the IOProc reports silence reached.
+    out: AtomicBool,
+    silent: AtomicBool,
+}
+
+impl Fade {
+    fn new() -> Arc<Self> {
+        Arc::new(Self { gain: AtomicU32::new(0f32.to_bits()), out: AtomicBool::new(false), silent: AtomicBool::new(false) })
+    }
+}
+
 /// Everything the IOProc touches. Owned by the stream and only ever used by
 /// the IOProc while the device runs.
 struct IoState {
     reader: RingReader,
     clock: Arc<SharedClock>,
+    fade: Arc<Fade>,
+    /// Gain change per output frame while ramping.
+    step: f32,
     scratch: Vec<Sample>,
     src_channels: usize,
     encoding: Encoding,
@@ -289,6 +315,12 @@ impl IoState {
             (c < self.src_channels).then_some(c)
         }
     }
+}
+
+/// `s` at `gain`, exact at 1.0.
+#[inline]
+fn scaled(s: Sample, gain: f32) -> Sample {
+    if gain >= 1.0 { s } else { (s as f64 * gain as f64) as Sample }
 }
 
 unsafe extern "C-unwind" fn io_proc(
@@ -313,9 +345,12 @@ unsafe extern "C-unwind" fn io_proc(
             unsafe { ptr::write_bytes(b.mData as *mut u8, 0, b.mDataByteSize as usize) };
         }
     }
+    let mut gain = f32::from_bits(st.fade.gain.load(Ordering::Relaxed));
     if let Some(generation) = st.clock.flush_pending() {
         st.reader.clear();
         st.clock.ack_flush(generation);
+        // Whatever comes next starts mid-waveform.
+        gain = 0.0;
     }
     let Some(first) = buffers.first() else { return 0 };
     if first.mData.is_null() {
@@ -328,10 +363,21 @@ unsafe extern "C-unwind" fn io_proc(
         first.mDataByteSize as usize / bytes
     };
     let planes = if st.interleaved { 1 } else { st.channels.min(buffers.len()) };
+    let out = st.fade.out.load(Ordering::Acquire);
+    if out && gain <= 0.0 {
+        // Ramped down: leave the ring alone so a resume continues from here.
+        st.fade.silent.store(true, Ordering::Release);
+        st.fade.gain.store(gain.to_bits(), Ordering::Relaxed);
+        return 0;
+    }
 
     let mut done = 0;
     while done < frames {
-        let chunk = (frames - done).min(SCRATCH_FRAMES);
+        let mut chunk = (frames - done).min(SCRATCH_FRAMES);
+        if out {
+            // Only what the ramp needs; the rest of the ring waits for the resume.
+            chunk = chunk.min(((gain / st.step).ceil() as usize).max(1));
+        }
         let n = chunk * st.src_channels;
         let got = st.reader.read(&mut st.scratch[..n]);
         for f in 0..got {
@@ -346,15 +392,26 @@ unsafe extern "C-unwind" fn io_proc(
                 } else {
                     continue;
                 };
-                unsafe { st.encoding.write(dst, src[sc]) };
+                unsafe { st.encoding.write(dst, scaled(src[sc], gain)) };
+            }
+            if out {
+                gain = (gain - st.step).max(0.0);
+            } else if gain < 1.0 {
+                gain = (gain + st.step).min(1.0);
             }
         }
         done += got;
+        if out && gain <= 0.0 {
+            break;
+        }
         if got < chunk {
             st.clock.underrun();
+            // The next samples, whenever they come, start mid-waveform.
+            gain = 0.0;
             break;
         }
     }
+    st.fade.gain.store(gain.to_bits(), Ordering::Relaxed);
 
     // When the last frame handed over reaches the speaker, on now_ns()'s clock.
     let ts = unsafe { output_time.as_ref() };
@@ -381,6 +438,7 @@ pub struct CoreAudioStream {
     device: Device,
     proc_id: AudioDeviceIOProcID,
     state: *mut IoState,
+    fade: Arc<Fade>,
     opened: Opened,
     restore: Restore,
     running: bool,
@@ -436,6 +494,7 @@ impl CoreAudioStream {
             device,
             proc_id: None,
             state: ptr::null_mut(),
+            fade: Fade::new(),
             opened: Opened {
                 device_uid: uid,
                 device_name: name,
@@ -463,7 +522,11 @@ impl CoreAudioStream {
                 get_vec(stream, kAudioStreamPropertyAvailablePhysicalFormats, GLOBAL).unwrap_or_default();
             if let Some(mut f) = pick_physical(&formats, rate, req.spec.bits) {
                 f.mSampleRate = rate;
-                if let Err(s) = set(stream, kAudioStreamPropertyPhysicalFormat, GLOBAL, &f) {
+                // Setting a format the device already runs still makes some
+                // DACs reconfigure, audibly.
+                if self.restore.physical.is_none_or(|p| !same_format(&p, &f))
+                    && let Err(s) = set(stream, kAudioStreamPropertyPhysicalFormat, GLOBAL, &f)
+                {
                     tracing::warn!(status = %fourcc(s), "physical format refused");
                 }
             }
@@ -501,6 +564,8 @@ impl CoreAudioStream {
         let state = Box::new(IoState {
             reader,
             clock,
+            fade: self.fade.clone(),
+            step: (1000.0 / (virt.mSampleRate.max(1.0) * RAMP_MS)) as f32,
             scratch: vec![0; SCRATCH_FRAMES * src_channels],
             src_channels,
             encoding,
@@ -556,6 +621,17 @@ fn pick_physical(formats: &[AudioStreamRangedDescription], rate: f64, bits: u8) 
         .copied()
 }
 
+/// The fields a physical format is chosen by; `mReserved` and packet layout
+/// follow from them.
+fn same_format(a: &AudioStreamBasicDescription, b: &AudioStreamBasicDescription) -> bool {
+    (a.mSampleRate - b.mSampleRate).abs() < 0.5
+        && a.mFormatID == b.mFormatID
+        && a.mFormatFlags == b.mFormatFlags
+        && a.mBitsPerChannel == b.mBitsPerChannel
+        && a.mBytesPerFrame == b.mBytesPerFrame
+        && a.mChannelsPerFrame == b.mChannelsPerFrame
+}
+
 impl OutputStream for CoreAudioStream {
     fn opened(&self) -> &Opened {
         &self.opened
@@ -563,6 +639,10 @@ impl OutputStream for CoreAudioStream {
 
     fn start(&mut self) -> Result<(), OutputError> {
         if !self.running {
+            // The IOProc is stopped, so nothing else touches the fade now.
+            self.fade.gain.store(0f32.to_bits(), Ordering::Relaxed);
+            self.fade.silent.store(false, Ordering::Relaxed);
+            self.fade.out.store(false, Ordering::Release);
             let status = unsafe { AudioDeviceStart(self.device.0, self.proc_id) };
             if status != 0 {
                 return Err(platform(status));
@@ -574,6 +654,12 @@ impl OutputStream for CoreAudioStream {
 
     fn pause(&mut self) -> Result<(), OutputError> {
         if self.running {
+            // Let the IOProc ramp down first; a stalled device is not waited on.
+            self.fade.out.store(true, Ordering::Release);
+            let deadline = std::time::Instant::now() + RAMP_WAIT;
+            while !self.fade.silent.load(Ordering::Acquire) && std::time::Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(1));
+            }
             // Synchronous: when this returns the IOProc has stopped.
             let status = unsafe { AudioDeviceStop(self.device.0, self.proc_id) };
             if status != 0 {
@@ -610,6 +696,7 @@ impl Drop for CoreAudioStream {
         let r = &self.restore;
         if r.hogged
             && let Some(p) = &r.physical
+            && get::<AudioStreamBasicDescription>(r.stream, kAudioStreamPropertyPhysicalFormat, GLOBAL).is_ok_and(|now| !same_format(&now, p))
         {
             let _ = set(r.stream, kAudioStreamPropertyPhysicalFormat, GLOBAL, p);
         }
