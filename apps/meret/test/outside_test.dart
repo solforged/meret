@@ -3,7 +3,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meret/core/bridge.dart';
 import 'package:meret/shell/outside.dart';
-import 'package:meret/src/rust/api/types.dart';
 
 /// The menu bar item and the media keys (plate 10) speak to the core
 /// through `Outside`. Swift is not under test here; the channel is driven

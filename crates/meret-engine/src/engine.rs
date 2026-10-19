@@ -37,6 +37,8 @@ pub enum Control {
     SetOutput { device: Option<String>, exclusive: bool },
     Volume(Sender<Result<DeviceVolume, OutputError>>),
     SetVolume { scalar: f32, reply: Sender<Result<DeviceVolume, OutputError>> },
+    /// The device UID this session plays on; the chosen one when idle.
+    OutputDevice(Sender<Option<String>>),
     Resume,
     Pause,
     Seek(u64),
@@ -105,6 +107,12 @@ impl Engine {
         rx.recv().map_err(|_| OutputError::Platform("engine stopped".into()))?
     }
 
+    pub fn output_device(&self) -> Option<String> {
+        let (reply, rx) = crossbeam_channel::bounded(1);
+        self.ctl.send(Control::OutputDevice(reply)).ok()?;
+        rx.recv().ok().flatten()
+    }
+
     pub fn set_volume(&self, scalar: f32) -> Result<DeviceVolume, OutputError> {
         if !scalar.is_finite() || !(0.0..=1.0).contains(&scalar) {
             return Err(OutputError::Refused("volume must be between 0 and 1".into()));
@@ -154,6 +162,8 @@ struct Worker {
     config: EngineConfig,
     /// System default resolves once per playback session, before taking hog.
     session_device: Option<String>,
+    /// The chosen device was absent, so the session runs on the system default.
+    session_fallback: bool,
     reopen_on_resume: bool,
     events: Sender<EngineEvent>,
     clock: Arc<SharedClock>,
@@ -179,6 +189,7 @@ impl Worker {
             backend,
             config,
             session_device: None,
+            session_fallback: false,
             reopen_on_resume: false,
             events,
             clock: Arc::new(SharedClock::default()),
@@ -239,6 +250,7 @@ impl Worker {
                     self.config.device = device;
                     self.config.exclusive = exclusive;
                     self.session_device = None;
+                    self.session_fallback = false;
                     if !self.playing {
                         self.reopen_on_resume = self.out.is_some();
                     }
@@ -250,7 +262,15 @@ impl Worker {
             Control::SetVolume { scalar, reply } => {
                 let _ = reply.send(self.backend.set_volume(self.volume_device(), scalar));
             }
+            Control::OutputDevice(reply) => {
+                let _ = reply.send(self.volume_device().map(str::to_owned));
+            }
             Control::Resume => {
+                if self.session_fallback && self.chosen_device_is_back() {
+                    self.session_device = None;
+                    self.session_fallback = false;
+                    self.reopen_on_resume = self.out.is_some();
+                }
                 if self.reopen_on_resume && !self.reopen_paused() {
                     return;
                 }
@@ -287,6 +307,7 @@ impl Worker {
                 self.playing = false;
                 self.release_output();
                 self.session_device = None;
+                self.session_fallback = false;
                 self.reopen_on_resume = false;
                 if let Some(b) = self.audible.take() {
                     let _ = self.events.send(EngineEvent::Ended { item: b.item });
@@ -304,13 +325,27 @@ impl Worker {
             .or(self.config.device.as_deref())
     }
 
+    /// The device for this session: the chosen one, or the system default
+    /// while the chosen one is absent. The choice itself is kept.
     fn resolve_session_device(&mut self) -> Result<String, OutputError> {
         if let Some(uid) = &self.session_device {
             return Ok(uid.clone());
         }
-        let uid = self.backend.resolve_device(self.config.device.as_deref())?;
+        let uid = match self.backend.resolve_device(self.config.device.as_deref()) {
+            Err(OutputError::NoDevice(wanted)) if self.config.device.is_some() => {
+                let fallback = self.backend.resolve_device(None)?;
+                tracing::warn!(%wanted, using = %fallback, "chosen output is away; playing on the system default");
+                self.session_fallback = true;
+                fallback
+            }
+            other => other?,
+        };
         self.session_device = Some(uid.clone());
         Ok(uid)
+    }
+
+    fn chosen_device_is_back(&self) -> bool {
+        self.config.device.as_deref().is_some_and(|uid| self.backend.resolve_device(Some(uid)).is_ok())
     }
 
     fn reopen_paused(&mut self) -> bool {
@@ -555,6 +590,7 @@ impl Worker {
             self.last_anchor = None;
             self.release_output();
             self.session_device = None;
+            self.session_fallback = false;
             self.reopen_on_resume = false;
             return;
         }
@@ -894,6 +930,61 @@ mod tests {
         *backend.uid.lock().unwrap() = "uid-d".into();
         worker.handle(Control::Play(load(4, cd(), 0.01)));
         assert_eq!(worker.volume_device(), Some("uid-d"));
+    }
+
+    #[test]
+    fn absent_choice_plays_on_the_default_and_returns_to_it_on_resume_or_next_session() {
+        use std::sync::Mutex;
+        struct Present { uids: Mutex<Vec<&'static str>>, recording: RecordingBackend }
+        impl OutputBackend for Present {
+            fn name(&self) -> &'static str { "present" }
+            fn devices(&self) -> Result<Vec<DeviceInfo>, OutputError> { self.recording.devices() }
+            fn resolve_device(&self, wanted: Option<&str>) -> Result<String, OutputError> {
+                let uids = self.uids.lock().unwrap();
+                match wanted {
+                    None => Ok(uids[0].into()),
+                    Some(uid) if uids.contains(&uid) => Ok(uid.into()),
+                    Some(uid) => Err(OutputError::NoDevice(uid.into())),
+                }
+            }
+            fn open(&self, req: &OutputRequest, source: RingReader, clock: Arc<SharedClock>) -> Result<Box<dyn OutputStream>, OutputError> {
+                self.recording.open(req, source, clock)
+            }
+        }
+        let opens = |actions: &Receiver<OutputAction>| actions.try_iter().filter_map(|a| match a {
+            OutputAction::Open { device, .. } => device, _ => None,
+        }).collect::<Vec<_>>();
+        let (actions_tx, actions) = unbounded();
+        let (events_tx, events) = unbounded();
+        let backend = Arc::new(Present { uids: Mutex::new(vec!["speakers"]), recording: RecordingBackend(actions_tx) });
+        let config = EngineConfig { device: Some("display".into()), ..Default::default() };
+        let mut worker = Worker::new(backend.clone(), config, events_tx);
+
+        // Away: the session runs on the default; the choice stays.
+        worker.handle(Control::Play(load(1, cd(), 0.01)));
+        assert_eq!(opens(&actions), ["speakers"]);
+        assert_eq!(worker.volume_device(), Some("speakers"));
+        assert_eq!(worker.config.device.as_deref(), Some("display"));
+        assert!(!events.try_iter().any(|e| matches!(e, EngineEvent::Error { .. })));
+
+        // Still away on resume: nothing reopens.
+        worker.handle(Control::Pause);
+        worker.handle(Control::Resume);
+        assert_eq!(opens(&actions), Vec::<String>::new());
+
+        // Back while paused: resume moves to it, keeping the buffered ring.
+        worker.handle(Control::Pause);
+        backend.uids.lock().unwrap().push("display");
+        worker.handle(Control::Resume);
+        assert_eq!(opens(&actions), ["display"]);
+        assert_eq!(worker.volume_device(), Some("display"));
+        assert!(!worker.session_fallback);
+
+        // A new session resolves afresh: away again means the default again.
+        worker.handle(Control::Stop);
+        backend.uids.lock().unwrap().retain(|u| *u != "display");
+        worker.handle(Control::Play(load(2, cd(), 0.01)));
+        assert_eq!(opens(&actions), ["speakers"]);
     }
 
     #[test]

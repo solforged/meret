@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
 import '../core/when.dart';
-import '../src/rust/api/types.dart';
 
 /// Playback outside the window (plate 10): the menu bar item, its panel and
 /// the media keys live in Swift (`Outside.swift`); this feeds them Now and
