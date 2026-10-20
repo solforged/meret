@@ -49,6 +49,12 @@ pub fn transport(cmd: TransportDto) -> Result<(), String> {
     api()?.transport(cmd)
 }
 
+/// Writes the queue position and the open listen; call as the app quits.
+pub fn flush_memory() -> Result<(), String> {
+    api()?.flush_memory();
+    Ok(())
+}
+
 /// Now's Up next: the queue after the playing item. Ask again when Now's
 /// item changes; the queue only moves with it.
 pub fn up_next(limit: u32) -> Result<UpNextDto, String> {

@@ -1,5 +1,8 @@
 //! The event pump's single open listen. The player lock is released before
 //! any store write; a matching Ended or Idle takes the open row exactly once.
+//! Memory checkpoints write how far it got while it plays, so quitting or
+//! crashing mid-track keeps the listen. Resuming the saved queue after a
+//! restart continues the listen it names rather than counting a second play.
 
 use meret_model::{ListenUid, RecordingId, TrackId};
 
@@ -11,6 +14,14 @@ pub(crate) struct Open {
     track: TrackId,
     recording: RecordingId,
     started_at: i64,
+    /// Already added to the hot columns' plays.
+    counted: bool,
+}
+
+/// The saved queue's open listen, continued if its item is the next to start.
+pub(crate) struct Carried {
+    pub uid: ListenUid,
+    pub recording: RecordingId,
 }
 
 pub(crate) fn on_started(core: &Core, token: u64) {
@@ -19,6 +30,7 @@ pub(crate) fn on_started(core: &Core, token: u64) {
     }
     // A replacement can start without an Idle between the two queues.
     finish(core, None);
+    let carried = core.carried_listen.lock().take();
     let item = {
         let player = core.player.lock();
         let queue = player.queue();
@@ -28,13 +40,23 @@ pub(crate) fn on_started(core: &Core, token: u64) {
         })
     };
     let Some((Some(track), Some(recording), from_stop)) = item else { return };
+    if let Some(carried) = carried.filter(|c| c.recording == recording) {
+        match core.store.listen(carried.uid) {
+            Ok(Some((saved, started_at, counted))) if saved == recording => {
+                *core.open_listen.lock() = Some(Open { uid: carried.uid, item: token, track, recording, started_at, counted });
+                return;
+            }
+            Ok(_) => {}
+            Err(error) => tracing::error!(%error, item = token, "could not continue listen"),
+        }
+    }
     let uid = ListenUid::new();
     let started_at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0);
     let result = core.store.listen_source(track).and_then(|source| {
         core.store.start_listen(uid, recording, source, "local".into(), started_at, from_stop, core.device_id.clone())
     });
     match result {
-        Ok(()) => *core.open_listen.lock() = Some(Open { uid, item: token, track, recording, started_at }),
+        Ok(()) => *core.open_listen.lock() = Some(Open { uid, item: token, track, recording, started_at, counted: false }),
         Err(error) => tracing::error!(%error, item = token, "could not start listen"),
     }
 }
@@ -47,6 +69,18 @@ pub(crate) fn on_idle(core: &Core) {
     finish(core, None);
 }
 
+/// The open listen, if it belongs to `token`; saved with the queue.
+pub(crate) fn open_uid(core: &Core, token: Option<u64>) -> Option<ListenUid> {
+    core.open_listen.lock().as_ref().filter(|open| Some(open.item) == token).map(|open| open.uid)
+}
+
+/// Writes how far the open listen got without closing it.
+pub(crate) fn progress(core: &Core) {
+    if let Some(open) = core.open_listen.lock().as_mut() {
+        write(core, open);
+    }
+}
+
 fn finish(core: &Core, item: Option<u64>) {
     let open = {
         let mut open = core.open_listen.lock();
@@ -55,16 +89,24 @@ fn finish(core: &Core, item: Option<u64>) {
         }
         open.take()
     };
-    let Some(open) = open else { return };
-    let played_ms = core.now.borrow().anchor.filter(|a| a.item == open.item)
-        .map(|a| (a.seconds_at(meret_engine::clock::now_ns()) * 1000.0) as u64).unwrap_or(0);
-    match core.store.finish_listen(open.uid, played_ms) {
-        Ok(true) => {
+    if let Some(mut open) = open {
+        write(core, &mut open);
+    }
+}
+
+/// Writes the position the anchor gives for the listen's item. Without an
+/// anchor for it, what was written last stands.
+fn write(core: &Core, open: &mut Open) {
+    let Some(played_ms) = core.now.borrow().anchor.filter(|a| a.item == open.item)
+        .map(|a| (a.seconds_at(meret_engine::clock::now_ns()) * 1000.0) as u64) else { return };
+    match core.store.update_listen(open.uid, played_ms) {
+        Ok(true) if !open.counted => {
+            open.counted = true;
             core.columns.write().record_play(open.track, open.started_at / 1000);
             core.status.send_modify(|status| status.library_version += 1);
         }
-        Ok(false) => {}
-        Err(error) => tracing::error!(%error, item = open.item, recording = open.recording.0, "could not finish listen"),
+        Ok(_) => {}
+        Err(error) => tracing::error!(%error, item = open.item, recording = open.recording.0, "could not write listen"),
     }
 }
 

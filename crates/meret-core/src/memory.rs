@@ -1,8 +1,10 @@
 //! Queue checkpoints and release-level resume, never on the audio callback.
+//! A checkpoint also writes how far the open listen got.
 
 use std::time::{Duration, Instant};
 
 use meret_engine::Anchor;
+use meret_model::ListenUid;
 use meret_player::QueueItem;
 
 use crate::{Core, Result};
@@ -13,6 +15,8 @@ pub(crate) struct Pending {
     pub items: Vec<QueueItem>,
     pub cursor: usize,
     pub position_ms: u64,
+    /// The listen open when the queue was saved, continued by a resume.
+    pub listen: Option<ListenUid>,
 }
 
 #[derive(Default)]
@@ -32,7 +36,7 @@ pub(crate) fn restore(core: &Core) -> Result<()> {
     now.anchor = Some(Anchor { item: item.token, position_frames: saved.position_ms, sample_rate: 1000,
         at_ns: meret_engine::clock::now_ns(), rate: 0.0 });
     core.now.send_replace(now);
-    *core.pending.lock() = Some(Pending { items, cursor: saved.cursor, position_ms: saved.position_ms });
+    *core.pending.lock() = Some(Pending { items, cursor: saved.cursor, position_ms: saved.position_ms, listen: saved.listen });
     Ok(())
 }
 
@@ -63,11 +67,18 @@ fn checkpoint(core: &Core, playing: bool, immediate: bool) {
     }
     let active = core.now.borrow().item;
     let resume = active.is_some() && state.completed != active;
+    crate::listens::progress(core);
     if let Err(error) = save(core, active, None, playing, resume) {
         report(Err(error));
     } else {
         state.last_write = Some(Instant::now());
     }
+}
+
+/// Writes the queue position and the open listen now, before the app quits.
+pub(crate) fn flush(core: &Core) {
+    let playing = core.now.borrow().anchor.is_some_and(|a| a.rate > 0.0);
+    checkpoint(core, playing, true);
 }
 
 pub(crate) fn on_ended(core: &Core, token: u64) {
@@ -106,7 +117,7 @@ fn snapshot(core: &Core, token: Option<u64>, position_ms: Option<u64>) -> Option
         let at = q.position_of(token?)?;
         (q.items.clone(), at)
     };
-    Some(Pending { items, cursor, position_ms: position_ms.unwrap_or_else(|| position(core, token)) })
+    Some(Pending { items, cursor, position_ms: position_ms.unwrap_or_else(|| position(core, token)), listen: None })
 }
 
 fn position(core: &Core, token: Option<u64>) -> u64 {
@@ -126,7 +137,7 @@ fn save(core: &Core, token: Option<u64>, position_ms: Option<u64>, playing: bool
     };
     let position_ms = position_ms.unwrap_or_else(|| position(core, token));
     let device = core.store.device_id()?;
-    core.store.save_queue(json, cursor, position_ms, playing, &device)?;
+    core.store.save_queue(json, cursor, position_ms, playing, &device, crate::listens::open_uid(core, token))?;
     if resume && let (Some(release), Some(recording)) = (release, recording) {
         core.store.upsert_resume(release, recording, position_ms, &device)?;
     }
@@ -266,6 +277,62 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
+    fn position_ms(core: &Core) -> u64 {
+        core.now.borrow().anchor.map_or(0, |a| (a.seconds_at(meret_engine::clock::now_ns()) * 1000.0) as u64)
+    }
+
+    fn wait_for(what: &str, ready: impl Fn() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !ready() {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    fn quitting_mid_track_keeps_the_listen_and_resuming_continues_it_without_a_second_play() {
+        let dir = fixture();
+        let running = Running::open(&dir, 1.0);
+        *running.core.columns.write() = running.core.store.load_columns().unwrap();
+        let mut events = running.core.events();
+        running.core.play_release(ReleaseId(1), 0).unwrap();
+        running.until(&mut events, |e| matches!(e, EngineEvent::Started { .. }));
+
+        // The quit flush writes the listen and the queue while playing.
+        wait_for("1.5 s of play", || position_ms(&running.core) >= 1500);
+        running.core.flush_memory();
+        let listen = running.core.store.history(1).unwrap().remove(0);
+        assert!((1500..2500).contains(&listen.played_ms), "flushed {} ms", listen.played_ms);
+        let saved = running.core.store.load_queue().unwrap().unwrap();
+        assert_eq!(saved.listen.map(|uid| uid.to_string()), Some(listen.uid.clone()));
+        assert!(saved.position_ms.abs_diff(listen.played_ms) < 100);
+
+        // Past half the cue, the next checkpoint counts it once.
+        wait_for("3.5 s of play", || position_ms(&running.core) >= 3500);
+        running.core.pause();
+        wait_for("the pause checkpoint to count the listen", || running.core.store.history(1).unwrap()[0].counted);
+        assert_eq!(running.core.columns.read().plays.iter().sum::<u32>(), 1);
+        // Quit without stopping: the listen is never finished.
+        drop(running);
+
+        let running = Running::open(&dir, 1.0);
+        *running.core.columns.write() = running.core.store.load_columns().unwrap();
+        assert_eq!(running.core.columns.read().plays.iter().sum::<u32>(), 1);
+        let mut events = running.core.events();
+        running.core.resume().unwrap();
+        running.until(&mut events, |e| matches!(e, EngineEvent::Ended { .. }));
+        running.stop(&mut events);
+        let history = running.core.store.history(10).unwrap();
+        let first: Vec<_> = history.iter().filter(|row| row.recording == RecordingId(1)).collect();
+        assert_eq!(first.len(), 1, "the resumed cue continued the same listen");
+        assert_eq!(first[0].uid, listen.uid);
+        assert!(first[0].played_ms >= 5900, "continued to {} ms", first[0].played_ms);
+        assert_eq!(running.core.columns.read().plays.iter().sum::<u32>(), 1, "one play, not two");
+        assert_eq!(running.core.store.load_columns().unwrap().plays.iter().sum::<u32>(), 1);
+        drop(running);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn pending_resume_obeys_every_idiom_and_from_start_and_pick_up() {
         let dir = fixture();
@@ -278,7 +345,7 @@ mod tests {
             let rows = store.release_page(ReleaseId(1)).unwrap().unwrap().tracks;
             let mut items = crate::queue_items(rows);
             for item in &mut items { item.idiom = idiom; }
-            store.save_queue(serde_json::to_string(&items).unwrap(), 0, saved_ms, false, &store.device_id().unwrap()).unwrap();
+            store.save_queue(serde_json::to_string(&items).unwrap(), 0, saved_ms, false, &store.device_id().unwrap(), None).unwrap();
             drop(store);
             let running = Running::open(&dir, 1.0);
             let mut events = running.core.events();
