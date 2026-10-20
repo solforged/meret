@@ -37,7 +37,7 @@ fn fixture() -> (Arc<Core>, std::path::PathBuf) {
 fn listen(core: &Core, recording: i64, at: i64, played: u64) {
     let uid = meret_model::ListenUid::new();
     core.store.start_listen(uid, meret_model::RecordingId(recording), None, "local".into(), at, None, core.store.device_id().unwrap()).unwrap();
-    core.store.finish_listen(uid, played).unwrap();
+    core.store.update_listen(uid, played).unwrap();
 }
 
 #[test]

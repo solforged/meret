@@ -36,6 +36,8 @@ abstract interface class CoreBridge {
   QueryDto parse(String input);
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins);
   Future<void> transport(TransportDto cmd);
+  /// Writes the queue position and the open listen; called as the app quits.
+  Future<void> flushMemory();
   /// The queue after the playing item; ask again when Now's item changes.
   Future<UpNextDto> upNext(int limit);
   Future<int> addRoot(String path);
@@ -109,6 +111,8 @@ class RustCore implements CoreBridge {
       rust.histogram(column: column, query: query, lo: lo, hi: hi, bins: bins);
   @override
   Future<void> transport(TransportDto cmd) => rust.transport(cmd: cmd);
+  @override
+  Future<void> flushMemory() => rust.flushMemory();
   @override
   Future<UpNextDto> upNext(int limit) => rust.upNext(limit: limit);
   @override
@@ -1200,6 +1204,9 @@ class FakeCore implements CoreBridge {
     );
     _now.add(_state);
   }
+
+  @override
+  Future<void> flushMemory() async {}
 
   @override
   Future<void> transport(TransportDto cmd) async {

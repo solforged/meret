@@ -170,6 +170,7 @@ pub struct Core {
     lists: Mutex<VecDeque<Arc<List>>>,
     settings: Mutex<Settings>,
     open_listen: Mutex<Option<listens::Open>>,
+    carried_listen: Mutex<Option<listens::Carried>>,
     device_id: String,
     pending: Mutex<Option<memory::Pending>>,
     memory_state: Mutex<memory::State>,
@@ -268,6 +269,7 @@ impl Core {
             lists: Mutex::new(VecDeque::with_capacity(LISTS)),
             settings: Mutex::new(settings),
             open_listen: Mutex::new(None),
+            carried_listen: Mutex::new(None),
             device_id,
             pending: Mutex::new(None),
             memory_state: Mutex::new(memory::State::default()),
@@ -603,11 +605,23 @@ impl Core {
         let position = if from_start { 0 } else {
             meret_player::resume::resume_point(saved.items[saved.cursor].idiom, saved.position_ms, &[]).position_ms
         };
+        // Picking up where the last run stopped is the same listen; from the
+        // start is a new one.
+        *self.carried_listen.lock() = saved.listen.zip(saved.items[saved.cursor].recording)
+            .filter(|_| !from_start)
+            .map(|(uid, recording)| listens::Carried { uid, recording });
         if let Err(error) = self.play_at(saved.items, saved.cursor, position) {
+            self.carried_listen.lock().take();
             memory::restore(self)?;
             return Err(error);
         }
         Ok(true)
+    }
+
+    /// Writes the queue position and how far the open listen got. The app
+    /// calls this as it quits; checkpoints cover a crash to within seconds.
+    pub fn flush_memory(&self) {
+        memory::flush(self);
     }
 
     pub fn resume_points(&self, limit: usize) -> Result<Vec<meret_store::ResumeRow>> {

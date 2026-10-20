@@ -82,6 +82,12 @@ impl Api {
         Ok(())
     }
 
+    /// Writes the queue position and how far the open listen got, so quitting
+    /// mid-track loses neither.
+    pub fn flush_memory(&self) {
+        self.core.flush_memory();
+    }
+
     /// Adds a music folder and scans it in the background. Progress and the
     /// new track count arrive on the status stream.
     pub fn add_root(&self, path: &str) -> Result<i64, String> {

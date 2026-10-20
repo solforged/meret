@@ -11,8 +11,7 @@ import 'types.dart';
 
 // These functions are ignored because they are not marked as `pub`: `api`
 
-/// Starts the process-wide core, or attaches to the running one. On macOS
-/// the app delegate may already have started it for the menu bar.
+/// Starts the process-wide core, or attaches to the running one.
 Future<void> startCore({required String dataDir, required bool nullOutput}) =>
     RustLib.instance.api.crateApiCoreStartCore(
       dataDir: dataDir,
@@ -38,6 +37,9 @@ Future<HistogramDto> histogram({
 
 Future<void> transport({required TransportDto cmd}) =>
     RustLib.instance.api.crateApiCoreTransport(cmd: cmd);
+
+/// Writes the queue position and the open listen; call as the app quits.
+Future<void> flushMemory() => RustLib.instance.api.crateApiCoreFlushMemory();
 
 /// Now's Up next: the queue after the playing item. Ask again when Now's
 /// item changes; the queue only moves with it.
