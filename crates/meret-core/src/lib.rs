@@ -7,6 +7,8 @@ mod local_zone;
 mod listens;
 mod now;
 mod scan;
+#[cfg(target_os = "macos")]
+mod fswatch;
 mod status;
 mod suggestions;
 mod views;
@@ -174,12 +176,16 @@ pub struct Core {
     device_id: String,
     pending: Mutex<Option<memory::Pending>>,
     memory_state: Mutex<memory::State>,
+    /// Tells the FSEvents watcher the roots changed.
+    #[cfg(target_os = "macos")]
+    fswatch: OnceLock<Sender<fswatch::Message>>,
 }
 
 static CORE: OnceLock<Arc<Core>> = OnceLock::new();
 
 /// Starts the process-wide core, or returns the running one. The hot
-/// columns load and known roots rescan in the background.
+/// columns load in the background, and the roots catch up with what changed
+/// since the last run.
 pub fn start(mut config: CoreConfig) -> Result<Arc<Core>> {
     config.data_dir = std::path::absolute(config.data_dir)?;
     if let Some(c) = CORE.get() {
@@ -192,6 +198,9 @@ pub fn start(mut config: CoreConfig) -> Result<Arc<Core>> {
     now::spawn_pump(core.clone());
     scan::spawn_worker(core.clone(), requests);
     let _ = core.scans.send(ScanRequest::LoadColumns);
+    #[cfg(target_os = "macos")]
+    fswatch::start(&core);
+    #[cfg(not(target_os = "macos"))]
     let _ = core.scans.send(ScanRequest::AllRoots);
     Ok(core)
 }
@@ -273,6 +282,8 @@ impl Core {
             device_id,
             pending: Mutex::new(None),
             memory_state: Mutex::new(memory::State::default()),
+            #[cfg(target_os = "macos")]
+            fswatch: OnceLock::new(),
         })
     }
 
@@ -298,6 +309,7 @@ impl Core {
     pub fn add_root(&self, path: &Path) -> Result<RootId> {
         let root = meret_library::add_root(&self.store, path)?;
         let _ = self.scans.send(ScanRequest::Root(root));
+        self.roots_changed();
         Ok(root)
     }
 
@@ -399,7 +411,17 @@ impl Core {
     pub fn remove_root(&self, root: RootId) -> Result<()> {
         let (done, result) = crossbeam_channel::bounded(1);
         self.scans.send(ScanRequest::Remove(root, done)).map_err(|_| meret_store::StoreError::WriterGone)?;
-        result.recv().map_err(|_| meret_store::StoreError::WriterGone)?
+        result.recv().map_err(|_| meret_store::StoreError::WriterGone)??;
+        self.roots_changed();
+        Ok(())
+    }
+
+    /// Points the FSEvents watcher, if one runs, at the current roots.
+    fn roots_changed(&self) {
+        #[cfg(target_os = "macos")]
+        if let Some(watcher) = self.fswatch.get() {
+            let _ = watcher.send(fswatch::Message::Roots);
+        }
     }
 
     /// Rescans every root in the background.
