@@ -38,7 +38,7 @@ class NowPane extends StatelessWidget {
           const Expanded(child: Text('NOW', style: Tok.label)),
           ListenableBuilder(
             listenable: clock,
-            builder: (_, _) => Text(!loaded ? 'nothing playing' : clock.playing ? 'playing' : 'paused', style: Tok.label),
+            builder: (_, _) => Text(!loaded ? '' : clock.playing ? 'playing' : 'paused', style: Tok.label),
           ),
         ]),
         const SizedBox(height: 8),
@@ -198,10 +198,7 @@ class _NowMemoryState extends State<NowMemory> {
       child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
     ),
     if (_resumes.isNotEmpty) ...[
-      NowSection(
-        title: widget.expanded ? 'Pick up where you left off' : 'Pick up',
-        meta: widget.expanded ? 'each resumes the way its music does' : null,
-      ),
+      const NowSection(title: 'Pick up'),
       for (final point in _resumes)
         NowDoor(
           key: ValueKey('now-pick-up-${point.releaseId}'),
@@ -227,7 +224,7 @@ class _NowMemoryState extends State<NowMemory> {
       const SizedBox(height: 22),
     ],
     if (_history.isNotEmpty) ...[
-      NowSection(title: 'What was that?', meta: widget.expanded ? 'last played, newest first · H for all history' : null),
+      NowSection(title: 'What was that?', meta: widget.expanded ? 'H for all history' : null),
       for (final listen in _history)
         NowDoor(
           key: ValueKey('now-listen-${listen.uid}'),
@@ -569,14 +566,14 @@ class _UpNextState extends State<UpNext> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
         const Expanded(child: Text('UP NEXT', style: Tok.label)),
-        Text(
-          upNext == null ? '' : remaining == 0 ? 'then stop' : more > 0 ? '$remaining · the queue, in order' : 'the queue, in order',
-          style: Tok.label,
-        ),
+        Text(switch (upNext) {
+          null => '',
+          _ when remaining == 0 => 'then stop',
+          _ when more > 0 => '$remaining',
+          _ => '',
+        }, style: Tok.label),
       ]),
       const SizedBox(height: 4),
-      if (upNext != null && upNext.items.isEmpty)
-        const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Nothing queued after this.', style: Tok.label)),
       for (final item in upNext?.items ?? const <UpNextItemDto>[])
         Container(
           key: ValueKey('up-next-${item.token}'),

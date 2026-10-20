@@ -24,7 +24,6 @@ void main() {
       expect(find.text('A kept trail'), findsOneWidget);
       expect(find.text('14 plays'), findsOneWidget);
       expect(find.text('Sunday at the Village Vanguard'), findsOneWidget);
-      expect(find.text('loved, then left'), findsOneWidget);
       for (final resume in resumes) {
         final row = find.byKey(ValueKey('front-pick-up-${resume.releaseId}'));
         expect(find.descendant(of: row, matching: find.text(resume.recordingTitle)), findsOneWidget);
@@ -95,7 +94,7 @@ void main() {
     await _front(tester, core);
     expect(find.text('Trails'), findsOneWidget);
     expect(find.text('Kept trails'), findsNothing);
-    expect(find.text('⌘S keeps a trail by name'), findsOneWidget);
+    expect(find.text('⌘S keeps a trail'), findsOneWidget);
     for (var year = 2002; year < 2006; year++) {
       expect(find.text('year:$year'), findsOneWidget);
     }
@@ -109,7 +108,7 @@ void main() {
     final core = _MemoryCore()..blankMemory = true;
     await _front(tester, core);
     expect(find.text('Kept trails'), findsOneWidget);
-    expect(find.text('Trails you follow and keep will be here'), findsOneWidget);
+    expect(find.text('No trails yet'), findsOneWidget);
     for (final heading in ['Pick up', 'Your log', 'Most played this week', 'Dormant']) {
       expect(find.text(heading), findsNothing);
     }

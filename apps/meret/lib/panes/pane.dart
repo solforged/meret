@@ -23,20 +23,20 @@ class PaneActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Wrap(spacing: 8, runSpacing: 8, children: [
     _ActionButton(key: primaryKey, label: primary, hint: 'Space', primary: true, onTap: onPrimary),
-    const _ActionButton(label: 'Want', hint: 'W', comingLater: 'Wants arrive with the lead store'),
-    const _ActionButton(label: 'Crate', hint: 'C', comingLater: 'Crates arrive with their store'),
+    const _ActionButton(label: 'Want', hint: 'W', later: true),
+    const _ActionButton(label: 'Crate', hint: 'C', later: true),
   ]);
 }
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({super.key, required this.label, required this.hint, this.primary = false, this.onTap, this.comingLater});
+  const _ActionButton({super.key, required this.label, required this.hint, this.primary = false, this.onTap, this.later = false});
   final String label;
   final String hint;
   final bool primary;
   final VoidCallback? onTap;
 
-  /// Why it's greyed: shown on hover, so the row reads as plate 01 draws it.
-  final String? comingLater;
+  /// Not built yet: greyed, and says so on hover, so the row reads as plate 01 draws it.
+  final bool later;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +63,7 @@ class _ActionButton extends StatelessWidget {
         ),
       ),
     );
-    return comingLater == null ? button : Tooltip(message: '$comingLater · coming later', child: button);
+    return later ? Tooltip(message: 'Coming later', child: button) : button;
   }
 }
 

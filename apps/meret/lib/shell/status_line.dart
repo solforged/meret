@@ -44,8 +44,9 @@ class _StatusLineState extends State<StatusLine> {
         else if (front == null)
           const Text('Reading folders…', style: Tok.label)
         else if (front.roots.any((root) => !root.online))
-          Text('${front.roots.where((root) => !root.online).length} offline. Meret will read them when they are available.', style: Tok.body.copyWith(color: Tok.muted)),
-        Text(scans.isEmpty ? 'No scan is running.' : 'Meret is ${scans.map((job) => job.verb).toSet().join(' and ')}.', style: Tok.body.copyWith(color: Tok.muted)),
+          Text('${front.roots.where((root) => !root.online).length} offline', style: Tok.body.copyWith(color: Tok.muted)),
+        if (scans.isNotEmpty)
+          Text('Meret is ${scans.map((job) => job.verb).toSet().join(' and ')}.', style: Tok.body.copyWith(color: Tok.muted)),
       ]);
     },
   );
@@ -66,11 +67,7 @@ class _StatusLineState extends State<StatusLine> {
       onSettings: () => showSettings(context, section: section),
       content: switch (source.key) {
         'local' => _local(status),
-        'musicbrainz' => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('MusicBrainz has never been contacted.', style: Tok.body),
-          const SizedBox(height: 8),
-          Text('Matching is not built yet. When it is, Meret will ask in Needs you before sending tags.', style: Tok.body.copyWith(color: Tok.muted)),
-        ]),
+        'musicbrainz' => const Text('Never contacted.', style: Tok.body),
         _ => Text(source.detail, style: Tok.body),
       },
       child: Row(mainAxisSize: MainAxisSize.min, children: [

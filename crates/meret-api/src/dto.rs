@@ -650,10 +650,10 @@ impl From<Front> for FrontDto {
 
         let offline = f.roots.iter().filter(|r| !r.online).count() as u64;
         let mut needs_you = vec![
-            line("Files whose tags can't be read", f.facts.unreadable, "tried again on every scan", None),
-            line("Tracks with no artist tag", f.facts.no_artist, "they sort last", None),
-            line("Files that have gone", f.facts.missing, "kept, with their plays", None),
-            line("Folders not connected", offline, "their tracks come back when they do", None),
+            line("Unreadable files", f.facts.unreadable, "", None),
+            line("No artist tag", f.facts.no_artist, "", None),
+            line("Missing files", f.facts.missing, "", None),
+            line("Offline folders", offline, "", None),
         ];
         needs_you.retain(|l| l.count > 0);
 

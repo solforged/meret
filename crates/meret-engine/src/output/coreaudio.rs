@@ -181,7 +181,7 @@ impl Device {
     fn volume(self) -> Result<DeviceVolume, OutputError> {
         let elements = self.volume_elements();
         if elements.is_empty() {
-            return Ok(DeviceVolume::unsupported("This output has no device volume control. Use its DAC or amplifier."));
+            return Ok(DeviceVolume::unsupported("No volume control on this output"));
         }
         let mut scalar = 0.0f32;
         for &element in &elements {
