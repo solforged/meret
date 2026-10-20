@@ -111,6 +111,10 @@ pub trait OutputStream: Send {
     fn opened(&self) -> &Opened;
     fn start(&mut self) -> Result<(), OutputError>;
     fn pause(&mut self) -> Result<(), OutputError>;
+    /// The device went away (unplugged, disconnected) and won't play again.
+    fn lost(&self) -> bool {
+        false
+    }
     /// Stops and closes the device, returning its unread ring without copying.
     /// Used to change outputs while paused without losing buffered joins.
     fn into_source(self: Box<Self>) -> RingReader;
