@@ -125,9 +125,9 @@ class _FrontMemoryState extends State<FrontMemory> {
           ]),
         ),
       if (_trails.isEmpty)
-        const Padding(padding: EdgeInsets.only(top: 10), child: Text('Trails you follow and keep will be here', style: Tok.label)),
+        const Padding(padding: EdgeInsets.only(top: 10), child: Text('No trails yet', style: Tok.label)),
       if (kept.isEmpty && _trails.isNotEmpty)
-        const Padding(padding: EdgeInsets.only(top: 8), child: Text('⌘S keeps a trail by name', style: Tok.label)),
+        const Padding(padding: EdgeInsets.only(top: 8), child: Text('⌘S keeps a trail', style: Tok.label)),
     ]);
   }
 
@@ -220,7 +220,7 @@ class _FrontMemoryState extends State<FrontMemory> {
           Text('${release.plays} plays, then none since ${DateTime.fromMillisecondsSinceEpoch(release.lastPlayedMs.toInt()).year}', style: Tok.label),
         ]),
       ),
-  ], meta: 'loved, then left');
+  ]);
 
   @override
   Widget build(BuildContext context) {

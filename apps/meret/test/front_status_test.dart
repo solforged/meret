@@ -19,10 +19,8 @@ void main() {
       expect(find.text(suggestion.path), findsOneWidget);
       if (suggestion.note.isNotEmpty) expect(find.text(suggestion.note), findsOneWidget);
     }
-    expect(find.text('macOS will ask to let Meret read this folder.'), findsWidgets);
-    expect(find.text('Folder found · count after access'), findsWidgets);
+    expect(find.text('macOS will ask for access'), findsWidgets);
     expect(find.text('Bring your history'), findsOneWidget);
-    expect(find.text('History import is not available yet.'), findsOneWidget);
 
     await tester.tap(find.text(suggestions.first.label));
     await tester.pump();
@@ -66,12 +64,11 @@ void main() {
     await _settleOverlay(tester);
 
     expect(find.text('0 tracks in 0 folders.'), findsOneWidget);
-    expect(find.text('No scan is running.'), findsOneWidget);
     await tester.tap(find.text('Open in Settings'));
     await _settleOverlay(tester);
 
     _expectSection(tester, 'Folders');
-    expect(find.text('No scan is running.'), findsNothing);
+    expect(find.text('0 tracks in 0 folders.'), findsNothing);
   });
 
   testWidgets('MusicBrainz popover uses the source key and opens Lookups', (tester) async {
@@ -79,8 +76,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('status-source-musicbrainz')));
     await _settleOverlay(tester);
 
-    expect(find.text('MusicBrainz has never been contacted.'), findsOneWidget);
-    expect(find.text('Matching is not built yet. When it is, Meret will ask in Needs you before sending tags.'), findsOneWidget);
+    expect(find.text('Never contacted.'), findsOneWidget);
     await tester.tap(find.text('Open in Settings'));
     await _settleOverlay(tester);
 

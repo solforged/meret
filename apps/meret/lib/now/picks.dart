@@ -6,10 +6,9 @@ import 'now_pane.dart';
 
 /// The core's ranked picks, with its reason and playback plan left intact.
 class PlaySomething extends StatefulWidget {
-  const PlaySomething({super.key, required this.core, required this.now, this.expanded = false});
+  const PlaySomething({super.key, required this.core, required this.now});
   final CoreBridge core;
   final NowDto? now;
-  final bool expanded;
 
   @override
   State<PlaySomething> createState() => _PlaySomethingState();
@@ -91,7 +90,7 @@ class _PlaySomethingState extends State<PlaySomething> {
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    NowSection(title: 'Or play something', meta: widget.expanded ? '⇧Space plays the first · always says why' : null),
+    const NowSection(title: 'Or play something'),
     if (_error != null) Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
@@ -99,7 +98,7 @@ class _PlaySomethingState extends State<PlaySomething> {
     if (_picks == null && _error == null)
       const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text('Finding something to play…', style: Tok.label)),
     if (_picks?.isEmpty == true)
-      const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text('Nothing to play yet · add a folder', style: Tok.label)),
+      const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text('Nothing to play yet', style: Tok.label)),
     for (final pick in _picks ?? const <PickDto>[]) _cell(pick, first: identical(pick, _picks!.first)),
   ]);
 }

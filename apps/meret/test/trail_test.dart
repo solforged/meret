@@ -105,7 +105,6 @@ void main() {
     expect(find.byKey(const ValueKey('keep-trail-dialog')), findsOneWidget);
     final field = find.byKey(const ValueKey('trail-name'));
     expect(tester.widget<TextField>(field).controller!.text, 'year:1998 → ${hit.title}');
-    expect(find.text('Keeping keeps the whole tree. A branch you played or wanted is kept with it.'), findsOneWidget);
     await tester.enterText(field, 'Music for the evening');
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
@@ -149,7 +148,7 @@ void main() {
     expect(find.byType(TrailStrip), findsOneWidget, reason: 'the Front does not end a trail');
     expect(find.byType(NoTrailStrip), findsNothing);
     expect(find.byKey(const ValueKey('front-over-trail')), findsOneWidget);
-    expect(find.text('Front · over Everything · ⌘1 or ] back to the trail'), findsOneWidget);
+    expect(find.text('Front · ⌘1 back to Everything'), findsOneWidget);
     await _command(tester, LogicalKeyboardKey.keyS);
     expect(find.byKey(const ValueKey('keep-trail-dialog')), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -164,7 +163,7 @@ void main() {
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pumpAndSettle();
     expect(find.byType(NoTrailStrip), findsOneWidget);
-    expect(find.text('no trail yet · open anything to start one'), findsOneWidget);
+    expect(find.text('no trail yet'), findsOneWidget);
     expect(find.descendant(of: find.byType(NoTrailStrip), matching: find.textContaining('to resume')), findsNothing);
     await _command(tester, LogicalKeyboardKey.keyS);
     expect(find.text("there's no trail to keep"), findsOneWidget);
@@ -177,12 +176,12 @@ void main() {
     )));
     await tester.pumpWidget(strip(0));
     await tester.pumpAndSettle();
-    expect(find.text('no trail yet · open anything to start one'), findsOneWidget);
+    expect(find.text('no trail yet'), findsOneWidget);
     await core.startTrail(const TargetDto.search(query: 'Iona'));
     await core.keepTrail(name: 'A kept tree');
     await tester.pumpWidget(strip(1));
     await tester.pumpAndSettle();
-    const line = "no trail open · open anything to start one · [ to resume today's · A kept tree · 1 stop";
+    const line = "[ to resume today's · A kept tree · 1 stop";
     final text = tester.widget<Text>(find.text(line));
     expect(text.maxLines, 1);
     expect(text.overflow, TextOverflow.ellipsis);
@@ -190,7 +189,7 @@ void main() {
     expect(bracket.style!.color, Tok.gold);
     await tester.pumpWidget(strip(1, bridge: FakeCore.empty()));
     await tester.pumpAndSettle();
-    expect(find.text('no trail yet · open anything to start one'), findsOneWidget);
+    expect(find.text('no trail yet'), findsOneWidget);
   });
 
   testWidgets('command S does not keep while typing in the query line', (tester) async {

@@ -218,7 +218,7 @@ class _QueryLineState extends State<QueryLine> {
   Widget build(BuildContext context) {
     final p = _parsed;
     final hint = _submitError ?? switch (p?.kind) {
-      null => 'Search everything, or type a command',
+      null => 'Search or type a command',
       QueryKind.invalid => p!.error ?? '',
       QueryKind.command => '↵ to run',
       QueryKind.search => '↵ as a table',
