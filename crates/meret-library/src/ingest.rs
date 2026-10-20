@@ -127,6 +127,21 @@ pub fn roots(store: &Store) -> Result<Vec<Root>, ScanError> {
 /// Walks `root`, diffs it against the store, and writes what changed.
 /// Blocks; call it from a background thread, never an engine thread.
 pub fn scan(store: &Store, root: RootId, progress: &(dyn Fn(ScanProgress) + Sync)) -> Result<ScanReport, ScanError> {
+    scan_in(store, root, &[], progress)
+}
+
+/// Walks only these folders of `root` and everything under them (relative,
+/// `/`-separated, as `watch::plan` gives them), leaving the rest of the root
+/// as the store has it.
+pub fn rescan_dirs(store: &Store, root: RootId, dirs: &[String], progress: &(dyn Fn(ScanProgress) + Sync)) -> Result<ScanReport, ScanError> {
+    if dirs.is_empty() {
+        return Ok(ScanReport::default());
+    }
+    scan_in(store, root, dirs, progress)
+}
+
+/// The whole root when `dirs` is empty.
+fn scan_in(store: &Store, root: RootId, dirs: &[String], progress: &(dyn Fn(ScanProgress) + Sync)) -> Result<ScanReport, ScanError> {
     let dir: Option<String> =
         store.read(|c| c.query_row("SELECT path FROM root WHERE id = ?1 AND state <> 'removed'", [root.0], |r| r.get(0)).optional())?;
     let dir = PathBuf::from(dir.ok_or(ScanError::NoRoot(root.0))?);
@@ -138,21 +153,43 @@ pub fn scan(store: &Store, root: RootId, progress: &(dyn Fn(ScanProgress) + Sync
         return Ok(report);
     }
 
+    // Taken before the walk, so a change made during it is replayed later.
+    let whole = dirs.is_empty();
+    #[cfg(target_os = "macos")]
+    let mark = whole.then(|| crate::watch::database_uuid(&dir).map(|uuid| (crate::watch::current_event_id(), uuid))).flatten();
+    #[cfg(not(target_os = "macos"))]
+    let mark: Option<(u64, String)> = None;
+
     progress(ScanProgress { phase: Phase::Walking, done: 0, total: 0 });
-    let found = walk(&dir);
+    let found: Vec<FileStat> = if whole {
+        walk(&dir)
+    } else {
+        dirs.iter().flat_map(|sub| walk(&dir.join(sub)).into_iter().map(move |mut f| {
+            f.rel_path = format!("{sub}/{}", f.rel_path);
+            f
+        })).collect()
+    };
     report.found = found.len();
     let known = store.read(|c| {
-        let mut stmt =
-            c.prepare("SELECT rel_path, size, mtime_ns, inode FROM file WHERE root_id = ?1 AND state = 'present'")?;
-        let rows = stmt.query_map([root.0], |r| {
-            Ok(FileStat {
-                rel_path: r.get(0)?,
-                size: r.get::<_, i64>(1)? as u64,
-                mtime_ns: r.get::<_, i64>(2)? as i128,
-                inode: r.get::<_, Option<i64>>(3)?.map(|i| i as u64),
-            })
-        })?;
-        rows.collect::<rusqlite::Result<Vec<_>>>()
+        let row = |r: &rusqlite::Row<'_>| Ok(FileStat {
+            rel_path: r.get(0)?,
+            size: r.get::<_, i64>(1)? as u64,
+            mtime_ns: r.get::<_, i64>(2)? as i128,
+            inode: r.get::<_, Option<i64>>(3)?.map(|i| i as u64),
+        });
+        if whole {
+            let mut stmt =
+                c.prepare("SELECT rel_path, size, mtime_ns, inode FROM file WHERE root_id = ?1 AND state = 'present'")?;
+            return stmt.query_map([root.0], row)?.collect::<rusqlite::Result<Vec<_>>>();
+        }
+        // Everything under `sub/`: from "sub/" up to "sub0", '0' following '/'.
+        let mut stmt = c.prepare("SELECT rel_path, size, mtime_ns, inode FROM file
+            WHERE root_id = ?1 AND state = 'present' AND rel_path >= ?2 AND rel_path < ?3")?;
+        let mut known = vec![];
+        for sub in dirs {
+            known.extend(stmt.query_map(params![root.0, format!("{sub}/"), format!("{sub}0")], row)?.collect::<rusqlite::Result<Vec<_>>>()?);
+        }
+        Ok(known)
     })?;
     let d = diff(&known, &found);
 
@@ -250,8 +287,12 @@ pub fn scan(store: &Store, root: RootId, progress: &(dyn Fn(ScanProgress) + Sync
         progress(ScanProgress { phase: Phase::Reading, done, total });
     }
 
-    store.writer.write(move |tx| {
-        tx.execute("UPDATE root SET state = 'online', last_walk_at = ?2 WHERE id = ?1", params![root.0, now_ms()])
+    store.writer.write(move |tx| match (whole, mark) {
+        (true, Some((id, uuid))) => tx.execute(
+            "UPDATE root SET state = 'online', last_walk_at = ?2, fsevents_id = ?3, fsevents_uuid = ?4 WHERE id = ?1",
+            params![root.0, now_ms(), id as i64, uuid]),
+        (true, None) => tx.execute("UPDATE root SET state = 'online', last_walk_at = ?2 WHERE id = ?1", params![root.0, now_ms()]),
+        (false, _) => tx.execute("UPDATE root SET state = 'online' WHERE id = ?1", [root.0]),
     })?;
     Ok(report)
 }
@@ -822,6 +863,41 @@ mod tests {
         assert_eq!(rows.len(), 1, "no phantom row for the old path");
         assert!(rows[0].path.as_deref().unwrap().ends_with("/y.flac"));
         assert_eq!(rows[0].title, "X");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn rescanning_folders_touches_only_them_and_follows_a_move_between_them() {
+        let (dir, store) = library();
+        let music = dir.join("music");
+        put(&music, "a/1.flac", Some(("One", "Hogg", "First", 1)));
+        put(&music, "a/2.flac", Some(("Two", "Hogg", "First", 2)));
+        put(&music, "a b/4.flac", Some(("Four", "Hogg", "Beside", 1)));
+        put(&music, "b/3.flac", Some(("Three", "Hogg", "Second", 1)));
+        let root = add_root(&store, &music).unwrap();
+        scan(&store, root, &|_| {}).unwrap();
+        let canonical = music.canonicalize().unwrap();
+        let one = track_at(&store, &canonical.join("a/1.flac")).unwrap();
+        if cfg!(target_os = "macos") {
+            let mark = &crate::watch::marks(&store).unwrap()[0];
+            assert!(mark.id.is_some() && mark.uuid.is_some(), "a full walk records where FSEvents can resume");
+        }
+
+        std::fs::create_dir_all(music.join("c")).unwrap();
+        std::fs::rename(music.join("a/1.flac"), music.join("c/1.flac")).unwrap();
+        put(&music, "c/5.flac", Some(("Five", "Hogg", "Third", 1)));
+        std::fs::remove_file(music.join("b/3.flac")).unwrap();
+        std::fs::remove_file(music.join("a b/4.flac")).unwrap();
+        let report = rescan_dirs(&store, root, &["a".into(), "c".into()], &|_| {}).unwrap();
+        assert_eq!((report.moved, report.added, report.removed), (1, 1, 0));
+        assert_eq!(track_at(&store, &canonical.join("c/1.flac")), Some(one));
+        assert!(track_at(&store, &canonical.join("a/2.flac")).is_some());
+        assert!(track_at(&store, &canonical.join("b/3.flac")).is_some(), "b wasn't asked about");
+        assert!(track_at(&store, &canonical.join("a b/4.flac")).is_some(), "\"a b\" sorts beside \"a\" but isn't under it");
+
+        let report = rescan_dirs(&store, root, &["b".into()], &|_| {}).unwrap();
+        assert_eq!(report.removed, 1);
+        assert_eq!(store.load_columns().unwrap().len(), 4);
         std::fs::remove_dir_all(dir).ok();
     }
 
