@@ -34,7 +34,7 @@ class _HistorySheetState extends State<_HistorySheet> {
     shape: const RoundedRectangleBorder(side: BorderSide(color: Tok.rule)),
     child: SizedBox(width: 520, height: 640, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(padding: const EdgeInsets.fromLTRB(20, 12, 12, 8), child: Row(children: [
-        const Expanded(child: Text('History · newest first', style: Tok.label)),
+        const Expanded(child: Text('History', style: Tok.label)),
         IconButton(tooltip: 'Close history', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close, size: 18, color: Tok.muted)),
       ])),
       const Divider(height: 1, color: Tok.rule),
@@ -44,7 +44,7 @@ class _HistorySheetState extends State<_HistorySheet> {
           if (snapshot.hasError) return Padding(padding: const EdgeInsets.all(20), child: Text(snapshot.error.toString(), style: Tok.label.copyWith(color: Tok.warn)));
           final listens = snapshot.data;
           if (listens == null) return const Padding(padding: EdgeInsets.all(20), child: Text('Reading your history…', style: Tok.label));
-          if (listens.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('What you play will be here.', style: Tok.label));
+          if (listens.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('Nothing played yet', style: Tok.label));
           return ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             itemCount: listens.length,
@@ -72,7 +72,7 @@ class _HistorySheetState extends State<_HistorySheet> {
           );
         },
       )),
-      const Padding(padding: EdgeInsets.fromLTRB(20, 8, 20, 16), child: Text('Escape closes · a play opens its release', style: Tok.label)),
+      const SizedBox(height: 16),
     ])),
   );
 }

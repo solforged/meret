@@ -92,7 +92,7 @@ pub trait OutputBackend: Send + Sync {
         device_uid(&self.devices()?, wanted)
     }
     fn volume(&self, _device: Option<&str>) -> Result<DeviceVolume, OutputError> {
-        Ok(DeviceVolume::unsupported("This output does not offer device volume."))
+        Ok(DeviceVolume::unsupported("No volume control on this output"))
     }
     fn set_volume(&self, _device: Option<&str>, _scalar: f32) -> Result<DeviceVolume, OutputError> {
         Err(OutputError::Refused("device volume is not available on this output".into()))

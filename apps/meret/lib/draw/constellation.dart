@@ -50,9 +50,8 @@ class _NoTrailStripState extends State<NoTrailStrip> {
               if (snapshot.hasError)
                 TextSpan(text: "couldn't load trails · ${snapshot.error}", style: Tok.label.copyWith(color: Tok.warn))
               else if (trail == null)
-                const TextSpan(text: 'no trail yet · open anything to start one')
+                const TextSpan(text: 'no trail yet')
               else ...[
-                const TextSpan(text: 'no trail open · open anything to start one · '),
                 TextSpan(text: '[', style: Tok.label.copyWith(color: Tok.gold)),
                 TextSpan(text: ' to resume ${dayPossessive(trail.whenMs.toInt())} · ${trail.name ?? trail.title} · ${trail.stops} ${trail.stops == 1 ? 'stop' : 'stops'}'),
               ],

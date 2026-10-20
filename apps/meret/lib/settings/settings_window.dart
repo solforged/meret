@@ -256,33 +256,30 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     color: const Color(0xFF080E20),
     child: Padding(
       padding: const EdgeInsets.fromLTRB(12, 20, 12, 16),
-      child: Column(children: [
-        Expanded(child: ListView(children: [
-          for (final section in SettingsSection.values)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Semantics(
-                selected: section == _section,
-                child: InkWell(
-                  key: ValueKey('settings-nav-${section.name}'),
-                  onTap: () => setState(() => _section = section),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: section == _section ? const Color(0x1AD2A64E) : Colors.transparent,
-                      border: Border.all(color: section == _section ? Tok.gold3 : Colors.transparent),
-                    ),
-                    child: Row(children: [
-                      Icon(_icon(section), size: 17, color: section == _section ? Tok.ink : Tok.muted),
-                      const SizedBox(width: 10),
-                      Text(_label(section), style: Tok.body.copyWith(fontSize: 14, color: section == _section ? Tok.ink : Tok.muted)),
-                    ]),
+      child: ListView(children: [
+        for (final section in SettingsSection.values)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Semantics(
+              selected: section == _section,
+              child: InkWell(
+                key: ValueKey('settings-nav-${section.name}'),
+                onTap: () => setState(() => _section = section),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: section == _section ? const Color(0x1AD2A64E) : Colors.transparent,
+                    border: Border.all(color: section == _section ? Tok.gold3 : Colors.transparent),
                   ),
+                  child: Row(children: [
+                    Icon(_icon(section), size: 17, color: section == _section ? Tok.ink : Tok.muted),
+                    const SizedBox(width: 10),
+                    Text(_label(section), style: Tok.body.copyWith(fontSize: 14, color: section == _section ? Tok.ink : Tok.muted)),
+                  ]),
                 ),
               ),
             ),
-        ])),
-        const Padding(padding: EdgeInsets.all(10), child: Text('Changes stay here.\nThe trail holds music.', style: TextStyle(fontSize: 12, color: Tok.faint, height: 1.5))),
+          ),
       ]),
     ),
   );
@@ -299,19 +296,15 @@ class _SettingsWindowState extends State<_SettingsWindow> {
   };
 
   Widget _folders() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _heading('Folders', 'Meret reads your music from these folders. A disconnected drive stays in the collection.'),
+    _heading('Folders'),
     if (_front == null) const Text('Reading folders…', style: Tok.monoSmall)
-    else if (_front!.roots.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('No folders added yet.', style: Tok.monoSmall))
+    else if (_front!.roots.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('No folders yet', style: Tok.monoSmall))
     else for (final root in _front!.roots) _folder(root),
     const SizedBox(height: 22),
     Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
       _button('Add a folder…', _changingFolders ? null : _addFolder, primary: true),
-      if (_front != null) Text('${_count(_front!.tracks)} ${_front!.tracks == BigInt.one ? 'track' : 'tracks'} · ${_count(_front!.releases)} ${_front!.releases == BigInt.one ? 'release' : 'releases'} on this Mac', style: Tok.monoSmall),
+      if (_front != null) Text('${_count(_front!.tracks)} ${_front!.tracks == BigInt.one ? 'track' : 'tracks'} · ${_count(_front!.releases)} ${_front!.releases == BigInt.one ? 'release' : 'releases'}', style: Tok.monoSmall),
     ]),
-    const SizedBox(height: 22),
-    _note('Removing a folder never deletes its audio files. Meret stops reading it and hides its tracks. Re-adding the folder restores it.'),
-    const SizedBox(height: 16),
-    const Text('Scanning happens on this Mac. Online matching is not built yet.', style: Tok.monoSmall),
   ]);
 
   Widget _folder(RootDto root) => Container(
@@ -326,7 +319,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
           const SizedBox(height: 4),
           Text(root.path, style: Tok.monoSmall.copyWith(color: Tok.ink)),
           const SizedBox(height: 6),
-          Text(root.online ? 'Online' : 'Offline · waiting for the drive', style: Tok.body.copyWith(fontSize: 12, color: root.online ? Tok.ok : Tok.warn)),
+          Text(root.online ? 'Online' : 'Offline', style: Tok.body.copyWith(fontSize: 12, color: root.online ? Tok.ok : Tok.warn)),
         ])),
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -350,8 +343,8 @@ class _SettingsWindowState extends State<_SettingsWindow> {
   Widget _sources() {
     final local = _status?.sources.where((source) => source.key == 'local').firstOrNull;
     final entries = <(String, String, String, String)>[
-      ('local', 'This Mac', _status == null ? 'Reading library…' : '${_count(_status!.tracks)} tracks', 'Local folders make your music available on this Mac. Scanning stays on this Mac.'),
-      ('musicbrainz', 'MusicBrainz', 'Registered · not used yet', 'MusicBrainz is registered as a metadata source. Meret has never contacted it. Matching is not built yet.'),
+      ('local', 'This Mac', _status == null ? 'Reading library…' : '${_count(_status!.tracks)} tracks', 'Your music folders'),
+      ('musicbrainz', 'MusicBrainz', 'Not used yet', 'Recordings and credits'),
       ..._futureSources.map((source) => (source.$1, source.$2, 'Coming later', source.$3)),
     ];
     final selected = entries.firstWhere((entry) => entry.$1 == _source);
@@ -371,10 +364,6 @@ class _SettingsWindowState extends State<_SettingsWindow> {
                 Text(entry.$2, style: Tok.body.copyWith(fontSize: 14)),
                 const SizedBox(height: 3),
                 Text(entry.$3, style: Tok.label.copyWith(letterSpacing: 0)),
-                if (entry.$1 != 'local' && entry.$1 != 'musicbrainz') ...[
-                  const SizedBox(height: 4),
-                  Text(entry.$4, style: Tok.body.copyWith(fontSize: 12, color: Tok.muted)),
-                ],
               ])),
             ]),
           ),
@@ -393,14 +382,10 @@ class _SettingsWindowState extends State<_SettingsWindow> {
           const SizedBox(height: 22),
           _button('Manage folders', () => setState(() => _section = SettingsSection.folders)),
         ],
-        if (selected.$1 == 'musicbrainz') ...[
-          const SizedBox(height: 22),
-          _note('Before any online match, Meret will ask in Needs you what may leave this Mac.'),
-        ],
       ]),
     );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _heading('Sources', 'Only this Mac is available today. Metadata and service connections say what is ready.'),
+      _heading('Sources'),
       LayoutBuilder(builder: (context, constraints) => constraints.maxWidth >= 650
         ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 260, child: list), const SizedBox(width: 24), Expanded(child: detail)])
         : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [list, const SizedBox(height: 22), detail])),
@@ -414,10 +399,10 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     final knownDevice = devices.any((device) => device.id == deviceId);
     final selected = devices.where((device) => deviceId == null ? device.isDefault : device.id == deviceId).firstOrNull;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _heading('Playback', 'These settings apply to playback on this Mac.'),
+      _heading('Playback'),
       if (settings == null) const Text('Reading playback settings…', style: Tok.monoSmall)
       else ...[
-        _settingRow('Output device', 'Choose where Meret sends audio.',
+        _settingRow('Output device',
           _devices == null
             ? Text(_deviceError ?? 'Reading outputs…', style: Tok.monoSmall)
             : SizedBox(width: 240, child: DropdownButton<String>(
@@ -432,25 +417,23 @@ class _SettingsWindowState extends State<_SettingsWindow> {
                   if (deviceId != null && !knownDevice) DropdownMenuItem(value: deviceId, child: const Text('Chosen output (away)')),
                 ],
                 onChanged: _saving ? null : (value) => _save(outputDevice: value == '' ? null : value, changeDevice: true),
-              ))),
+              )),
+          note: _devices != null && deviceId != null && !knownDevice ? 'Using the system default' : null),
         if (selected != null) Padding(
           padding: const EdgeInsets.only(top: 10),
           child: Text('${selected.maxBits} bit · ${selected.sampleRates.map((rate) => '${rate / 1000} kHz').join(', ')}', style: Tok.monoSmall),
         ),
-        _settingRow('Exclusive mode', selected?.canBeExclusive == false
-            ? 'This output does not offer exclusive mode.'
-            : 'Meret takes the output while playing, when the device supports it.',
-          Switch(value: settings.exclusive && selected?.canBeExclusive != false, onChanged: _saving || selected?.canBeExclusive == false ? null : (value) => _save(exclusive: value))),
-        const SizedBox(height: 16),
-        _note('While playing, output changes apply to the next track. When paused, they apply on resume; when idle, on the next play. System default stays on the same device until playback stops or this setting changes. When the chosen output is away, playback uses the system default until it returns.'),
+        _settingRow('Exclusive mode',
+          Switch(value: settings.exclusive && selected?.canBeExclusive != false, onChanged: _saving || selected?.canBeExclusive == false ? null : (value) => _save(exclusive: value)),
+          note: selected?.canBeExclusive == false ? 'Not offered by this output' : null),
       ],
       const SizedBox(height: 12),
-      _settingRow('Device volume', 'Now controls the output device’s own volume when available. Otherwise use your DAC or amplifier. Meret never scales the samples.', const Text('On the device', style: Tok.monoSmall)),
-      _settingRow('Software volume', 'No software gain is applied.', const Text('Not offered', style: Tok.label)),
-      _settingRow('Gapless playback', 'Adjacent tracks stay continuous. No crossfade or added silence.', const Text('Always on', style: Tok.monoSmall)),
+      _settingRow('Device volume', const Text('On the device', style: Tok.monoSmall)),
+      _settingRow('Software volume', const Text('Not offered', style: Tok.label)),
+      _settingRow('Gapless playback', const Text('Always on', style: Tok.monoSmall)),
       const SizedBox(height: 22),
       if (_now != null && _now!.path.isNotEmpty) ...[
-        const Text('Current signal path', style: Tok.label),
+        const Text('Signal path', style: Tok.label),
         const SizedBox(height: 12),
         for (final stage in _now!.path) Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -461,53 +444,41 @@ class _SettingsWindowState extends State<_SettingsWindow> {
   }
 
   Widget _lookups() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _heading('Lookups', 'Meret has looked nothing up. Online matching is not built yet.'),
-    _note('Before the first online match, Meret will ask in Needs you what may leave this Mac. Nothing is sent before you answer.'),
-    const SizedBox(height: 22),
-    _futureRow('MusicBrainz', 'When matching is ready, titles, tags, track lengths and existing MusicBrainz IDs can find recordings and credits. No audio files or folder paths.'),
-    _futureRow('AcoustID', 'When matching is ready, a fingerprint computed on this Mac and the track length can identify a recording. A fingerprint is not the audio file.'),
-    const SizedBox(height: 22),
-    _note('No audio files, folder paths or listening history are sent for matching. Your corrections will outrank a provider’s claim.'),
+    _heading('Lookups'),
+    _futureRow('MusicBrainz', 'Recordings and credits from your tags'),
+    _futureRow('AcoustID', 'Fingerprints made on this Mac'),
   ]);
 
   Widget _files() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _heading('Files', 'Meret does not change your files yet.'),
-    _note('Your audio files stay as they are. Tag editing, file moves and write history are coming later.'),
-    const SizedBox(height: 22),
-    _futureRow('Write tags on save', 'When editing lands, corrections will go into Meret’s store first and tags will be written on save.'),
-    _futureRow('Undo every batch', 'Meret will keep the tag values each write batch replaced, so the whole batch can be undone.'),
-    _futureRow('See moves first', 'Moving or renaming files will always show a plan before anything changes. Offline and read-only folders will wait.'),
+    _heading('Files'),
+    _futureRow('Write tags on save'),
+    _futureRow('Undo every batch'),
+    _futureRow('See moves first'),
   ]);
 
   Widget _history() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _heading('Bring your history', 'Importers are coming later. No history import runs today.'),
-    _futureRow('Apple Music', 'Play counts, ratings, playlists and date added from your Music or iTunes library. Playlists will become crates.'),
-    _futureRow('Last.fm', 'Every listen, with its time. Match recordings to tracks you own; keep unowned recordings as listens, not local music.'),
-    _futureRow('ListenBrainz', 'Every listen, with its time. Account connection and history import are both coming later.'),
-    const SizedBox(height: 22),
-    _note('When ready: choose a source, review matches and crates, then import as a job. Importing again will add only what is new.'),
+    _heading('History'),
+    _futureRow('Apple Music', 'Plays, ratings, playlists'),
+    _futureRow('Last.fm', 'Every listen'),
+    _futureRow('ListenBrainz', 'Every listen'),
   ]);
 
   Widget _pairedDevices() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _heading('Devices', 'Phone pairing is coming later. This Mac will remain your music hub.'),
-    _futureRow('Pair a phone', 'Link a phone to this Mac, then choose which music lives on the phone. Without a local copy, the phone will be able to control playback on the Mac.'),
-    const SizedBox(height: 22),
-    const Text('No phone paired.', style: Tok.monoSmall),
-    const SizedBox(height: 22),
-    _note('After pairing, pick up where the Mac stopped. Pairing and phone copies are not available yet; no code or permission is requested.'),
+    _heading('Devices'),
+    _futureRow('Pair a phone'),
   ]);
 
   Widget _light() {
     final accent = _now?.light == null ? Tok.gold : Color(_now!.light!.light);
     final wash = _now?.light == null ? const Color(0x14D2A64E) : Color(_now!.light!.wash);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _heading('Light', 'The playing cover lends Meret one light. The instrument’s structure stays fixed.'),
+      _heading('Light'),
       if (_settings == null) const Text('Reading light settings…', style: Tok.monoSmall)
       else LayoutBuilder(builder: (context, constraints) => Wrap(spacing: 12, runSpacing: 12, children: [
         for (final (level, title, description) in const [
-          (LightLevelDto.off, 'Off', 'Keep the instrument’s gold accent. No colour from the cover.'),
-          (LightLevelDto.accent, 'Accent', 'Use cover light on the body, transport and current stop.'),
-          (LightLevelDto.accentAndWash, 'Accent and wash', 'Add a faint cover wash behind the music. Keep chrome fixed.'),
+          (LightLevelDto.off, 'Off', 'Gold accent, no cover colour'),
+          (LightLevelDto.accent, 'Accent', 'Cover colour on the body and transport'),
+          (LightLevelDto.accentAndWash, 'Accent and wash', 'Plus a faint wash behind the music'),
         ]) SizedBox(
           width: constraints.maxWidth >= 550 ? (constraints.maxWidth - 24) / 3 : constraints.maxWidth,
           child: Semantics(
@@ -542,11 +513,9 @@ class _SettingsWindowState extends State<_SettingsWindow> {
           ),
         ),
       ])),
-      const SizedBox(height: 22),
-      _note('Text, borders and status colours never take the light. Pale or grey covers use the instrument’s own accent.'),
       if (_now?.trackId != null) ...[
         const SizedBox(height: 22),
-        const Text('Preview from the playing release', style: Tok.label),
+        const Text('Previewing', style: Tok.label),
         const SizedBox(height: 12),
         Text(_now!.title, style: Tok.body),
       ],
@@ -554,13 +523,9 @@ class _SettingsWindowState extends State<_SettingsWindow> {
   }
 }
 
-Widget _heading(String title, String lead) => Padding(
+Widget _heading(String title) => Padding(
   padding: const EdgeInsets.only(bottom: 22),
-  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(title, style: Tok.title.copyWith(fontSize: 25)),
-    const SizedBox(height: 5),
-    Text(lead, style: Tok.body.copyWith(fontSize: 14, color: Tok.muted)),
-  ]),
+  child: Text(title, style: Tok.title.copyWith(fontSize: 25)),
 );
 
 Widget _note(String text, {bool warning = false}) => Container(
@@ -569,14 +534,16 @@ Widget _note(String text, {bool warning = false}) => Container(
   child: Text(text, style: Tok.body.copyWith(color: warning ? Tok.warn : Tok.muted)),
 );
 
-Widget _settingRow(String title, String description, Widget control) => Container(
+Widget _settingRow(String title, Widget control, {String? note}) => Container(
   padding: const EdgeInsets.symmetric(vertical: 14),
   decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
   child: LayoutBuilder(builder: (context, constraints) {
     final text = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title, style: Tok.body.copyWith(fontSize: 15, fontWeight: FontWeight.w500)),
-      const SizedBox(height: 4),
-      Text(description, style: Tok.body.copyWith(color: Tok.muted)),
+      if (note != null) ...[
+        const SizedBox(height: 4),
+        Text(note, style: Tok.body.copyWith(color: Tok.muted)),
+      ],
     ]);
     return constraints.maxWidth < 550
       ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [text, const SizedBox(height: 10), control])
@@ -584,7 +551,7 @@ Widget _settingRow(String title, String description, Widget control) => Containe
   }),
 );
 
-Widget _futureRow(String title, String description) => _settingRow(title, description, const Text('Coming later', style: Tok.label));
+Widget _futureRow(String title, [String? note]) => _settingRow(title, const Text('Coming later', style: Tok.label), note: note);
 
 Widget _button(String title, VoidCallback? onPressed, {bool primary = false}) => TextButton(
   onPressed: onPressed,
@@ -630,14 +597,14 @@ IconData _icon(SettingsSection section) => switch (section) {
 };
 
 const _futureSources = [
-  ('spotify', 'Spotify', 'Saved releases, playlists and Spotify Connect playback.'),
-  ('music-assistant', 'Music Assistant', 'Music providers and playback zones from your Music Assistant server.'),
-  ('roon', 'Roon', 'Control playback in your Roon zones, authorised in Roon.'),
-  ('bandcamp', 'Bandcamp', 'The music in your Bandcamp collection.'),
-  ('youtube', 'YouTube', 'Music available to hear on YouTube.'),
-  ('qobuz', 'Qobuz', 'Your Qobuz collection and streaming playback.'),
-  ('listenbrainz', 'ListenBrainz', 'Import listening history and scrobble new listens.'),
-  ('last-fm', 'Last.fm', 'Import listening history and scrobble new listens.'),
+  ('spotify', 'Spotify', 'Saved music, playlists and Connect'),
+  ('music-assistant', 'Music Assistant', 'Players and providers on your server'),
+  ('roon', 'Roon', 'Your Roon zones'),
+  ('bandcamp', 'Bandcamp', 'Your Bandcamp collection'),
+  ('youtube', 'YouTube', 'Music on YouTube'),
+  ('qobuz', 'Qobuz', 'Your Qobuz collection'),
+  ('listenbrainz', 'ListenBrainz', 'History and scrobbling'),
+  ('last-fm', 'Last.fm', 'History and scrobbling'),
 ];
 
 class _CloseSettings extends Intent {

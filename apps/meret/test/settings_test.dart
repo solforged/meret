@@ -193,19 +193,18 @@ void main() {
     for (final name in ['This Mac', 'MusicBrainz', 'Spotify', 'Music Assistant', 'Roon', 'Bandcamp', 'YouTube', 'Qobuz', 'ListenBrainz', 'Last.fm']) {
       expect(find.text(name), findsWidgets);
     }
+    expect(find.text('Recordings and credits'), findsNothing);
     await tester.tap(find.text('MusicBrainz').last);
     await tester.pump();
-    expect(find.text('MusicBrainz is registered as a metadata source. Meret has never contacted it. Matching is not built yet.'), findsOneWidget);
+    expect(find.text('Recordings and credits'), findsOneWidget);
     expect(find.textContaining('Connect…'), findsNothing);
     expect(find.textContaining('Sign in'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('settings-nav-lookups')));
     await tester.pump();
-    expect(find.text('Meret has looked nothing up. Online matching is not built yet.'), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
     await tester.tap(find.byKey(const ValueKey('settings-nav-files')));
     await tester.pump();
-    expect(find.text('Meret does not change your files yet.'), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
   });
 }

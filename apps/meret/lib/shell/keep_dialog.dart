@@ -70,8 +70,6 @@ class _KeepDialogState extends State<_KeepDialog> {
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _keep(),
               ),
-              const SizedBox(height: 14),
-              Text('Keeping keeps the whole tree. A branch you played or wanted is kept with it.', style: Tok.body.copyWith(color: Tok.muted)),
               const SizedBox(height: 22),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 TextButton(

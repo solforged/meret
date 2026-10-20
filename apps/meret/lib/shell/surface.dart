@@ -377,7 +377,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                         Container(
                           padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                           color: Tok.sky,
-                          child: Text('Front · over ${_trail!.name ?? path.first.title} · ⌘1 or ] back to the trail', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          child: Text('Front · ⌘1 back to ${_trail!.name ?? path.first.title}', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
                         ),
                         Expanded(child: front),
                       ])
@@ -419,7 +419,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                               Container(
                                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                                 color: Tok.sky,
-                                child: const Text('Front · behind Now, one key away ⌘1', style: Tok.label),
+                                child: const Text('Front', style: Tok.label),
                               ),
                               Expanded(child: front),
                             ])),

@@ -34,7 +34,6 @@ void main() {
     await _surface(tester, FakeCore());
     await tester.pump();
     expect(find.byType(PlayOn), findsOneWidget);
-    expect(find.text('every zone says what it does to the sound'), findsOneWidget);
     expect(find.text('MacBook Pro Speakers'), findsOneWidget);
     expect(find.text('RME ADI-2 DAC'), findsOneWidget);
     expect(find.text('This Mac · default output'), findsOneWidget);
@@ -167,7 +166,7 @@ void main() {
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     await tester.pump();
     // The fake's opening Now is a loose anchor with no queue behind it.
-    expect(find.text('Nothing queued after this.'), findsOneWidget);
+    expect(find.descendant(of: find.byType(UpNext), matching: find.text('then stop')), findsOneWidget);
 
     await core.playResults('', _libraryView, 0);
     await tester.pump();
@@ -227,7 +226,6 @@ void main() {
 
     expect(find.byType(NowStage), findsOneWidget);
     expect(find.byType(FrontPane), findsOneWidget);
-    expect(find.text('Front · behind Now, one key away ⌘1'), findsOneWidget);
     expect(find.byType(PaneRow), findsNothing);
     expect(find.byType(NowPane), findsNothing);
     expect(find.byType(NowBar), findsNothing);
@@ -336,8 +334,6 @@ void main() {
     expect(core.pickLimits, isNotEmpty);
     expect(core.pickLimits, everyElement(3));
     final section = find.descendant(of: find.byType(NowStage), matching: find.byType(PlaySomething));
-    expect(tester.widget<PlaySomething>(section).expanded, isTrue);
-    expect(find.text('⇧Space plays the first · always says why'), findsOneWidget);
     expect(tester.widgetList<NowDoor>(find.descendant(of: section, matching: find.byType(NowDoor))).map((door) => door.key),
       picks.map((pick) => ValueKey('now-pick-${pick.releaseId}')));
     for (final (index, pick) in picks.indexed) {
@@ -399,7 +395,6 @@ void main() {
     final picks = find.descendant(of: pane, matching: find.byType(PlaySomething));
     final queue = find.descendant(of: pane, matching: find.byType(UpNext));
     final memory = find.descendant(of: pane, matching: find.byType(NowMemory));
-    expect(tester.widget<PlaySomething>(picks).expanded, isFalse);
     expect(tester.getTopLeft(picks).dy, greaterThan(tester.getBottomLeft(queue).dy));
     expect(tester.getBottomLeft(picks).dy, lessThan(tester.getTopLeft(memory).dy));
   });
@@ -409,7 +404,7 @@ void main() {
     final section = find.byType(PlaySomething);
     expect(section, findsOneWidget);
     expect(find.descendant(of: section, matching: find.text('Or play something')), findsOneWidget);
-    final empty = find.descendant(of: section, matching: find.text('Nothing to play yet · add a folder'));
+    final empty = find.descendant(of: section, matching: find.text('Nothing to play yet'));
     expect(empty, findsOneWidget);
     expect(tester.widget<Text>(empty).style, Tok.label);
     expect(find.descendant(of: section, matching: find.byType(NowDoor)), findsNothing);
@@ -904,7 +899,7 @@ void main() {
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.byType(FrontPane), findsOneWidget);
     expect(find.byType(TablePane), findsNothing);
-    expect(find.textContaining('Front · over Everything'), findsOneWidget);
+    expect(find.textContaining('back to Everything'), findsOneWidget);
     expect(find.byType(TrailStrip), findsOneWidget, reason: 'the trail stays open behind the Front');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump(const Duration(milliseconds: 300));

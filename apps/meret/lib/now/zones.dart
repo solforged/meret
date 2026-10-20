@@ -7,13 +7,9 @@ import 'now_pane.dart';
 
 /// Output choices and their sound verdicts, as reported by the core.
 class PlayOn extends StatefulWidget {
-  const PlayOn({
-    super.key, required this.core, required this.now, this.expanded = false,
-    this.settingsChanges,
-  });
+  const PlayOn({super.key, required this.core, required this.now, this.settingsChanges});
   final CoreBridge core;
   final NowDto? now;
-  final bool expanded;
   final Listenable? settingsChanges;
 
   @override
@@ -78,7 +74,7 @@ class _PlayOnState extends State<PlayOn> {
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    NowSection(title: 'Play on', meta: widget.expanded ? 'every zone says what it does to the sound' : null),
+    const NowSection(title: 'Play on'),
     for (final zone in _zones)
       Semantics(selected: zone.current, child: NowDoor(
         key: ValueKey('now-zone-${zone.id}'),

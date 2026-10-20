@@ -199,29 +199,30 @@ class _FrontPaneState extends State<FrontPane> {
     ),
   );
 
-  Widget _suggestion(FolderSuggestionDto suggestion) => FrontDoor(
-    onTap: _adding ? null : () => _addFolder(suggestion.path),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        Expanded(child: Text(suggestion.label, style: Tok.body)),
-        const SizedBox(width: 8),
-        Text('Add folder →', style: Tok.label.copyWith(color: _adding ? Tok.faint : Tok.gold)),
+  Widget _suggestion(FolderSuggestionDto suggestion) {
+    final files = suggestion.audioFiles;
+    final detail = suggestion.asksPermission ? 'macOS will ask for access'
+      : files == null ? null
+      : '${suggestion.more ? 'At least ' : ''}${_count(files, 'audio file')}';
+    return FrontDoor(
+      onTap: _adding ? null : () => _addFolder(suggestion.path),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: Text(suggestion.label, style: Tok.body)),
+          const SizedBox(width: 8),
+          Text('Add folder →', style: Tok.label.copyWith(color: _adding ? Tok.faint : Tok.gold)),
+        ]),
+        const SizedBox(height: 3),
+        Text(suggestion.path, style: Tok.monoSmall.copyWith(fontSize: 10, color: Tok.faint)),
+        if (detail != null) ...[
+          const SizedBox(height: 4),
+          Text(detail, style: Tok.body.copyWith(fontSize: 11, color: Tok.muted)),
+        ],
+        if (suggestion.note.isNotEmpty)
+          Text(suggestion.note, style: Tok.body.copyWith(fontSize: 11, color: Tok.muted)),
       ]),
-      const SizedBox(height: 3),
-      Text(suggestion.path, style: Tok.monoSmall.copyWith(fontSize: 10, color: Tok.faint)),
-      const SizedBox(height: 4),
-      Text(
-        suggestion.audioFiles == null
-          ? 'Folder found · count after access'
-          : 'Quick look: ${suggestion.more ? 'at least ' : ''}${_count(suggestion.audioFiles!, 'audio file')}',
-        style: Tok.body.copyWith(fontSize: 11, color: Tok.muted),
-      ),
-      if (suggestion.note.isNotEmpty)
-        Text(suggestion.note, style: Tok.body.copyWith(fontSize: 11, color: Tok.muted)),
-      if (suggestion.asksPermission)
-        Text('macOS will ask to let Meret read this folder.', style: Tok.body.copyWith(fontSize: 11, color: Tok.muted)),
-    ]),
-  );
+    );
+  }
 
   Widget _emptyCollection() => Container(
     padding: const EdgeInsets.all(20),
@@ -234,23 +235,15 @@ class _FrontPaneState extends State<FrontPane> {
       for (final suggestion in _suggestions ?? <FolderSuggestionDto>[]) _suggestion(suggestion),
       FrontDoor(
         onTap: _adding ? null : _addFolder,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Row(children: [
-            const Expanded(child: Text('Choose a folder…', style: Tok.body)),
-            Text('Browse →', style: Tok.label.copyWith(color: _adding ? Tok.faint : Tok.gold)),
-          ]),
-          const SizedBox(height: 4),
-          Text('Another folder, external drive or mounted share.', style: Tok.body.copyWith(fontSize: 11, color: Tok.muted)),
+        child: Row(children: [
+          const Expanded(child: Text('Choose a folder…', style: Tok.body)),
+          Text('Browse →', style: Tok.label.copyWith(color: _adding ? Tok.faint : Tok.gold)),
         ]),
       ),
       const SizedBox(height: 12),
       FrontDoor(
         onTap: () => showSettings(context, section: SettingsSection.sources),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('Connect a service', style: Tok.body.copyWith(color: Tok.gold)),
-          const SizedBox(height: 4),
-          const Text('Optional · opens Settings › Sources', style: Tok.label),
-        ]),
+        child: Text('Connect a service', style: Tok.body.copyWith(color: Tok.gold)),
       ),
       const SizedBox(height: 14),
       Container(
@@ -261,23 +254,15 @@ class _FrontPaneState extends State<FrontPane> {
           const SizedBox(height: 6),
           Text('Bring your history', style: Tok.body.copyWith(color: Tok.muted)),
           const SizedBox(height: 4),
-          Text('Apple Music, Last.fm and ListenBrainz. Plays, ratings and playlists, with a preview before import.', style: Tok.body.copyWith(fontSize: 11, color: Tok.faint)),
-          const SizedBox(height: 8),
-          const Text('History import is not available yet.', style: Tok.label),
+          Text('Apple Music, Last.fm, ListenBrainz', style: Tok.body.copyWith(fontSize: 11, color: Tok.faint)),
         ]),
       ),
-      const SizedBox(height: 14),
-      const Text('Meret reads files where they are and copies nothing.', style: Tok.label),
     ]),
   );
 
-  Widget _quietLine(String title, String detail) => Padding(
+  Widget _quietLine(String title) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 16),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text(title, style: Tok.body.copyWith(color: Tok.faint)),
-      const SizedBox(height: 4),
-      Text(detail, style: Tok.body.copyWith(fontSize: 12, color: Tok.dim)),
-    ]),
+    child: Text(title, style: Tok.body.copyWith(color: Tok.faint)),
   );
 
   Widget _quietPanel(List<Widget> children) => Container(
@@ -289,37 +274,33 @@ class _FrontPaneState extends State<FrontPane> {
   Widget _emptyLeads() => _quietPanel([
     Text('Leads', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
     const SizedBox(height: 12),
-    _quietLine('Music to follow', 'People, credits and recordings related to what you add. Every lead will say why it is here.'),
+    _quietLine('Music to follow'),
     const Divider(height: 1, color: Tok.line),
-    _quietLine('Wants', 'Music you mark to hear or own.'),
+    _quietLine('Wants'),
     const Divider(height: 1, color: Tok.line),
-    _quietLine('Needs you', 'Files Meret could not read and identities that need your answer.'),
-    const SizedBox(height: 20),
-    const Text('No lookup starts before you allow it.', style: Tok.label),
+    _quietLine('Needs you'),
   ]);
 
   Widget _emptyMemory() => _quietPanel([
     Text('Crates and trails', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
     const SizedBox(height: 12),
-    _quietLine('Sets you make', 'Put music in a crate. Keep a trail as you follow credits.'),
+    _quietLine('Sets you make'),
     const Divider(height: 1, color: Tok.line),
     const SizedBox(height: 28),
     Text('Pick up', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
     const SizedBox(height: 12),
-    _quietLine('Where you stopped', 'After your first listen, unfinished music will be here.'),
-    const SizedBox(height: 20),
-    const Text('Nothing to resume yet.', style: Tok.label),
+    _quietLine('Where you stopped'),
   ]);
 
   Widget _quietLeadsAndCrates() => _quietPanel([
     Text('Leads', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
-    _quietLine('Music to follow', 'People, credits and recordings related to what you add. Every lead will say why it is here.'),
+    _quietLine('Music to follow'),
     const Divider(height: 1, color: Tok.line),
-    _quietLine('Wants', 'Music you mark to hear or own.'),
+    _quietLine('Wants'),
     const Divider(height: 1, color: Tok.line),
     const SizedBox(height: 16),
     Text('Crates', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
-    _quietLine('Sets you make', 'Put music in a crate.'),
+    _quietLine('Sets you make'),
   ]);
 
   Widget _memory() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -342,13 +323,9 @@ class _FrontPaneState extends State<FrontPane> {
         padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Front · first launch', style: Tok.label),
+          const Text('Front', style: Tok.label),
           const SizedBox(height: 10),
           Text(count > 0 ? 'Meret found $count ${count == 1 ? 'place' : 'places'} with music' : 'Start with a music folder', style: Tok.title),
-          const SizedBox(height: 8),
-          Text(count > 0 ? 'Add a place to start listening. You can add the others later.' : 'Choose where your music lives. You can add more folders later.', style: Tok.body.copyWith(color: Tok.muted)),
-          const SizedBox(height: 8),
-          const Text('No account needed. Nothing leaves the Mac.', style: Tok.label),
         ]),
       ),
       Padding(

@@ -87,14 +87,11 @@ class NowStage extends StatelessWidget {
   }
 
   Widget _queue() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    PlaySomething(core: core, now: now, expanded: true),
+    PlaySomething(core: core, now: now),
     const SizedBox(height: 22),
-    PlayOn(core: core, now: now, expanded: true, settingsChanges: settingsChanges),
+    PlayOn(core: core, now: now, settingsChanges: settingsChanges),
     const SizedBox(height: 22),
-    const Padding(padding: EdgeInsets.only(bottom: 8), child: Text('when this ends', style: Tok.label)),
     UpNext(core: core, now: now),
-    const SizedBox(height: 10),
-    const Text("Then: stop. A score you were exploring doesn't roll into radio unless you ask.", style: Tok.label),
   ]);
 
   @override
@@ -108,7 +105,6 @@ class NowStage extends StatelessWidget {
         children: [
           Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 16, runSpacing: 6, children: [
             ListenableBuilder(listenable: clock, builder: (_, _) => Text('Now · ${clock.playing ? 'playing' : 'paused'}', style: Tok.label.copyWith(color: Tok.ink))),
-            const Text('Meret opens here. Space resumes.', style: Tok.label),
             TextButton(onPressed: onLeave, child: const Text('Front ⌘1', style: Tok.label)),
           ]),
           const SizedBox(height: 20),

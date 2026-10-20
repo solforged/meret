@@ -314,12 +314,9 @@ class _TablePaneState extends State<TablePane> {
           child: _rowsError != null
               ? Align(alignment: Alignment.topLeft, child: Text(_rowsError!, style: Tok.body.copyWith(color: Tok.warn)))
               : emptyLibrary
-                  ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Text('Add your music to the library.', style: Tok.body),
-                      TextButton(onPressed: _adding ? null : _addFolder, child: const Text('Add a music folder', style: Tok.body)),
-                    ]))
+                  ? Center(child: TextButton(onPressed: _adding ? null : _addFolder, child: const Text('Add a music folder', style: Tok.body)))
                   : _total == 0
-                      ? Center(child: Text(widget.scanning ? 'Scanning music folders.' : 'No matching tracks.', style: Tok.label))
+                      ? Center(child: Text(widget.scanning ? 'Scanning…' : 'No matching tracks', style: Tok.label))
                       : LayoutBuilder(builder: (context, box) => SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: SizedBox(

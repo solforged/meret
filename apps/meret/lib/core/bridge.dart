@@ -335,8 +335,8 @@ class FakeCore implements CoreBridge {
             addedMs: PlatformInt64Util.from(now - id * 86400000), query: 'release:${_quote(_releases[id - 1].$1)}'),
       ],
       needsYou: [
-        FrontLineDto(label: 'Tracks with a guessed identity', count: BigInt.from(312), note: 'Mostly game rips; 41 could go to MusicBrainz with your tags and VGMdb’s list'),
-        FrontLineDto(label: 'Albums with two editions', count: BigInt.from(18), note: 'Pick which one plays by default'),
+        FrontLineDto(label: 'Tracks with a guessed identity', count: BigInt.from(312), note: ''),
+        FrontLineDto(label: 'Albums with two editions', count: BigInt.from(18), note: ''),
       ],
       roots: [for (final root in _roots.entries) RootDto(
         id: PlatformInt64Util.from(root.key), path: root.value, online: true,
