@@ -155,6 +155,8 @@ struct Output {
     spec: StreamSpec,
     device: Option<String>,
     exclusive: bool,
+    /// The device went away; nothing plays here again.
+    lost: bool,
 }
 
 struct Worker {
@@ -226,6 +228,7 @@ impl Worker {
                 }
                 self.handle(c);
             }
+            self.watch_output();
             if self.playing {
                 self.fill();
             }
@@ -320,9 +323,28 @@ impl Worker {
 
     fn volume_device(&self) -> Option<&str> {
         // Output still playing on the previous setting takes precedence.
-        self.out.as_ref().map(|o| o.stream.opened().device_uid.as_str())
+        self.out.as_ref().filter(|o| !o.lost).map(|o| o.stream.opened().device_uid.as_str())
             .or(self.session_device.as_deref())
             .or(self.config.device.as_deref())
+    }
+
+    /// A device that went away pauses playback where it stopped. The ring is
+    /// kept for the resume, which opens the chosen device if it's back and
+    /// otherwise the system default, as a new session would.
+    fn watch_output(&mut self) {
+        let Some(o) = &mut self.out else { return };
+        if o.lost || !o.stream.lost() {
+            return;
+        }
+        o.lost = true;
+        let name = o.stream.opened().device_name.clone();
+        tracing::warn!(device = %name, playing = self.playing, "output lost; pausing");
+        self.playing = false;
+        self.clock.set_playing(false);
+        self.session_device = None;
+        self.session_fallback = false;
+        self.reopen_on_resume = true;
+        self.error(self.audible.as_ref().map(|b| b.item), format!("{name} disconnected"));
     }
 
     /// The device for this session: the chosen one, or the system default
@@ -364,7 +386,7 @@ impl Worker {
             Ok(stream) => {
                 let actual = stream.opened().clone();
                 self.out = Some(Output { stream, writer: old.writer, spec,
-                    device: self.config.device.clone(), exclusive: self.config.exclusive });
+                    device: self.config.device.clone(), exclusive: self.config.exclusive, lost: false });
                 self.reopen_on_resume = false;
                 // Preserve ring, decode position, pending samples and clock across
                 // the switch, including a gapless boundary already in the ring.
@@ -431,7 +453,7 @@ impl Worker {
 
     fn output_matches(&self, spec: StreamSpec) -> bool {
         self.out.as_ref().is_some_and(|o| {
-            o.spec == spec && o.device == self.config.device && o.exclusive == self.config.exclusive
+            !o.lost && o.spec == spec && o.device == self.config.device && o.exclusive == self.config.exclusive
         })
     }
 
@@ -461,7 +483,7 @@ impl Worker {
         match self.backend.open(&req, reader, self.clock.clone()) {
             Ok(stream) => {
                 self.reopen_on_resume = false;
-                self.out = Some(Output { stream, writer, spec, device: self.config.device.clone(), exclusive: req.exclusive });
+                self.out = Some(Output { stream, writer, spec, device: self.config.device.clone(), exclusive: req.exclusive, lost: false });
                 true
             }
             Err(e) => {
@@ -985,6 +1007,96 @@ mod tests {
         backend.uids.lock().unwrap().retain(|u| *u != "display");
         worker.handle(Control::Play(load(2, cd(), 0.01)));
         assert_eq!(opens(&actions), ["speakers"]);
+    }
+
+    #[test]
+    fn a_lost_output_pauses_where_it_stopped_and_resume_or_play_opens_the_default() {
+        use std::sync::Mutex;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        struct Unplug { present: Mutex<Vec<&'static str>>, gone: Mutex<Arc<AtomicBool>>, recording: RecordingBackend }
+        impl Unplug {
+            fn unplug(&self, uid: &str) {
+                self.present.lock().unwrap().retain(|u| *u != uid);
+                self.gone.lock().unwrap().store(true, Ordering::Release);
+            }
+        }
+        impl OutputBackend for Unplug {
+            fn name(&self) -> &'static str { "unplug" }
+            fn devices(&self) -> Result<Vec<DeviceInfo>, OutputError> { self.recording.devices() }
+            fn resolve_device(&self, wanted: Option<&str>) -> Result<String, OutputError> {
+                let present = self.present.lock().unwrap();
+                match wanted {
+                    None => Ok(present[0].into()),
+                    Some(uid) if present.contains(&uid) => Ok(uid.into()),
+                    Some(uid) => Err(OutputError::NoDevice(uid.into())),
+                }
+            }
+            fn open(&self, req: &OutputRequest, source: RingReader, clock: Arc<SharedClock>) -> Result<Box<dyn OutputStream>, OutputError> {
+                let inner = self.recording.open(req, source, clock)?;
+                let gone = Arc::new(AtomicBool::new(false));
+                *self.gone.lock().unwrap() = gone.clone();
+                Ok(Box::new(Pluggable { inner, gone }))
+            }
+        }
+        struct Pluggable { inner: Box<dyn OutputStream>, gone: Arc<AtomicBool> }
+        impl OutputStream for Pluggable {
+            fn opened(&self) -> &Opened { self.inner.opened() }
+            fn start(&mut self) -> Result<(), OutputError> { self.inner.start() }
+            fn pause(&mut self) -> Result<(), OutputError> { self.inner.pause() }
+            fn lost(&self) -> bool { self.gone.load(Ordering::Acquire) }
+            fn into_source(self: Box<Self>) -> RingReader { self.inner.into_source() }
+        }
+
+        let (actions_tx, actions) = unbounded();
+        let (events_tx, events) = unbounded();
+        let backend = Arc::new(Unplug { present: Mutex::new(vec!["speakers", "dac"]),
+            gone: Mutex::new(Arc::new(AtomicBool::new(false))), recording: RecordingBackend(actions_tx) });
+        let config = EngineConfig { device: Some("dac".into()), ..Default::default() };
+        let mut worker = Worker::new(backend.clone(), config, events_tx);
+        worker.handle(Control::Play(load(1, cd(), 1.0)));
+        worker.handle(Control::SetNext(Some(load(2, cd(), 1.0))));
+        worker.fill();
+        worker.clock.advance(1_000, now_ns());
+        worker.publish();
+        actions.try_iter().for_each(drop);
+        events.try_iter().for_each(drop);
+
+        // Unplugged mid-play: paused at the last frame the device took, nothing reopened yet.
+        backend.unplug("dac");
+        worker.watch_output();
+        worker.publish();
+        assert!(!worker.playing);
+        assert!(actions.is_empty(), "the default is not opened, or hogged, until playback resumes");
+        let seen: Vec<_> = events.try_iter().collect();
+        assert!(seen.contains(&EngineEvent::Error { item: Some(1), message: "dac disconnected".into() }), "{seen:?}");
+        assert!(seen.iter().any(|e| matches!(e, EngineEvent::Anchor(a) if a.item == 1 && a.rate == 0.0 && a.position_frames == 1_000)),
+            "{seen:?}");
+        worker.watch_output();
+        assert!(events.is_empty(), "a loss is reported once");
+
+        // Resume moves the buffered ring, and the gapless join, to the default.
+        let written = worker.written;
+        worker.handle(Control::Resume);
+        assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
+            OutputAction::Drop,
+            OutputAction::Open { device: Some("speakers".into()), exclusive: true },
+            OutputAction::Start,
+        ]);
+        assert!(worker.playing);
+        assert_eq!(worker.written, written);
+        assert_eq!(worker.next.as_ref().unwrap().item, 2);
+        assert_eq!(worker.volume_device(), Some("speakers"));
+
+        // Lost again, a new item opens a fresh output rather than the dead one.
+        backend.unplug("speakers");
+        backend.present.lock().unwrap().push("headphones");
+        worker.watch_output();
+        worker.handle(Control::Play(load(3, cd(), 1.0)));
+        assert_eq!(actions.try_iter().collect::<Vec<_>>(), [
+            OutputAction::Drop,
+            OutputAction::Open { device: Some("headphones".into()), exclusive: true },
+            OutputAction::Start,
+        ]);
     }
 
     #[test]
