@@ -66,7 +66,11 @@ pub(crate) fn spawn_pump(core: Arc<Core>) -> std::thread::JoinHandle<()> {
                         crate::listens::on_started(&core, *item);
                         crate::memory::on_started(&core, *item);
                     }
-                    EngineEvent::OutputChanged { path } => core.now.send_modify(|n| n.path = Some(path.clone())),
+                    // Playing on somewhere new: an error about the old output is over.
+                    EngineEvent::OutputChanged { path } => core.now.send_modify(|n| {
+                        n.path = Some(path.clone());
+                        n.error = None;
+                    }),
                     EngineEvent::Anchor(a) => {
                         core.now.send_modify(|n| n.anchor = Some(*a));
                         crate::memory::on_anchor(&core, a);

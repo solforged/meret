@@ -19,9 +19,10 @@
 //! On close it stops the IOProc and puts back the original format and rate,
 //! then releases hog mode.
 //!
-//! Not yet: listening for `kAudioDevicePropertyDeviceIsAlive` and
-//! default-device changes. An unplugged DAC stalls playback rather than
-//! reporting an error.
+//! A listener on `kAudioDevicePropertyDeviceIsAlive` marks the stream lost
+//! when its device goes away (a DAC unplugged, a display disconnected); the
+//! engine then pauses where the device stopped. Default-device changes aren't
+//! followed while a stream is open.
 
 use std::ffi::c_void;
 use std::ptr::{self, NonNull};
@@ -32,11 +33,13 @@ use std::time::Duration;
 
 use objc2_core_audio::{
     AudioDeviceCreateIOProcID, AudioDeviceDestroyIOProcID, AudioDeviceIOProcID, AudioDeviceStart, AudioDeviceStop,
-    AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectHasProperty, AudioObjectID,
-    AudioObjectIsPropertySettable, AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector, AudioObjectSetPropertyData,
+    AudioObjectAddPropertyListener, AudioObjectGetPropertyData, AudioObjectGetPropertyDataSize, AudioObjectHasProperty, AudioObjectID,
+    AudioObjectIsPropertySettable, AudioObjectPropertyAddress, AudioObjectPropertyScope, AudioObjectPropertySelector,
+    AudioObjectRemovePropertyListener, AudioObjectSetPropertyData,
     AudioStreamRangedDescription, AudioConvertHostTimeToNanos, AudioGetCurrentHostTime,
-    kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyDeviceUID, kAudioDevicePropertyHogMode,
-    kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams, kAudioDevicePropertyVolumeScalar,
+    kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyDeviceIsAlive, kAudioDevicePropertyDeviceUID,
+    kAudioDevicePropertyHogMode, kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams,
+    kAudioDevicePropertyVolumeScalar,
     kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices, kAudioObjectPropertyElementMain,
     kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeOutput,
     kAudioObjectSystemObject, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyLatency,
@@ -426,6 +429,24 @@ unsafe extern "C-unwind" fn io_proc(
     0
 }
 
+/// Marks the stream lost when its device stops being alive. Runs on a HAL
+/// notification thread, never the IOProc's.
+unsafe extern "C-unwind" fn alive_changed(
+    device: AudioObjectID,
+    _count: u32,
+    _addresses: NonNull<AudioObjectPropertyAddress>,
+    client: *mut c_void,
+) -> i32 {
+    // SAFETY: `client` is the stream's `alive` flag, which the stream keeps
+    // until after it removes this listener.
+    let alive = unsafe { &*(client as *const AtomicBool) };
+    if !get::<u32>(device, kAudioDevicePropertyDeviceIsAlive, GLOBAL).is_ok_and(|v| v != 0) {
+        tracing::warn!(device, "output device is gone");
+        alive.store(false, Ordering::Release);
+    }
+    0
+}
+
 /// What the device was doing before we changed it.
 struct Restore {
     stream: AudioObjectID,
@@ -442,6 +463,9 @@ pub struct CoreAudioStream {
     opened: Opened,
     restore: Restore,
     running: bool,
+    /// Cleared by `alive_changed` when the device goes away.
+    alive: Arc<AtomicBool>,
+    listening: bool,
 }
 
 // SAFETY: `state` is only dereferenced by the IOProc; the stream just owns it
@@ -506,10 +530,25 @@ impl CoreAudioStream {
             },
             restore,
             running: false,
+            alive: Arc::new(AtomicBool::new(true)),
+            listening: false,
         };
+        this.listen();
         this.configure(req)?;
         this.install(reader, clock)?;
         Ok(this)
+    }
+
+    fn listen(&mut self) {
+        let address = address(kAudioDevicePropertyDeviceIsAlive, GLOBAL);
+        let status = unsafe {
+            AudioObjectAddPropertyListener(self.device.0, NonNull::from(&address), Some(alive_changed),
+                Arc::as_ptr(&self.alive) as *mut c_void)
+        };
+        self.listening = status == 0;
+        if !self.listening {
+            tracing::warn!(status = %fourcc(status), "can't watch the output for removal");
+        }
     }
 
     /// Sets the rate (and in exclusive mode the physical format) and waits for
@@ -653,6 +692,10 @@ impl OutputStream for CoreAudioStream {
     }
 
     fn pause(&mut self) -> Result<(), OutputError> {
+        if self.running && self.lost() {
+            // Nothing is calling the IOProc any more, and the device can't be stopped.
+            self.running = false;
+        }
         if self.running {
             // Let the IOProc ramp down first; a stalled device is not waited on.
             self.fade.out.store(true, Ordering::Release);
@@ -670,6 +713,10 @@ impl OutputStream for CoreAudioStream {
         Ok(())
     }
 
+    fn lost(&self) -> bool {
+        !self.alive.load(Ordering::Acquire)
+    }
+
     fn into_source(mut self: Box<Self>) -> RingReader {
         let _ = self.pause();
         if self.proc_id.is_some() {
@@ -685,7 +732,14 @@ impl OutputStream for CoreAudioStream {
 
 impl Drop for CoreAudioStream {
     fn drop(&mut self) {
-        tracing::info!(device_uid = ?self.device.uid(), system_default_uid = ?find_device(None).ok().and_then(Device::uid), hogged = self.restore.hogged, "closing output");
+        tracing::info!(device_uid = ?self.device.uid(), system_default_uid = ?find_device(None).ok().and_then(Device::uid), hogged = self.restore.hogged, lost = self.lost(), "closing output");
+        if self.listening {
+            let address = address(kAudioDevicePropertyDeviceIsAlive, GLOBAL);
+            unsafe {
+                AudioObjectRemovePropertyListener(self.device.0, NonNull::from(&address), Some(alive_changed),
+                    Arc::as_ptr(&self.alive) as *mut c_void)
+            };
+        }
         let _ = self.pause();
         if self.proc_id.is_some() {
             unsafe { AudioDeviceDestroyIOProcID(self.device.0, self.proc_id) };
@@ -868,5 +922,89 @@ mod tests {
             }
         }
         assert!(!devices.is_empty());
+    }
+
+    /// Unplugs a device under a playing engine: a private aggregate of the
+    /// system default output plays silence, shared, until it's destroyed.
+    /// Touches real hardware; run with
+    /// `cargo test -p meret-engine -- --ignored unplugged --nocapture`.
+    #[test]
+    #[ignore]
+    fn an_unplugged_device_pauses_playback_and_resume_moves_to_the_default() {
+        use crate::decode::Tone;
+        use crate::engine::{Control, Engine, EngineConfig, EngineEvent, Load};
+        use meret_model::audio::{Codec, StreamSpec};
+        use objc2_core_audio::{
+            AudioHardwareCreateAggregateDevice, AudioHardwareDestroyAggregateDevice, kAudioAggregateDeviceIsPrivateKey,
+            kAudioAggregateDeviceMainSubDeviceKey, kAudioAggregateDeviceNameKey, kAudioAggregateDeviceSubDeviceListKey,
+            kAudioAggregateDeviceUIDKey, kAudioSubDeviceUIDKey,
+        };
+        use objc2_core_foundation::{CFArray, CFDictionary, CFNumber, CFType};
+        use std::time::Instant;
+
+        fn cf(value: &CFType) -> &CFType { value }
+        let key = |k: &std::ffi::CStr| CFString::from_str(k.to_str().unwrap());
+        let wait = |what: &str, ready: &mut dyn FnMut() -> bool| {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !ready() {
+                assert!(Instant::now() < deadline, "timed out waiting for {what}");
+                thread::sleep(Duration::from_millis(10));
+            }
+        };
+
+        let default = find_device(None).unwrap();
+        let (default_uid, default_name) = (default.uid().unwrap(), default.name().unwrap());
+        let rate = default.nominal_rate().unwrap() as u32;
+        let aggregate_uid = format!("io.sowilo.meret.test-unplug-{}", std::process::id());
+        let (uid, name, private, sub_uid) = (CFString::from_str(&aggregate_uid), CFString::from_static_str("Meret unplug test"),
+            CFNumber::new_i32(1), CFString::from_str(&default_uid));
+        let sub_key = key(kAudioSubDeviceUIDKey);
+        let sub = CFDictionary::<CFString, CFType>::from_slices(&[&sub_key], &[cf(&sub_uid)]);
+        let subs = CFArray::from_objects(&[&*sub]);
+        let keys = [key(kAudioAggregateDeviceUIDKey), key(kAudioAggregateDeviceNameKey), key(kAudioAggregateDeviceIsPrivateKey),
+            key(kAudioAggregateDeviceSubDeviceListKey), key(kAudioAggregateDeviceMainSubDeviceKey)];
+        let description = CFDictionary::<CFString, CFType>::from_slices(
+            &[&keys[0], &keys[1], &keys[2], &keys[3], &keys[4]],
+            &[cf(&uid), cf(&name), cf(&private), cf(&subs), cf(&sub_uid)],
+        );
+        let mut id: AudioObjectID = 0;
+        let status = unsafe { AudioHardwareCreateAggregateDevice(description.as_opaque(), NonNull::from(&mut id)) };
+        assert_eq!(status, 0, "create aggregate: {}", fourcc(status));
+        wait("the aggregate to appear", &mut || find_device(Some(&aggregate_uid)).is_ok());
+
+        let engine = Engine::spawn(Arc::new(CoreAudioBackend),
+            EngineConfig { device: Some(aggregate_uid.clone()), exclusive: false, ..Default::default() });
+        let spec = StreamSpec { sample_rate: rate, channels: 2, bits: 16, codec: Codec::Flac };
+        engine.send(Control::Play(Load { item: 1, decoder: Box::new(Tone::new(spec, 60.0, 0.0)), start_frame: 0, stages: vec![] }));
+        let next = |what: &str, wanted: &dyn Fn(&EngineEvent) -> bool| -> EngineEvent {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                let left = deadline.saturating_duration_since(Instant::now());
+                let event = engine.events().recv_timeout(left).unwrap_or_else(|_| panic!("timed out waiting for {what}"));
+                println!("{event:?}");
+                if wanted(&event) {
+                    return event;
+                }
+            }
+        };
+        let EngineEvent::Started { path, .. } = next("start", &|e| matches!(e, EngineEvent::Started { item: 1, .. })) else { unreachable!() };
+        assert!(path.stages.last().unwrap().detail.starts_with("Meret unplug test"));
+        thread::sleep(Duration::from_millis(500));
+
+        let unplugged = Instant::now();
+        assert_eq!(unsafe { AudioHardwareDestroyAggregateDevice(id) }, 0);
+        next("the disconnect", &|e| matches!(e, EngineEvent::Error { item: Some(1), message } if message == "Meret unplug test disconnected"));
+        let EngineEvent::Anchor(paused) = next("a paused anchor", &|e| matches!(e, EngineEvent::Anchor(a) if a.rate == 0.0)) else { unreachable!() };
+        println!("paused {:?} after the unplug at {} ms", unplugged.elapsed(), paused.position_frames * 1000 / rate as u64);
+        assert!(paused.position_frames >= rate as u64 / 4, "played before the unplug");
+
+        engine.send(Control::Resume);
+        let EngineEvent::OutputChanged { path } = next("the move to the default", &|e| matches!(e, EngineEvent::OutputChanged { .. })) else { unreachable!() };
+        assert!(path.stages.last().unwrap().detail.starts_with(&default_name), "{path:?}");
+        let EngineEvent::Anchor(resumed) = next("playback on the default",
+            &|e| matches!(e, EngineEvent::Anchor(a) if a.rate > 0.0)) else { unreachable!() };
+        assert!(resumed.position_frames >= paused.position_frames, "resumed where it stopped");
+        engine.send(Control::Stop);
+        next("idle", &|e| matches!(e, EngineEvent::Idle));
     }
 }
