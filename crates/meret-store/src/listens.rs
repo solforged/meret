@@ -86,8 +86,9 @@ impl Store {
         })
     }
 
-    /// Returns whether the finished listen counts, using the same rule as reads.
-    pub fn finish_listen(&self, uid: ListenUid, played_ms: u64) -> Result<bool> {
+    /// Writes how far a listen got, while it plays and when it ends, and
+    /// returns whether it counts, using the same rule as reads.
+    pub fn update_listen(&self, uid: ListenUid, played_ms: u64) -> Result<bool> {
         self.writer.write(move |tx| {
             let uid = uid.to_string();
             let played_ms = i64::try_from(played_ms).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
@@ -95,6 +96,13 @@ impl Store {
             tx.query_row(&format!("SELECT {COUNTED} FROM listen l {LISTEN_TRACK} WHERE l.uid = ?1"),
                 [uid], |r| r.get(0))
         })
+    }
+
+    /// A listen's recording, start and whether it counts yet, for continuing it.
+    pub fn listen(&self, uid: ListenUid) -> Result<Option<(RecordingId, i64, bool)>> {
+        self.read(|c| c.query_row(&format!("SELECT l.recording_id, l.started_at, {COUNTED} FROM listen l {LISTEN_TRACK}
+            WHERE l.uid = ?1 AND l.recording_id IS NOT NULL"), [uid.to_string()],
+            |r| Ok((RecordingId(r.get(0)?), r.get(1)?, r.get(2)?))).optional())
     }
 
     /// The source that the player will choose for this library track.
@@ -204,7 +212,7 @@ mod tests {
     fn listen(store: &Store, recording: i64, at: i64, played: u64) -> bool {
         let uid = ListenUid::new();
         store.start_listen(uid, RecordingId(recording), None, "local".into(), at, None, store.device_id().unwrap()).unwrap();
-        store.finish_listen(uid, played).unwrap()
+        store.update_listen(uid, played).unwrap()
     }
 
     #[test]
@@ -281,7 +289,7 @@ mod tests {
         ")).unwrap();
         let uid = ListenUid::new();
         store.start_listen(uid, RecordingId(1), Some(SourceId(2)), "local".into(), 2, None, store.device_id().unwrap()).unwrap();
-        assert!(store.finish_listen(uid, 50_000).unwrap());
+        assert!(store.update_listen(uid, 50_000).unwrap());
         listen(&store, 1, 1, 50_000);
         let history = store.history(10).unwrap();
         assert_eq!(history.len(), 2);

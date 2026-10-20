@@ -1,6 +1,6 @@
 //! The last queue and release-level pick-up points, written off the audio thread.
 
-use meret_model::{EntityKind, Idiom, RecordingId, ReleaseId};
+use meret_model::{EntityKind, Idiom, ListenUid, RecordingId, ReleaseId};
 use rusqlite::{OptionalExtension, params};
 
 use crate::{Artwork, Result, Store};
@@ -13,6 +13,8 @@ pub struct SavedQueue {
     pub playing: bool,
     pub updated_at: i64,
     pub device: String,
+    /// The listen open when this was saved; a resume continues it.
+    pub listen: Option<ListenUid>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -32,15 +34,16 @@ pub struct ResumeRow {
 }
 
 impl Store {
-    pub fn save_queue(&self, items: String, cursor: usize, position_ms: u64, playing: bool, device: &str) -> Result<()> {
+    pub fn save_queue(&self, items: String, cursor: usize, position_ms: u64, playing: bool, device: &str,
+        listen: Option<ListenUid>) -> Result<()> {
         let device = device.to_owned();
         self.writer.write(move |tx| {
             tx.execute(
-                "INSERT INTO queue_state(id,items,cursor,position_ms,playing,updated_at,device)
-                 VALUES(1,?1,?2,?3,?4,?5,?6) ON CONFLICT(id) DO UPDATE SET
+                "INSERT INTO queue_state(id,items,cursor,position_ms,playing,updated_at,device,listen)
+                 VALUES(1,?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET
                  items=excluded.items,cursor=excluded.cursor,position_ms=excluded.position_ms,
-                 playing=excluded.playing,updated_at=excluded.updated_at,device=excluded.device",
-                params![items, cursor as i64, position_ms as i64, playing, now_ms(), device],
+                 playing=excluded.playing,updated_at=excluded.updated_at,device=excluded.device,listen=excluded.listen",
+                params![items, cursor as i64, position_ms as i64, playing, now_ms(), device, listen.map(|l| l.to_string())],
             )?;
             Ok(())
         })
@@ -48,10 +51,11 @@ impl Store {
 
     pub fn load_queue(&self) -> Result<Option<SavedQueue>> {
         self.read(|c| c.query_row(
-            "SELECT items,cursor,position_ms,playing,updated_at,device FROM queue_state WHERE id=1",
+            "SELECT items,cursor,position_ms,playing,updated_at,device,listen FROM queue_state WHERE id=1",
             [],
             |r| Ok(SavedQueue { items_json: r.get(0)?, cursor: r.get::<_, i64>(1)? as usize, position_ms: r.get::<_, i64>(2)? as u64,
-                playing: r.get(3)?, updated_at: r.get(4)?, device: r.get(5)? }),
+                playing: r.get(3)?, updated_at: r.get(4)?, device: r.get(5)?,
+                listen: r.get::<_, Option<String>>(6)?.and_then(|uid| uid.parse().ok()).map(ListenUid) }),
         ).optional())
     }
 
@@ -137,8 +141,9 @@ mod tests {
             Ok(())
         }).unwrap();
         let device = store.device_id().unwrap();
-        store.save_queue("[]".into(), 0, 3000, true, &device).unwrap();
-        store.save_queue("[{\"token\":1}]".into(), 1, 3456, false, &device).unwrap();
+        let listen = ListenUid::new();
+        store.save_queue("[]".into(), 0, 3000, true, &device, Some(listen)).unwrap();
+        store.save_queue("[{\"token\":1}]".into(), 1, 3456, false, &device, Some(listen)).unwrap();
         store.upsert_resume(ReleaseId(1), RecordingId(1), 1000, &device).unwrap();
         store.upsert_resume(ReleaseId(1), RecordingId(1), 3456, &device).unwrap();
         store.upsert_resume(ReleaseId(2), RecordingId(2), 2000, &device).unwrap();
@@ -146,8 +151,10 @@ mod tests {
         drop(store);
         let store = Store::open(&path).unwrap();
         let saved = store.load_queue().unwrap().unwrap();
-        assert_eq!((saved.items_json.as_str(), saved.cursor, saved.position_ms, saved.playing, saved.device.as_str()),
-            ("[{\"token\":1}]", 1, 3456, false, device.as_str()));
+        assert_eq!((saved.items_json.as_str(), saved.cursor, saved.position_ms, saved.playing, saved.device.as_str(), saved.listen),
+            ("[{\"token\":1}]", 1, 3456, false, device.as_str(), Some(listen)));
+        store.save_queue("[]".into(), 0, 0, false, &device, None).unwrap();
+        assert_eq!(store.load_queue().unwrap().unwrap().listen, None, "a stopped queue carries no listen");
         assert_eq!(store.resume_for(ReleaseId(1)).unwrap(), Some((RecordingId(1), 3456)));
         assert_eq!(store.resume_points(1).unwrap()[0].release, ReleaseId(2));
         let rows = store.resume_points(10).unwrap();

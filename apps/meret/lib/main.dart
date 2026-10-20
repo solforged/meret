@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -26,6 +27,12 @@ Future<void> main() async {
     await rust.startCore(dataDir: dir.path, nullOutput: !Platform.isMacOS);
     core = RustCore();
   }
+  // ⌘Q, the Dock's Quit and logging out ask first; write where playback got
+  // to and the open listen before the process ends.
+  AppLifecycleListener(onExitRequested: () async {
+    await core.flushMemory().timeout(const Duration(seconds: 1), onTimeout: () {}).catchError((Object _) {});
+    return AppExitResponse.exit;
+  });
   runApp(MeretApp(core: core));
 }
 
