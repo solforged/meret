@@ -1389,12 +1389,14 @@ name = "meret-library"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "crossbeam-channel",
  "ignore",
  "image",
  "lofty",
  "meret-model",
  "meret-query",
  "meret-store",
+ "objc2-core-foundation",
  "parking_lot",
  "rayon",
  "rusqlite",

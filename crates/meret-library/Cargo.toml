@@ -19,6 +19,10 @@ rusqlite.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFString", "CFArray"] }
+
 [dev-dependencies]
+crossbeam-channel.workspace = true
 meret-query.workspace = true
 parking_lot.workspace = true
