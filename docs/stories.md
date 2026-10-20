@@ -58,18 +58,18 @@ Decided 2026-10-14.
 
 | Story | Where | State |
 |---|---|---|
-| I open Meret and carry on where I stopped | Now, paused at the position; `Space` | Placed (plate 09) |
+| I open Meret and carry on where I stopped | Now, paused at the position; `Space` | Built |
 | I want music without choosing | `⇧Space` Play something, with why | Built (from listens and trails; habits and leads later) |
 | I want one specific album, now | `/`, type, `↵` | Built |
 | I browse the whole library as a table | `⌘L` or a Front door | Built |
 | I wander from a credit to a person to their other work | Panes and threads; the strip | Built (local credits only) |
-| I see what's next, and change it | Now, Up next | Placed (plate 09) |
-| I find out what played ten minutes ago | Now, "What was that?"; `H` for history | Placed |
+| I see what's next, and change it | Now, Up next | Built (shown; changing the queue isn't built) |
+| I find out what played ten minutes ago | Now, "What was that?"; `H` for history | Built |
 | I play on another speaker | Now, Play on | Built for this Mac's outputs; other zones later |
-| I control playback while working in another app | Menu bar item, media keys | Placed (plate 10) |
+| I control playback while working in another app | Menu bar item, media keys | Built |
 | I know whether I'm hearing it bit-perfect | Now, signal path | Built |
-| I skip, go back, seek | Now, under the body; the bar on narrow windows | Placed |
-| I set the volume | At the DAC; Meret's own volume is a setting, and the signal path flags it | Placed |
+| I skip, go back, seek | Now, under the body; the bar on narrow windows | Built |
+| I set the volume | Now's device-volume slider; at the DAC when the device has no settable volume | Built (device volume; samples stay untouched) |
 
 ## Keeping the collection
 
@@ -79,7 +79,7 @@ Decided 2026-10-14.
 | I see what Meret couldn't read | The Front, Needs you | Built |
 | I fix a release Meret guessed wrong | The `≈` mark where I see it; the Front's Needs you for batches | Placed |
 | I tell Meret what kind of music a release is (its idiom) | The release pane's header | Placed |
-| Two rips of one album show once, and I pick which plays | The release pane; Needs you, "albums with two editions" | Placed (plate 02) |
+| Two rips of one album show once, and I pick which plays | The release pane; Needs you, "albums with two editions" | Built (copies show once; picking which plays isn't built) |
 | I correct a title or credit, and my files follow | The release pane, in place for a few fields; an edit sheet for many tracks; see *Writing back to files* | Placed |
 | My folders follow a naming scheme I choose | Settings › Files, a path template with a preview | Placed |
 | I see what a long job is doing and pause it | The status line job opens its detail | Status line built |
@@ -130,7 +130,7 @@ Mostly placed by the plates; listed so the whole set is in one file.
 | I see what's new for me, and why | The Front, Leads (`L`) | Placed |
 | I mark something I want to own | `W` anywhere; the Front, Wants | Placed |
 | I make a crate by hand, or from a rule | `C` / `⌘K`; the Front, Crates and trails | Placed |
-| I keep a trail and come back to it | `⌘S`; the Front; `[` from a new root | Placed |
+| I keep a trail and come back to it | `⌘S`; the Front; `[` from a new root | Built |
 | I see my library as a map | `M`, the sky | Placed (plate 05) |
 | I check and refuse a habit | Play something's why → plate 12 | Placed |
 
