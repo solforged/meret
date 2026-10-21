@@ -31,7 +31,7 @@ pub use art::{Artwork, COVER_SIZES, cover_file};
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
 pub use library::{LibraryFacts, RecentRelease, ReleaseHead, TrackRow};
 pub use listens::{Dormant, ListenRow, PlayCount};
-pub use pages::{Colleague, PersonPage, PersonRelease, ReleasePage, TrackCredit};
+pub use pages::{Colleague, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
 pub use plan::{Plan, format_code, plan};
 pub use search::{PersonHit, ReleaseHit};
 pub use settings::{LightLevel, Settings};

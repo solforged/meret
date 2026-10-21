@@ -30,12 +30,12 @@ use meret_engine::output::null::NullBackend;
 use meret_engine::{Engine, EngineEvent};
 use meret_graph::TrailHistory;
 use meret_jobs::Scheduler;
-use meret_model::{AgentId, Idiom, ReleaseId, RootId, TrackId};
+use meret_model::{AgentId, Idiom, ReleaseId, RootId, TrackId, WorkId};
 use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError, ZoneFidelity, ZoneInfo};
 use meret_provider::Registry;
 use meret_query::{Input, Term, parse};
 use meret_store::{HotColumns, LibraryFacts, PersonHit, ReleaseHit, Store, TrackRow};
-pub use meret_store::{Colleague, PersonPage, PersonRelease, ReleasePage, TrackCredit};
+pub use meret_store::{Colleague, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, watch};
 
@@ -568,6 +568,17 @@ impl Core {
     /// Plays a release's tracklist from row `index`, replacing the queue.
     pub fn play_release(&self, release: ReleaseId, index: usize) -> Result<()> {
         let page = self.store.release_page(release)?.ok_or_else(|| CoreError::Query("that release is gone".into()))?;
+        self.play(queue_items(page.tracks.into_iter().skip(index)))
+    }
+
+    /// A work pane. None when the work doesn't exist.
+    pub fn work(&self, work: WorkId) -> Result<Option<WorkPage>> {
+        Ok(self.store.work_page(work)?)
+    }
+
+    /// Plays a work's recordings from row `index`, replacing the queue.
+    pub fn play_work(&self, work: WorkId, index: usize) -> Result<()> {
+        let page = self.store.work_page(work)?.ok_or_else(|| CoreError::Query("that work is gone".into()))?;
         self.play(queue_items(page.tracks.into_iter().skip(index)))
     }
 
