@@ -11,6 +11,8 @@ mod art;
 mod columns;
 pub mod copies;
 pub mod credits;
+mod http_cache;
+mod jobs;
 mod library;
 mod listens;
 mod migrate;
@@ -29,12 +31,14 @@ use rusqlite::{Connection, OpenFlags};
 
 pub use art::{Artwork, COVER_SIZES, cover_file};
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
+pub use http_cache::HttpCache;
+pub use jobs::{JobCounts, NewJob, QueuedJob};
 pub use library::{LibraryFacts, RecentRelease, ReleaseHead, TrackRow};
 pub use listens::{Dormant, ListenRow, PlayCount};
-pub use pages::{Colleague, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
+pub use pages::{Colleague, OtherRecording, PersonLink, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
 pub use plan::{Plan, format_code, plan};
 pub use search::{PersonHit, ReleaseHit};
-pub use settings::{LightLevel, Settings};
+pub use settings::{LightLevel, Lookups, Settings};
 pub use writer::Writer;
 pub use trails::TrailSummary;
 pub use memory::{ResumeRow, SavedQueue};
@@ -43,6 +47,8 @@ pub use memory::{ResumeRow, SavedQueue};
 pub enum StoreError {
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
     #[error("the writer thread has stopped")]
     WriterGone,
     #[error("a write batch failed to commit: {0}")]

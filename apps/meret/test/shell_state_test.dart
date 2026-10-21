@@ -135,12 +135,12 @@ void main() {
 Future<void> _seedTrail(FakeCore core, {required int stops}) async {
   var trail = await core.startTrail(const TargetDto.search(query: ''));
   final release = await core.release(PlatformInt64Util.from(1));
-  trail = await core.follow(trail.current, TargetDto.release(id: release.id), ThreadKind.matched);
+  trail = await core.follow(trail.current, TargetDto.release(id: release.id), ThreadKind.matched, 'library');
   if (stops >= 3) {
-    trail = await core.follow(trail.current, release.artistLinks.first.to, ThreadKind.albumArtist);
+    trail = await core.follow(trail.current, release.artistLinks.first.to, ThreadKind.albumArtist, release.artistLinks.first.provider);
   }
   if (stops >= 4) {
-    await core.follow(trail.current, TargetDto.release(id: PlatformInt64Util.from(2)), ThreadKind.appearsOn);
+    await core.follow(trail.current, TargetDto.release(id: PlatformInt64Util.from(2)), ThreadKind.appearsOn, 'local_tags');
   }
 }
 

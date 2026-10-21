@@ -53,7 +53,27 @@ impl Api {
 
     /// The Front. Ask again when the status line's `library_version` moves.
     pub fn front(&self) -> Result<FrontDto, String> {
-        self.core.front().map(FrontDto::from).map_err(|e| e.to_string())
+        let mut front = self.core.front().map(FrontDto::from).map_err(|e| e.to_string())?;
+        let setting = self.core.settings().lookups;
+        if setting == meret_core::Lookups::Unasked {
+            let summary = self.core.lookup_summary().map_err(|e| e.to_string())?;
+            if summary.releases + summary.recordings + summary.people > 0 {
+                front.lookups = Some(LookupStatusDto::new(setting, summary));
+            }
+        }
+        Ok(front)
+    }
+
+    /// Settings › Lookups: the answer, what the tags carry, and what's been looked up.
+    pub fn lookups(&self) -> Result<LookupStatusDto, String> {
+        let summary = self.core.lookup_summary().map_err(|e| e.to_string())?;
+        Ok(LookupStatusDto::new(self.core.settings().lookups, summary))
+    }
+
+    /// Answers the lookup question, from the Front or Settings.
+    pub fn set_lookups(&self, lookups: LookupsDto) -> Result<(), String> {
+        let settings = meret_core::Settings { lookups: lookups.into(), ..self.core.settings() };
+        self.core.set_settings(settings).map_err(|e| e.to_string())
     }
 
     /// Runs a command from the query line. `play <query>` plays what
@@ -258,14 +278,15 @@ impl Api {
     }
 
     /// Follows a thread from stop `from_stop`, the pane it was picked in.
-    /// From a pane before the last, this starts a branch.
-    pub fn follow(&self, from_stop: u32, to: TargetDto, via: ThreadKind) -> Result<TrailDto, String> {
-        let source = match via {
-            ThreadKind::By | ThreadKind::AlbumArtist | ThreadKind::AppearsOn | ThreadKind::WorkedWith
-            | ThreadKind::ComposedBy | ThreadKind::LyricsBy | ThreadKind::ArrangedBy | ThreadKind::PerformedBy
-            | ThreadKind::ConductedBy | ThreadKind::ProducedBy | ThreadKind::EngineeredBy | ThreadKind::RecordingOf => LOCAL_TAGS,
-            ThreadKind::Matched => "library",
-            other => return Err(format!("\"{}\" threads come with providers, which aren't built yet", other.label())),
+    /// From a pane before the last, this starts a branch. `provider` is the
+    /// thread's `provider`, so the strip can say where it came from.
+    pub fn follow(&self, from_stop: u32, to: TargetDto, via: ThreadKind, provider: &str) -> Result<TrailDto, String> {
+        let source = match (via, provider) {
+            (ThreadKind::Matched, "library") => "library",
+            (ThreadKind::Matched, _) => return Err("a search's hits are followed from the library".into()),
+            (_, LOCAL_TAGS) => LOCAL_TAGS,
+            (_, MUSICBRAINZ) => MUSICBRAINZ,
+            (kind, other) => return Err(format!("\"{}\" threads from {other} aren't built yet", kind.label())),
         };
         if matches!(to, TargetDto::Search { .. }) {
             return Err("a search starts a trail; it isn't followed to".into());
@@ -569,8 +590,8 @@ mod trail_memory_tests {
         let api = Api::new(core.clone());
         api.start_trail(TargetDto::Search { query: "older".into() });
         let root = api.start_trail(TargetDto::Search { query: "fixture".into() });
-        let release = api.follow(root.current, TargetDto::Release { id: 1 }, ThreadKind::Matched).unwrap();
-        api.follow(release.current, TargetDto::Person { id: 1 }, ThreadKind::By).unwrap();
+        let release = api.follow(root.current, TargetDto::Release { id: 1 }, ThreadKind::Matched, "library").unwrap();
+        api.follow(release.current, TargetDto::Person { id: 1 }, ThreadKind::By, LOCAL_TAGS).unwrap();
         let expected = api.keep_trail(Some("Fixture tree".into())).unwrap();
         let before = api.trail_history(10).unwrap();
         assert_eq!(before.len(), 2);

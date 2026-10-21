@@ -76,7 +76,7 @@ void main() {
 
   testWidgets('Play on draws the shared-mode verdict verbatim for both devices', (tester) async {
     final core = FakeCore();
-    await core.setSettings(SettingsDto(light: core.settings().light, exclusive: false));
+    await core.setSettings(SettingsDto(light: core.settings().light, exclusive: false, lookups: core.settings().lookups));
     await _surface(tester, core);
     await tester.pump();
     final verdicts = find.text('◐ shared with macOS');
@@ -122,7 +122,7 @@ void main() {
   testWidgets('a written joint credit opens each individual thread', (tester) async {
     final people = [
       for (final (id, name) in [(1, 'Roger Briggs'), (2, 'Mark Cromer')])
-        ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags',
+        ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags', provider: 'local_tags',
           to: TargetDto.person(id: PlatformInt64Util.from(id)), title: name, detail: ''),
     ];
     final followed = <ThreadDto>[];
@@ -591,7 +591,7 @@ void main() {
 
   testWidgets('the release lights the playing row without inventing a cover', (tester) async {
     final core = FakeCore();
-    await core.setSettings(const SettingsDto(light: LightLevelDto.accentAndWash, exclusive: true));
+    await core.setSettings(const SettingsDto(light: LightLevelDto.accentAndWash, exclusive: true, lookups: LookupsDto.unasked));
     final releaseId = (await core.now().first).releaseId!;
     await core.playRelease(id: releaseId, index: 2);
     final now = await core.now().first;
@@ -1192,7 +1192,7 @@ void main() {
     await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(row.releaseId);
     await tester.pump();
     final credit = (await core.release(row.releaseId)).credits.first;
-    await tester.widget<ReleasePane>(find.byType(ReleasePane)).onFollow(credit.to, credit.kind);
+    await tester.widget<ReleasePane>(find.byType(ReleasePane)).onFollow(credit.to, credit.kind, credit.provider);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const ValueKey('release-row-2')));

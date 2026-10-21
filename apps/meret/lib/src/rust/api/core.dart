@@ -149,16 +149,25 @@ Future<TrailDto> startTrail({required TargetDto to}) =>
     RustLib.instance.api.crateApiCoreStartTrail(to: to);
 
 /// Follows a thread from stop `from_stop`, the pane it was picked in; from
-/// a pane before the last, this starts a branch.
+/// a pane before the last, this starts a branch. `provider` is the thread's.
 Future<TrailDto> follow({
   required int fromStop,
   required TargetDto to,
   required ThreadKind via,
+  required String provider,
 }) => RustLib.instance.api.crateApiCoreFollow(
   fromStop: fromStop,
   to: to,
   via: via,
+  provider: provider,
 );
+
+/// Settings › Lookups: the answer, what the tags carry, what's been looked up.
+Future<LookupStatusDto> lookups() => RustLib.instance.api.crateApiCoreLookups();
+
+/// Answers the MusicBrainz question, from the Front or Settings.
+Future<void> setLookups({required LookupsDto lookups}) =>
+    RustLib.instance.api.crateApiCoreSetLookups(lookups: lookups);
 
 /// `[`: one stop back. None at the root.
 Future<TrailDto?> trailBack() => RustLib.instance.api.crateApiCoreTrailBack();

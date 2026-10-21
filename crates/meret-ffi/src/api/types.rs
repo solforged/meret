@@ -8,7 +8,7 @@ pub use meret_api::{
 };
 pub use meret_api::LightDto;
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
-pub use meret_api::{FolderKindDto, FolderSuggestionDto, LightLevelDto, OutputDeviceDto, SettingsDto};
+pub use meret_api::{FolderKindDto, FolderSuggestionDto, LightLevelDto, LookupStatusDto, LookupsDto, OutputDeviceDto, SettingsDto};
 pub use meret_api::{UpNextDto, UpNextItemDto, VolumeDto};
 pub use meret_api::TrailSummaryDto;
 
@@ -42,11 +42,30 @@ pub enum _LightLevelDto {
     AccentAndWash,
 }
 
+#[frb(mirror(LookupsDto))]
+pub enum _LookupsDto {
+    Unasked,
+    Allowed,
+    Off,
+}
+
+#[frb(mirror(LookupStatusDto))]
+pub struct _LookupStatusDto {
+    pub setting: LookupsDto,
+    pub releases: u64,
+    pub recordings: u64,
+    pub people: u64,
+    pub looked_up: u64,
+    pub waiting: u64,
+    pub failed: u64,
+}
+
 #[frb(mirror(SettingsDto))]
 pub struct _SettingsDto {
     pub light: LightLevelDto,
     pub output_device: Option<String>,
     pub exclusive: bool,
+    pub lookups: LookupsDto,
 }
 
 #[frb(mirror(OutputDeviceDto))]
@@ -252,6 +271,7 @@ pub struct _StatusDto {
     pub new_leads: u64,
     pub tracks: u64,
     pub library_version: u64,
+    pub lookups_version: u64,
 }
 
 #[frb(mirror(TrackRowDto))]
@@ -333,6 +353,7 @@ pub struct _FrontDto {
     pub added_lately: Vec<RecentDto>,
     pub needs_you: Vec<FrontLineDto>,
     pub roots: Vec<RootDto>,
+    pub lookups: Option<LookupStatusDto>,
 }
 
 #[frb(mirror(IdiomLineDto))]
@@ -413,6 +434,7 @@ pub enum _ThreadKind {
     ProducedBy,
     EngineeredBy,
     MemberOf,
+    HasMember,
     WorkedWith,
     RecordingOf,
     ArrangedAs,
@@ -435,6 +457,7 @@ pub struct _ThreadDto {
     pub kind: ThreadKind,
     pub label: String,
     pub source: String,
+    pub provider: String,
     pub to: TargetDto,
     pub title: String,
     pub detail: String,
@@ -469,6 +492,7 @@ pub struct _PersonDto {
     pub appears_on: Vec<ThreadDto>,
     pub roles: Vec<CreditSectionDto>,
     pub works: Vec<ThreadDto>,
+    pub groups: Vec<CreditSectionDto>,
     pub worked_with: Vec<ThreadDto>,
     pub plays: u64,
     pub last_played_ms: Option<i64>,
@@ -489,6 +513,8 @@ pub struct _WorkDto {
     pub part_of: Option<ThreadDto>,
     pub parts: Vec<ThreadDto>,
     pub rows: Vec<TrackRowDto>,
+    pub others: Vec<ThreadDto>,
+    pub recordings_known: Option<u64>,
     pub length_ms: u64,
     pub plays: u64,
     pub last_played_ms: Option<i64>,

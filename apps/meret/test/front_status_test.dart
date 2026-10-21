@@ -4,10 +4,48 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meret/core/bridge.dart';
 import 'package:meret/main.dart';
 import 'package:meret/panes/front_pane.dart';
+import 'package:meret/panes/person_pane.dart';
 import 'package:meret/settings/settings_window.dart';
 import 'package:meret/shell/status_line.dart';
 
 void main() {
+  testWidgets('Allow answers the Front question and membership follows its provider', (tester) async {
+    final core = _LookupCore();
+    _size(tester, const Size(1400, 1100));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: FrontPane(
+      core: core, memoryVersion: 0, onQuery: (_) {},
+    ))));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('MusicBrainz lookups'), findsOneWidget);
+    final frontCalls = core.frontCalls;
+    await tester.ensureVisible(find.text('Allow'));
+    await tester.tap(find.text('Allow'));
+    await tester.pump();
+    await tester.pump();
+    expect(core.answers, [LookupsDto.allowed]);
+    expect(core.frontCalls, greaterThan(frontCalls));
+    expect(find.text('MusicBrainz lookups'), findsNothing);
+
+    final person = (await core.search('Joanne Hogg')).people.single;
+    final trail = await core.startTrail(TargetDto.person(id: person.id));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: PersonPane(
+      core: core, id: person.id,
+      onFollow: (to, kind, provider) async { await core.follow(trail.current, to, kind, provider); },
+    ))));
+    await tester.pump();
+    expect(find.text('Member of'), findsOneWidget);
+    final member = (await core.person(person.id)).groups.single.threads.single;
+    await tester.ensureVisible(find.text(member.title));
+    await tester.tap(find.text(member.title));
+    await tester.pump();
+    await tester.pump();
+    expect(core.providers, ['musicbrainz']);
+    final followed = (await core.trail())!;
+    expect(followed.stops[followed.current].target, member.to);
+    expect(followed.stops[followed.current].viaSource, 'MB');
+  });
+
   testWidgets('an empty Front shows suggestions and adds the selected path', (tester) async {
     final core = _RecordingEmptyCore();
     final suggestions = await core.suggestFolders();
@@ -76,7 +114,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('status-source-musicbrainz')));
     await _settleOverlay(tester);
 
-    expect(find.text('Never contacted.'), findsOneWidget);
+    expect(find.text('not used yet'), findsNWidgets(2));
     await tester.tap(find.text('Open in Settings'));
     await _settleOverlay(tester);
 
@@ -159,6 +197,7 @@ StatusDto _status(List<SourceDto> sources, {List<JobDto> jobs = const []}) => St
   newLeads: BigInt.zero,
   tracks: BigInt.zero,
   libraryVersion: BigInt.one,
+  lookupsVersion: BigInt.zero,
 );
 
 class _RecordingEmptyCore extends FakeCore {
@@ -170,5 +209,29 @@ class _RecordingEmptyCore extends FakeCore {
   Future<int> addRoot(String path) {
     addedPaths.add(path);
     return super.addRoot(path);
+  }
+}
+
+class _LookupCore extends FakeCore {
+  final answers = <LookupsDto>[];
+  final providers = <String>[];
+  int frontCalls = 0;
+
+  @override
+  Future<FrontDto> front() {
+    frontCalls++;
+    return super.front();
+  }
+
+  @override
+  Future<void> setLookups(LookupsDto lookups) {
+    answers.add(lookups);
+    return super.setLookups(lookups);
+  }
+
+  @override
+  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via, String provider) {
+    providers.add(provider);
+    return super.follow(fromStop, to, via, provider);
   }
 }

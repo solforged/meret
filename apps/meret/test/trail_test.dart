@@ -71,7 +71,7 @@ void main() {
     final core = FakeCore();
     final first = await core.startTrail(const TargetDto.search(query: 'Iona'));
     final hit = (await core.search('Iona')).people.first;
-    final previous = await core.follow(first.current, TargetDto.person(id: hit.id), ThreadKind.matched);
+    final previous = await core.follow(first.current, TargetDto.person(id: hit.id), ThreadKind.matched, 'library');
     await core.startTrail(const TargetDto.search(query: 'year:1998'));
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pump();
@@ -96,7 +96,7 @@ void main() {
     final core = _KeepingCore();
     final root = await core.startTrail(const TargetDto.search(query: 'year:1998'));
     final hit = (await core.search('Iona')).people.first;
-    await core.follow(root.current, TargetDto.person(id: hit.id), ThreadKind.matched);
+    await core.follow(root.current, TargetDto.person(id: hit.id), ThreadKind.matched, 'library');
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pumpAndSettle();
     await _restoreTrail(tester);
@@ -209,13 +209,13 @@ void main() {
     final core = FakeCore();
     final root = await core.startTrail(const TargetDto.search(query: 'Iona'));
     final hit = (await core.search('Iona')).people.first;
-    final person = await core.follow(root.current, TargetDto.person(id: hit.id), ThreadKind.matched);
+    final person = await core.follow(root.current, TargetDto.person(id: hit.id), ThreadKind.matched, 'library');
     final release = (await core.person(hit.id)).releases.first;
-    final album = await core.follow(person.current, release.to, release.kind);
-    final loop = await core.follow(album.current, TargetDto.person(id: hit.id), ThreadKind.albumArtist);
+    final album = await core.follow(person.current, release.to, release.kind, release.provider);
+    final loop = await core.follow(album.current, TargetDto.person(id: hit.id), ThreadKind.albumArtist, 'local_tags');
     expect(loop.current, person.current);
     expect(loop.stops, hasLength(3));
-    final current = await core.follow(person.current, TargetDto.person(id: hit.id), ThreadKind.workedWith);
+    final current = await core.follow(person.current, TargetDto.person(id: hit.id), ThreadKind.workedWith, 'local_tags');
     expect(current.current, person.current);
     expect(current.stops, hasLength(3));
     await core.startTrail(const TargetDto.search(query: 'year:1998'));
@@ -233,7 +233,7 @@ void main() {
     final rows = await core.rows('', const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), 0, 1);
     final row = (rows.items.single as ItemDto_Track).row;
     final hit = (id: row.releaseId, title: row.album);
-    await core.follow(root.current, TargetDto.release(id: hit.id), ThreadKind.matched);
+    await core.follow(root.current, TargetDto.release(id: hit.id), ThreadKind.matched, 'library');
     await core.playRelease(id: hit.id, index: 0, fromStop: 1);
     await core.keepTrail(name: 'A kept tree');
     final saved = (await core.trailHistory(1)).single;

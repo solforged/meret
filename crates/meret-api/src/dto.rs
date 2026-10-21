@@ -22,11 +22,41 @@ pub enum LightLevelDto {
     AccentAndWash,
 }
 
+/// Whether Meret may look things up online; asked once.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LookupsDto {
+    #[default]
+    Unasked,
+    Allowed,
+    Off,
+}
+
+impl From<meret_core::Lookups> for LookupsDto {
+    fn from(l: meret_core::Lookups) -> Self {
+        match l {
+            meret_core::Lookups::Unasked => Self::Unasked,
+            meret_core::Lookups::Allowed => Self::Allowed,
+            meret_core::Lookups::Off => Self::Off,
+        }
+    }
+}
+
+impl From<LookupsDto> for meret_core::Lookups {
+    fn from(l: LookupsDto) -> Self {
+        match l {
+            LookupsDto::Unasked => Self::Unasked,
+            LookupsDto::Allowed => Self::Allowed,
+            LookupsDto::Off => Self::Off,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SettingsDto {
     pub light: LightLevelDto,
     pub output_device: Option<String>,
     pub exclusive: bool,
+    pub lookups: LookupsDto,
 }
 
 impl From<meret_core::Settings> for SettingsDto {
@@ -36,7 +66,7 @@ impl From<meret_core::Settings> for SettingsDto {
             meret_core::LightLevel::Accent => LightLevelDto::Accent,
             meret_core::LightLevel::AccentAndWash => LightLevelDto::AccentAndWash,
         };
-        Self { light, output_device: s.output_device, exclusive: s.exclusive }
+        Self { light, output_device: s.output_device, exclusive: s.exclusive, lookups: s.lookups.into() }
     }
 }
 
@@ -47,7 +77,35 @@ impl From<SettingsDto> for meret_core::Settings {
             LightLevelDto::Accent => meret_core::LightLevel::Accent,
             LightLevelDto::AccentAndWash => meret_core::LightLevel::AccentAndWash,
         };
-        Self { light, output_device: s.output_device, exclusive: s.exclusive }
+        Self { light, output_device: s.output_device, exclusive: s.exclusive, lookups: s.lookups.into() }
+    }
+}
+
+/// What MusicBrainz lookups would send and have done: the consent line on
+/// the Front and Settings › Lookups.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LookupStatusDto {
+    pub setting: LookupsDto,
+    /// MusicBrainz IDs in your tags, by kind.
+    pub releases: u64,
+    pub recordings: u64,
+    pub people: u64,
+    pub looked_up: u64,
+    pub waiting: u64,
+    pub failed: u64,
+}
+
+impl LookupStatusDto {
+    pub fn new(setting: meret_core::Lookups, s: meret_core::LookupSummary) -> Self {
+        LookupStatusDto {
+            setting: setting.into(),
+            releases: s.releases,
+            recordings: s.recordings,
+            people: s.people,
+            looked_up: s.jobs.done,
+            waiting: s.jobs.queued + s.jobs.running,
+            failed: s.jobs.failed,
+        }
     }
 }
 
@@ -316,6 +374,8 @@ pub struct StatusDto {
     pub tracks: u64,
     /// Changes whenever the library's rows do; a list refetches when it moves.
     pub library_version: u64,
+    /// Changes when lookups add facts; release, person and work panes refetch.
+    pub lookups_version: u64,
 }
 
 impl From<&StatusState> for StatusDto {
@@ -327,6 +387,7 @@ impl From<&StatusState> for StatusDto {
             new_leads: s.new_leads,
             tracks: s.tracks,
             library_version: s.library_version,
+            lookups_version: s.lookups_version,
         }
     }
 }
@@ -577,6 +638,9 @@ pub struct FrontDto {
     /// Things to fix, only those that are non-zero.
     pub needs_you: Vec<FrontLineDto>,
     pub roots: Vec<RootDto>,
+    /// The MusicBrainz question, in Needs you while it's unanswered and the
+    /// tags carry an ID to look up.
+    pub lookups: Option<LookupStatusDto>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -682,6 +746,7 @@ impl From<Front> for FrontDto {
                 .into_iter()
                 .map(|r| RootDto { id: r.id.0, path: r.path.display().to_string(), online: r.online, tracks: r.tracks, label: r.label })
                 .collect(),
+            lookups: None,
         }
     }
 }
@@ -752,8 +817,10 @@ pub struct ThreadDto {
     pub kind: ThreadKind,
     /// "by", "album artist", "on", "worked with".
     pub label: String,
-    /// "tags", "your library".
+    /// "tags", "MB", "your library".
     pub source: String,
+    /// The source's key, handed back to `follow`: "local_tags", "musicbrainz".
+    pub provider: String,
     pub to: TargetDto,
     pub title: String,
     /// "1-03, 1-07"; "2010 · 12 tracks"; "3 releases".
@@ -762,12 +829,18 @@ pub struct ThreadDto {
 
 impl ThreadDto {
     fn local(kind: ThreadKind, to: TargetDto, title: String, detail: String) -> Self {
-        ThreadDto { kind, label: kind.label().into(), source: source_label(LOCAL_TAGS).into(), to, title, detail }
+        Self::from_source(kind, LOCAL_TAGS, to, title, detail)
+    }
+
+    fn from_source(kind: ThreadKind, provider: &str, to: TargetDto, title: String, detail: String) -> Self {
+        ThreadDto { kind, label: kind.label().into(), source: source_label(provider).into(), provider: provider.into(), to, title, detail }
     }
 }
 
 /// Threads read from file tags.
 pub(crate) const LOCAL_TAGS: &str = "local_tags";
+/// Threads from MusicBrainz lookups.
+pub(crate) const MUSICBRAINZ: &str = "musicbrainz";
 
 /// A release pane (plate 01, the middle pane).
 #[derive(Clone, Debug, PartialEq)]
@@ -852,7 +925,7 @@ impl ReleaseDto {
                 Some(plays) => format!("{plays} · {}", positions(&c.positions)),
                 None => positions(&c.positions),
             };
-            credits.push(ThreadDto::local(kind, TargetDto::Person { id: c.agent.0 }, c.name, detail));
+            credits.push(ThreadDto::from_source(kind, &c.source, TargetDto::Person { id: c.agent.0 }, c.name, detail));
         }
         let row_works = rows.iter().map(|row| {
             p.works.iter().find(|(track, _, _)| track.0 == row.track_id).map(|(_, work, title)| {
@@ -897,7 +970,10 @@ pub struct PersonDto {
     pub roles: Vec<CreditSectionDto>,
     /// Works they wrote, by title.
     pub works: Vec<ThreadDto>,
-    /// People who share releases with them, most shared first.
+    /// "Member of" and "Members", from MusicBrainz.
+    pub groups: Vec<CreditSectionDto>,
+    /// People who share releases with them, most shared first, then the
+    /// collaborations MusicBrainz knows of.
     pub worked_with: Vec<ThreadDto>,
     /// Counted plays of their recordings and the releases they front.
     pub plays: u64,
@@ -934,16 +1010,34 @@ impl From<PersonPage> for PersonDto {
             works: p.works.into_iter().map(|w| {
                 ThreadDto::local(ThreadKind::ComposedBy, TargetDto::Work { id: w.work.0 }, w.title, n(w.tracks, "track", "tracks"))
             }).collect(),
+            groups: [("Member of", ThreadKind::MemberOf, p.member_of), ("Members", ThreadKind::HasMember, p.members)]
+                .into_iter()
+                .filter(|(_, _, links)| !links.is_empty())
+                .map(|(title, kind, links)| CreditSectionDto {
+                    title: title.into(),
+                    threads: links.into_iter().map(|l| link(kind, l)).collect(),
+                })
+                .collect(),
             worked_with: p
                 .worked_with
-                .into_iter()
+                .iter()
                 .map(|c| {
                     let detail = n(c.releases, "release", "releases");
-                    ThreadDto::local(ThreadKind::WorkedWith, TargetDto::Person { id: c.agent.0 }, c.name, detail)
+                    ThreadDto::local(ThreadKind::WorkedWith, TargetDto::Person { id: c.agent.0 }, c.name.clone(), detail)
                 })
+                .chain(p.linked.into_iter()
+                    .filter(|l| !p.worked_with.iter().any(|c| c.agent == l.agent))
+                    .map(|l| link(ThreadKind::WorkedWith, l)))
                 .collect(),
         }
     }
+}
+
+/// A person MusicBrainz relates to this one: what they did, and their tracks here.
+fn link(kind: ThreadKind, l: meret_core::PersonLink) -> ThreadDto {
+    let tracks = (l.tracks > 0).then(|| format!("{} {}", l.tracks, if l.tracks == 1 { "track" } else { "tracks" }));
+    let detail = [l.detail, tracks].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+    ThreadDto::from_source(kind, &l.source, TargetDto::Person { id: l.agent.0 }, l.name, detail)
 }
 
 /// A work pane: a composition, its composer, its parts, and every
@@ -962,6 +1056,10 @@ pub struct WorkDto {
     pub parts: Vec<ThreadDto>,
     /// Recordings of it and its parts; row i plays with `play_work(id, i)`.
     pub rows: Vec<TrackRowDto>,
+    /// Recordings MusicBrainz knows that you don't have, each to its first artist.
+    pub others: Vec<ThreadDto>,
+    /// How many recordings MusicBrainz knows of it, when looked up.
+    pub recordings_known: Option<u64>,
     pub length_ms: u64,
     pub plays: u64,
     pub last_played_ms: Option<i64>,
@@ -984,6 +1082,14 @@ impl From<meret_core::WorkPage> for WorkDto {
             }).collect(),
             length_ms: rows.iter().filter_map(|r| r.length_ms).sum(),
             rows,
+            others: p.others.into_iter().filter_map(|o| {
+                let (first, _) = *o.artists.first()?;
+                let names = o.artists.iter().map(|(_, name)| name.as_str()).collect::<Vec<_>>().join(", ");
+                let length = o.length_ms.map(|ms| format!("{}:{:02}", ms / 60_000, ms / 1_000 % 60));
+                let detail = [Some(names), length].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+                Some(ThreadDto::from_source(ThreadKind::By, &o.source, TargetDto::Person { id: first.0 }, o.title, detail))
+            }).collect(),
+            recordings_known: p.recordings_known,
             plays: p.plays,
             last_played_ms: p.last_played,
         }

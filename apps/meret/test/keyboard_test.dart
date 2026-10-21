@@ -127,7 +127,7 @@ void main() {
     final releaseId = (await core.now().first).releaseId!;
     _desktop(tester);
     await tester.pumpWidget(_pane(ReleasePane(
-      core: core, id: releaseId, fromStop: 0, onFollow: (_, _) async {},
+      core: core, id: releaseId, fromStop: 0, onFollow: (_, _, _) async {},
     )));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('release-row-0')));

@@ -19,7 +19,7 @@ use meret_player::Zone;
 use serde::{Deserialize, Serialize};
 
 pub use claim::*;
-pub use context::{Context, Http, Kv, MemoryKv};
+pub use context::{Cache, CachedResponse, Context, Http, Kv, MemoryKv};
 pub use registry::Registry;
 
 #[derive(Debug, thiserror::Error)]
@@ -32,6 +32,9 @@ pub enum ProviderError {
     NotFound,
     #[error("http: {0}")]
     Http(String),
+    /// No connection, DNS, or a timeout.
+    #[error("offline: {0}")]
+    Offline(String),
     #[error("unexpected response: {0}")]
     Parse(String),
     #[error("{0}")]
@@ -94,7 +97,7 @@ pub trait Provider: Send + Sync {
 /// Facts about entities: titles, credits, editions, external IDs.
 #[async_trait]
 pub trait Catalog: Send + Sync {
-    async fn lookup(&self, ctx: &Context, subject: &ExternalRef) -> Result<Vec<Claim>>;
+    async fn lookup(&self, ctx: &Context, subject: &ExternalRef) -> Result<Lookup>;
     async fn search(&self, ctx: &Context, query: &CatalogQuery) -> Result<Vec<CatalogHit>>;
 }
 

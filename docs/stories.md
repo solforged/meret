@@ -52,7 +52,7 @@ Decided 2026-10-14.
 | I see the scan working, and can start listening before it ends | Status line progress; the Front and table fill as batches commit | Built (progress) |
 | I bring my history | The empty Front's "Bring your history"; Settings › History | Later |
 | I choose where sound goes and whether Meret takes the device exclusively | Asked on the first play, in Now's signal path; Settings › Playback | Settings › Playback built; the first-play question isn't |
-| I decide whether Meret may look my music up online | A line in Needs you before the first lookup, with a status line reminder; Settings › Lookups | Placed |
+| I decide whether Meret may look my music up online | A line in Needs you before the first lookup, with a status line reminder; Settings › Lookups | Built for MusicBrainz lookups by ID (slice H) |
 | I connect the services I pay for, now or later, without being forced through them | The empty Front's "Connect a service"; Settings › Sources | Doors built; every service says it's coming later |
 | macOS asks for folder access and I understand why | Meret says why just before the system dialog | A suggested folder that macOS protects says so; the moment before the dialog isn't built |
 

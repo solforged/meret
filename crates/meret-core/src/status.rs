@@ -25,6 +25,8 @@ pub struct StatusState {
     pub tracks: u64,
     /// Bumped whenever the library's rows change, so lists know to refetch.
     pub library_version: u64,
+    /// Bumped when lookups add facts: pages refetch, tables don't need to.
+    pub lookups_version: u64,
 }
 
 const SCAN_VERBS: [&str; 3] = ["scanning", "reading tags", "reading covers"];
@@ -65,12 +67,27 @@ pub(crate) fn set_scan(s: &mut StatusState, progress: Option<ScanProgress>) {
     }
 }
 
+/// Sets a source's item, and its job group: shown while `running` is Some.
+pub(crate) fn set_source(s: &mut StatusState, key: &str, detail: String, ok: bool, verb: &str, running: Option<JobGroupStatus>) {
+    if let Some(source) = s.sources.iter_mut().find(|x| x.key == key) {
+        source.detail = detail;
+        source.ok = ok;
+    }
+    s.jobs.retain(|j| j.verb != verb);
+    s.jobs.extend(running);
+}
+
+/// Lookups wrote facts for pages; the track rows didn't change, so tables keep theirs.
+pub(crate) fn bump_lookups(s: &mut StatusState) {
+    s.lookups_version += 1;
+}
+
 fn local_name() -> &'static str {
     if cfg!(target_os = "macos") { "This Mac" } else { "This device" }
 }
 
 /// 48210 → "48,210", as the status line writes counts.
-fn thousands(n: u64) -> String {
+pub(crate) fn thousands(n: u64) -> String {
     let digits = n.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);
     for (i, c) in digits.chars().enumerate() {

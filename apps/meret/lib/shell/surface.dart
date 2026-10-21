@@ -261,19 +261,19 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       _navigationError = null;
     });
     if (hit != null) {
-      trail = await widget.core.follow(trail.current, _hitTarget(hit), ThreadKind.matched);
+      trail = await widget.core.follow(trail.current, _hitTarget(hit), ThreadKind.matched, 'library');
       if (!mounted || version != _navigationVersion) return;
       setState(() => _trail = trail);
     }
     _animate(1);
   }
 
-  Future<void> _follow(int from, TargetDto to, ThreadKind via) =>
-      _navigate(() => widget.core.follow(from, to, via));
+  Future<void> _follow(int from, TargetDto to, ThreadKind via, String provider) =>
+      _navigate(() => widget.core.follow(from, to, via, provider));
 
   Widget _pane(StopDto stop) {
     final scanning = _status?.jobs.any((job) => job.verb == 'scanning' || job.verb == 'reading tags') ?? false;
-    Future<void> follow(TargetDto to, ThreadKind via) => _follow(stop.index, to, via);
+    Future<void> follow(TargetDto to, ThreadKind via, String provider) => _follow(stop.index, to, via, provider);
     final body = switch (stop.target) {
       TargetDto_Search(:final query) => SearchPane(
         core: widget.core,
@@ -281,12 +281,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         libraryVersion: _status?.libraryVersion,
         tracks: _status?.tracks,
         scanning: scanning,
-        onFollow: follow,
-        onHit: (hit) => _report(follow(_hitTarget(hit), ThreadKind.matched)),
+        onFollow: (to, via) => follow(to, via, 'local_tags'),
+        onHit: (hit) => _report(follow(_hitTarget(hit), ThreadKind.matched, 'library')),
       ),
-      TargetDto_Release(:final id) => ReleasePane(core: widget.core, id: id, fromStop: stop.index, onFollow: follow),
-      TargetDto_Person(:final id) => PersonPane(core: widget.core, id: id, onFollow: follow),
-      TargetDto_Work(:final id) => WorkPane(core: widget.core, id: id, onFollow: follow),
+      TargetDto_Release(:final id) => ReleasePane(core: widget.core, id: id, fromStop: stop.index, onFollow: follow,
+        libraryVersion: _status?.libraryVersion, lookupsVersion: _status?.lookupsVersion),
+      TargetDto_Person(:final id) => PersonPane(core: widget.core, id: id, onFollow: follow,
+        libraryVersion: _status?.libraryVersion, lookupsVersion: _status?.lookupsVersion),
+      TargetDto_Work(:final id) => WorkPane(core: widget.core, id: id, onFollow: follow,
+        libraryVersion: _status?.libraryVersion, lookupsVersion: _status?.lookupsVersion),
     };
     return Pane(
       key: ValueKey('stop-${stop.index}-${stop.target}'),

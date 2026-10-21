@@ -238,8 +238,8 @@ pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[Stri
             "keep" => api.keep_trail(None).map_err(anyhow::Error::msg)?,
             _ => {
                 let index: usize = step.parse().map_err(|_| anyhow!("expected a line number, '[', ']', 'keep', 'search=QUERY' or 'trail=UID', got {step:?}"))?;
-                let (via, to, _) = lines.get(index).cloned().ok_or_else(|| anyhow!("there's no line {index}"))?;
-                api.follow(trail.current, to, via).map_err(|e| anyhow!(e))?
+                let (via, to, provider, _) = lines.get(index).cloned().ok_or_else(|| anyhow!("there's no line {index}"))?;
+                api.follow(trail.current, to, via, &provider).map_err(|e| anyhow!(e))?
             }
         };
         let target = &trail.stops.iter().find(|stop| stop.index == trail.current).expect("current stop").target;
@@ -260,7 +260,14 @@ pub fn trails(api: &Api, limit: u32) -> Result<()> {
     Ok(())
 }
 
-fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<(ThreadKind, TargetDto, String)>> {
+/// A numbered line: the thread to follow, its source, and what's printed.
+type Line = (ThreadKind, TargetDto, String, String);
+
+fn line(label: &str, c: &ThreadDto) -> Line {
+    (c.kind, c.to.clone(), c.provider.clone(), thread_line(label, c))
+}
+
+fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<Line>> {
     let t = Instant::now();
     let lines: Vec<_> = match target {
         TargetDto::Search { query } => {
@@ -268,8 +275,8 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<(ThreadKind, TargetDto
             println!("\nsearch {}: {} tracks", s.query, s.tracks);
             s.people
                 .iter()
-                .map(|h| (ThreadKind::Matched, TargetDto::Person { id: h.id }, format!("{} · {}", h.title, h.detail)))
-                .chain(s.releases.iter().map(|h| (ThreadKind::Matched, TargetDto::Release { id: h.id }, format!("{} · {}", h.title, h.detail))))
+                .map(|h| (ThreadKind::Matched, TargetDto::Person { id: h.id }, "library".to_string(), format!("{} · {}", h.title, h.detail)))
+                .chain(s.releases.iter().map(|h| (ThreadKind::Matched, TargetDto::Release { id: h.id }, "library".to_string(), format!("{} · {}", h.title, h.detail))))
                 .collect()
         }
         TargetDto::Release { id } => {
@@ -295,8 +302,7 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<(ThreadKind, TargetDto
                     println!("          recording of {}", work.title);
                 }
             }
-            r.credits.iter().chain(r.row_works.iter().flatten())
-                .map(|c| (c.kind, c.to.clone(), thread_line(&c.label, c))).collect()
+            r.credits.iter().chain(r.row_works.iter().flatten()).map(|c| line(&c.label, c)).collect()
         }
         TargetDto::Person { id } => {
             let p = api.person(*id).map_err(|e| anyhow!(e))?;
@@ -304,8 +310,10 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<(ThreadKind, TargetDto
             [("releases", &p.releases), ("on", &p.appears_on)]
                 .into_iter()
                 .chain(p.roles.iter().map(|s| (s.title.as_str(), &s.threads)))
-                .chain([("works", &p.works), ("worked with", &p.worked_with)])
-                .flat_map(|(group, list)| list.iter().map(move |c| (c.kind, c.to.clone(), thread_line(&group.to_lowercase(), c))))
+                .chain([("works", &p.works)])
+                .chain(p.groups.iter().map(|s| (s.title.as_str(), &s.threads)))
+                .chain([("worked with", &p.worked_with)])
+                .flat_map(|(group, list)| list.iter().map(move |c| line(&group.to_lowercase(), c)))
                 .collect()
         }
         TargetDto::Work { id } => {
@@ -314,8 +322,12 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<(ThreadKind, TargetDto
             for row in &w.rows {
                 println!("    {:<44.44} {:<24.24} {}", row.title, row.artist.as_deref().unwrap_or(""), row.album);
             }
-            w.composer_links.iter().chain(&w.part_of).chain(&w.parts)
-                .map(|c| (c.kind, c.to.clone(), thread_line(&c.label, c))).collect()
+            if let Some(known) = w.recordings_known {
+                println!("    MusicBrainz knows {known} recordings");
+            }
+            w.composer_links.iter().chain(&w.part_of).chain(&w.parts).map(|c| line(&c.label, c))
+                .chain(w.others.iter().map(|c| line("other recording", c)))
+                .collect()
         }
     };
     print_lines(&lines);
@@ -341,8 +353,8 @@ fn thread_line(label: &str, c: &ThreadDto) -> String {
     })
 }
 
-fn print_lines(lines: &[(ThreadKind, TargetDto, String)]) {
-    for (i, (_, _, text)) in lines.iter().enumerate() {
+fn print_lines(lines: &[Line]) {
+    for (i, (_, _, _, text)) in lines.iter().enumerate() {
         println!("  [{i}] {text}");
     }
 }
@@ -541,4 +553,28 @@ pub fn zones(api: &Api) -> Result<()> {
         println!("{} {} · {} · {} · {}", if zone.current { "●" } else { " " }, zone.name, zone.detail, zone.verdict, zone.id);
     }
     Ok(())
+}
+
+/// MusicBrainz lookups: answers the question when given an answer, then
+/// waits for the queue to empty while lookups are allowed, printing progress.
+pub fn lookups(api: &Api, rt: &tokio::runtime::Runtime, answer: Option<meret_api::LookupsDto>) -> Result<()> {
+    settle(api, rt);
+    if let Some(answer) = answer {
+        api.set_lookups(answer).map_err(anyhow::Error::msg)?;
+    }
+    let t = Instant::now();
+    let mut last = None;
+    loop {
+        let l = api.lookups().map_err(anyhow::Error::msg)?;
+        let line = format!("{:?} · tags carry {} releases, {} recordings, {} people · {} looked up, {} waiting, {} failed",
+            l.setting, l.releases, l.recordings, l.people, l.looked_up, l.waiting, l.failed);
+        if last.as_ref() != Some(&line) {
+            println!("{line}  ({:.1?})", t.elapsed());
+            last = Some(line);
+        }
+        if l.setting != meret_api::LookupsDto::Allowed || l.waiting == 0 {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
 }

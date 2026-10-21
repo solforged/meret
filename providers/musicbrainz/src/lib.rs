@@ -1,11 +1,11 @@
-//! MusicBrainz: the spine of the model (works, recordings, releases, credits,
-//! relationships). One request a second, with a User-Agent naming a contact.
+//! MusicBrainz catalogue facts and relationships.
 //! https://musicbrainz.org/doc/MusicBrainz_API
 
+mod parsers;
+pub use parsers::{artist, recording, release, work};
+
 use async_trait::async_trait;
-use meret_model::{Provenance, ThreadKind};
 use meret_provider::*;
-use serde_json::Value;
 
 const BASE: &str = "https://musicbrainz.org/ws/2";
 
@@ -19,133 +19,112 @@ impl Provider for MusicBrainz {
         "MusicBrainz"
     }
     fn capabilities(&self) -> Capabilities {
-        Capabilities { catalog: true, threads: true, ..Default::default() }
+        Capabilities { catalog: true, ..Default::default() }
     }
     fn health(&self) -> Health {
-        Health::Ok { detail: "not used yet".into() }
+        Health::Ok { detail: String::new() }
     }
     fn as_catalog(&self) -> Option<&dyn Catalog> {
         Some(self)
-    }
-    fn as_threads(&self) -> Option<&dyn ThreadSource> {
-        Some(self)
-    }
-}
-
-fn prov(external: &str) -> Provenance {
-    Provenance {
-        source: "musicbrainz".into(),
-        external_ref: Some(external.into()),
-        fetched_at: Context::now_ms(),
-        confidence: 1.0,
     }
 }
 
 #[async_trait]
 impl Catalog for MusicBrainz {
-    async fn lookup(&self, ctx: &Context, subject: &ExternalRef) -> Result<Vec<Claim>> {
-        if subject.namespace != "mbid" || subject.kind != RefKind::Recording {
-            // TODO(musicbrainz): releases, release groups, works, artists.
-            return Ok(vec![]);
+    async fn lookup(&self, ctx: &Context, subject: &ExternalRef) -> Result<Lookup> {
+        if subject.namespace != "mbid" {
+            return Ok(Lookup::default());
         }
-        let url = format!("{BASE}/recording/{}?inc=artist-credits+isrcs+work-rels&fmt=json", subject.value);
-        let v = ctx.http.get_json(&url).await?;
-        Ok(recording_claims(subject, &v))
+        let (entity, inc) = match subject.kind {
+            RefKind::Release => ("release", "artist-credits+labels+recordings+release-groups"),
+            RefKind::Recording => ("recording", "artist-credits+artist-rels+work-rels+isrcs"),
+            RefKind::Agent => ("artist", "artist-rels"),
+            RefKind::Work => ("work", "artist-rels"),
+            _ => return Ok(Lookup::default()),
+        };
+        let url = format!("{BASE}/{entity}/{}?inc={inc}&fmt=json", subject.value);
+        let value = ctx.http.get_json(&url).await?;
+        let mut lookup = match subject.kind {
+            RefKind::Release => release(subject, &value),
+            RefKind::Recording => recording(subject, &value),
+            RefKind::Agent => artist(subject, &value),
+            RefKind::Work => {
+                let url = format!("{BASE}/recording?work={}&inc=artist-credits&limit=100&fmt=json", subject.value);
+                let recordings = ctx.http.get_json(&url).await?;
+                work(subject, &value, &recordings)
+            }
+            _ => unreachable!(),
+        };
+        let now = Context::now_ms();
+        for claim in &mut lookup.claims {
+            claim.provenance.fetched_at = now;
+        }
+        for thread in &mut lookup.threads {
+            thread.provenance.fetched_at = now;
+        }
+        Ok(lookup)
     }
 
     async fn search(&self, _ctx: &Context, _query: &CatalogQuery) -> Result<Vec<CatalogHit>> {
-        // TODO(musicbrainz): /ws/2/recording?query=… with Lucene escaping.
         Ok(vec![])
     }
 }
 
-#[async_trait]
-impl ThreadSource for MusicBrainz {
-    async fn threads(&self, ctx: &Context, about: &ExternalRef) -> Result<Vec<ThreadClaim>> {
-        if about.kind != RefKind::Agent {
-            return Ok(vec![]);
-        }
-        let url = format!("{BASE}/artist/{}?inc=artist-rels&fmt=json", about.value);
-        let v = ctx.http.get_json(&url).await?;
-        Ok(artist_threads(about, &v))
-    }
-}
-
-pub fn recording_claims(subject: &ExternalRef, v: &Value) -> Vec<Claim> {
-    let p = prov(&subject.value);
-    let mut out = vec![];
-    let mut put = |field: Field, value: Value| {
-        out.push(Claim { subject: subject.clone(), field, value, provenance: p.clone() });
-    };
-    if let Some(t) = v["title"].as_str() {
-        put(Field::Title, t.into());
-    }
-    if let Some(l) = v["length"].as_u64() {
-        put(Field::LengthMs, l.into());
-    }
-    if let Some(credits) = v["artist-credit"].as_array() {
-        let printed: String = credits
-            .iter()
-            .map(|c| format!("{}{}", c["name"].as_str().unwrap_or(""), c["joinphrase"].as_str().unwrap_or("")))
-            .collect();
-        put(Field::ArtistCredit, printed.into());
-    }
-    for isrc in v["isrcs"].as_array().into_iter().flatten() {
-        put(Field::Isrc, isrc.clone());
-    }
-    out
-}
-
-/// Artist relationships become threads: member of, worked with.
-pub fn artist_threads(about: &ExternalRef, v: &Value) -> Vec<ThreadClaim> {
-    let mut out = vec![];
-    for rel in v["relations"].as_array().into_iter().flatten() {
-        let kind = match rel["type"].as_str() {
-            Some("member of band") => ThreadKind::MemberOf,
-            Some("collaboration") | Some("supporting musician") => ThreadKind::WorkedWith,
-            _ => continue,
-        };
-        let Some(id) = rel["artist"]["id"].as_str() else { continue };
-        let attrs: Vec<&str> = rel["attributes"].as_array().into_iter().flatten().filter_map(|a| a.as_str()).collect();
-        out.push(ThreadClaim {
-            from: about.clone(),
-            to: ExternalRef::mbid(RefKind::Agent, id),
-            to_name: rel["artist"]["name"].as_str().unwrap_or("").into(),
-            kind,
-            detail: (!attrs.is_empty()).then(|| attrs.join(", ")),
-            provenance: prov(&about.value),
-        });
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use serde_json::json;
+
     use super::*;
 
-    #[test]
-    fn reads_a_recording() {
-        let v: Value = serde_json::from_str(
-            r#"{"title":"Small Two of Pieces ~Broken Pieces~","length":391000,
-                "artist-credit":[{"name":"Joanne Hogg","joinphrase":""}],"isrcs":["JPDC09800217"]}"#,
-        )
-        .unwrap();
-        let s = ExternalRef::mbid(RefKind::Recording, "x");
-        let c = recording_claims(&s, &v);
-        assert_eq!(c.len(), 4);
-        assert!(c.iter().any(|c| c.field == Field::ArtistCredit && c.value == "Joanne Hogg"));
+    struct FixtureCache(HashMap<String, CachedResponse>);
+
+    impl Cache for FixtureCache {
+        fn get(&self, url: &str) -> Option<CachedResponse> {
+            Some(self.0.get(url).expect("unexpected request URL").clone())
+        }
+
+        fn put(&self, _url: &str, _response: &CachedResponse) {
+            panic!("cached lookups must not request the network");
+        }
     }
 
-    #[test]
-    fn reads_band_membership_as_a_thread() {
-        let v: Value = serde_json::from_str(
-            r#"{"relations":[{"type":"member of band","attributes":["lead vocals"],
-                "artist":{"id":"iona","name":"Iona"}}]}"#,
-        )
-        .unwrap();
-        let t = artist_threads(&ExternalRef::mbid(RefKind::Agent, "hogg"), &v);
-        assert_eq!(t[0].kind, ThreadKind::MemberOf);
-        assert_eq!(t[0].to_name, "Iona");
-        assert_eq!(t[0].detail.as_deref(), Some("lead vocals"));
+    #[tokio::test]
+    async fn catalog_dispatches_all_kinds_and_joins_the_work_browse() {
+        let fixtures = [
+            ("release/release?inc=artist-credits+labels+recordings+release-groups&fmt=json", include_str!("../tests/fixtures/release.json").into()),
+            ("recording/recording?inc=artist-credits+artist-rels+work-rels+isrcs&fmt=json", include_str!("../tests/fixtures/recording.json").into()),
+            ("artist/artist?inc=artist-rels&fmt=json", include_str!("../tests/fixtures/artist.json").into()),
+            ("work/work?inc=artist-rels&fmt=json", json!({"title":"Cloud Study"}).to_string()),
+            ("recording?work=work&inc=artist-credits&limit=100&fmt=json", json!({"recording-count":150,"recordings":[{"id":"other","title":"Cloud Study live"}]}).to_string()),
+        ];
+        let now = Context::now_ms();
+        let cache = FixtureCache(fixtures.into_iter().map(|(path, body)| {
+            (format!("{BASE}/{path}"), CachedResponse { status: 200, body, fetched_at: now })
+        }).collect());
+        let ctx = Context {
+            http: Http::new("Meret test").with_cache(Arc::new(cache), 60_000),
+            kv: Arc::new(MemoryKv::default()),
+            provider: "musicbrainz",
+        };
+        for (kind, id) in [(RefKind::Release, "release"), (RefKind::Recording, "recording"), (RefKind::Agent, "artist"), (RefKind::Work, "work")] {
+            let lookup = MusicBrainz.lookup(&ctx, &ExternalRef::mbid(kind, id)).await.unwrap();
+            assert!(!lookup.claims.is_empty());
+            assert!(lookup.claims.iter().all(|c| c.provenance.source == "musicbrainz" && c.provenance.fetched_at >= now));
+            if kind == RefKind::Work {
+                assert!(lookup.claims.iter().any(|c| c.field == Field::RecordingCount && c.value == 150));
+                assert_eq!(lookup.threads.len(), 1);
+                assert_eq!(lookup.threads[0].to.value, "work");
+                assert_eq!(lookup.threads[0].from.value, "other");
+            }
+        }
+        for subject in [
+            ExternalRef::mbid(RefKind::Edition, "unsupported"),
+            ExternalRef { namespace: "elsewhere".into(), kind: RefKind::Recording, value: "unsupported".into() },
+        ] {
+            assert_eq!(MusicBrainz.lookup(&ctx, &subject).await.unwrap(), Lookup::default());
+        }
     }
 }

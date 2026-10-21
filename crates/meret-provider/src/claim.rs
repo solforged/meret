@@ -26,6 +26,13 @@ impl ExternalRef {
     }
 }
 
+/// What one lookup learned.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Lookup {
+    pub claims: Vec<Claim>,
+    pub threads: Vec<ThreadClaim>,
+}
+
 /// One fact about one subject, from one source.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Claim {
@@ -45,6 +52,11 @@ pub enum Field {
     Genre,
     Label,
     CatalogNumber,
+    /// A recording's release, disc, track and printed title.
+    Position,
+    AgentType,
+    SortName,
+    RecordingCount,
     /// The credited name as printed ("Mitsuda, Uematsu, Matsueda").
     ArtistCredit,
     /// A person in a role; the value is `{ "agent": ExternalRef, "name": "…", "detail": "…" }`.

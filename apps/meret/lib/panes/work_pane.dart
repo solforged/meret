@@ -9,11 +9,13 @@ import 'pane.dart';
 import 'release_pane.dart';
 
 class WorkPane extends StatefulWidget {
-  const WorkPane({super.key, required this.core, required this.id, required this.onFollow});
+  const WorkPane({super.key, required this.core, required this.id, required this.onFollow, this.libraryVersion, this.lookupsVersion});
 
   final CoreBridge core;
   final PlatformInt64 id;
-  final Future<void> Function(TargetDto, ThreadKind) onFollow;
+  final Future<void> Function(TargetDto, ThreadKind, String) onFollow;
+  final BigInt? libraryVersion;
+  final BigInt? lookupsVersion;
 
   @override
   State<WorkPane> createState() => _WorkPaneState();
@@ -35,7 +37,7 @@ class _WorkPaneState extends State<WorkPane> {
   @override
   void didUpdateWidget(WorkPane old) {
     super.didUpdateWidget(old);
-    if (old.id != widget.id || old.core != widget.core) _load();
+    if (old.id != widget.id || old.core != widget.core || old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) _load();
   }
 
   @override
@@ -75,7 +77,7 @@ class _WorkPaneState extends State<WorkPane> {
 
   Future<void> _follow(ThreadDto thread) async {
     try {
-      await widget.onFollow(thread.to, thread.kind);
+      await widget.onFollow(thread.to, thread.kind, thread.provider);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     }
@@ -134,7 +136,7 @@ class _WorkPaneState extends State<WorkPane> {
                   child: GestureDetector(
                     key: ValueKey('work-album-${row.trackId}'),
                     onTap: () => _follow(ThreadDto(
-                      kind: ThreadKind.appearsOn, label: 'on', source: 'tags',
+                      kind: ThreadKind.appearsOn, label: 'on', source: 'tags', provider: 'local_tags',
                       to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
                     )),
                     child: Text(row.album, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -179,6 +181,7 @@ class _WorkPaneState extends State<WorkPane> {
         SliverList(delegate: SliverChildBuilderDelegate(
           (_, i) => _row(work.rows[i], i), childCount: work.rows.length,
         )),
+        ..._section(work.recordingsKnown == null ? 'Other recordings' : 'Other recordings · ${work.recordingsKnown} known', work.others),
         const SliverToBoxAdapter(child: SizedBox(height: 20)),
       ]),
     );
