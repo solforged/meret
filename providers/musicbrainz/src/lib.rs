@@ -2,7 +2,7 @@
 //! https://musicbrainz.org/doc/MusicBrainz_API
 
 mod parsers;
-pub use parsers::{artist, recording, release, work};
+pub use parsers::{artist, recording, release, release_hits, work};
 
 use async_trait::async_trait;
 use meret_provider::*;
@@ -65,9 +65,28 @@ impl Catalog for MusicBrainz {
         Ok(lookup)
     }
 
-    async fn search(&self, _ctx: &Context, _query: &CatalogQuery) -> Result<Vec<CatalogHit>> {
-        Ok(vec![])
+    /// Releases by title, and by artist when given: `release` names the release.
+    /// The search is by words, loosely; the caller decides what matches.
+    async fn search(&self, ctx: &Context, query: &CatalogQuery) -> Result<Vec<CatalogHit>> {
+        let Some(title) = &query.release else { return Ok(vec![]) };
+        let mut lucene = format!("release:({})", words(title));
+        if let Some(artist) = &query.artist {
+            lucene.push_str(&format!(" AND artist:({})", words(artist)));
+        }
+        let url = Http::url(&format!("{BASE}/release"), &[("query", &lucene), ("limit", "10"), ("fmt", "json")]);
+        Ok(release_hits(&ctx.http.get_json(&url).await?))
     }
+}
+
+/// Text as Lucene search words: lower case, so "AND" and "OR" in a title
+/// stay words, with the rest of the query syntax escaped.
+fn words(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars().flat_map(char::to_lowercase) {
+        if "+-&|!(){}[]^\"~*?:\\/".contains(c) { out.push('\\') }
+        out.push(c);
+    }
+    out
 }
 
 #[cfg(test)]

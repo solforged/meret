@@ -57,7 +57,7 @@ impl Api {
         let setting = self.core.settings().lookups;
         if setting == meret_core::Lookups::Unasked {
             let summary = self.core.lookup_summary().map_err(|e| e.to_string())?;
-            if summary.releases + summary.recordings + summary.people > 0 {
+            if summary.releases + summary.recordings + summary.people + summary.unidentified > 0 {
                 front.lookups = Some(LookupStatusDto::new(setting, summary));
             }
         }

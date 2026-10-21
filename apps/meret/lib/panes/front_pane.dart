@@ -180,10 +180,11 @@ class _FrontPaneState extends State<FrontPane> {
       _door(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Text('MusicBrainz lookups', style: Tok.body),
         Text([
-          'sends MusicBrainz IDs from tags',
+          'sends IDs, album titles and album artists from tags',
           if (lookups.releases > BigInt.zero) _count(lookups.releases, 'release'),
           if (lookups.recordings > BigInt.zero) _count(lookups.recordings, 'track'),
           if (lookups.people > BigInt.zero) '${_n(lookups.people)} ${lookups.people == BigInt.one ? 'person' : 'people'}',
+          if (lookups.unidentified > BigInt.zero) '${_n(lookups.unidentified)} to match by name',
         ].join(' · '), style: Tok.label),
         const SizedBox(height: 6),
         PaneActions(

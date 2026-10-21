@@ -91,9 +91,18 @@ pub struct CatalogQuery {
 pub struct CatalogHit {
     pub subject: ExternalRef,
     pub title: String,
+    /// The credit as printed.
     pub artist: String,
     pub length_ms: Option<u64>,
+    /// 0.0 to 1.0, as the catalogue ranks it.
     pub score: f32,
+    /// For a release: its tracks and discs.
+    pub tracks: Option<u32>,
+    pub discs: Option<u32>,
+    /// Every name the credited people go by here: as credited, their own, and their sort name.
+    pub artists: Vec<String>,
+    /// The release group a release belongs to.
+    pub group: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

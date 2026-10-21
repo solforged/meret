@@ -491,7 +491,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
             child: _button(label, _savingLookups ? null : () => _setLookups(setting), primary: _lookupStatus!.setting == setting),
           ),
       ]),
-      note: 'sends MusicBrainz IDs from tags'),
+      note: 'sends IDs, album titles and album artists from tags'),
     if (_lookupStatus case final lookups?)
       if (lookups.lookedUp > BigInt.zero || lookups.waiting > BigInt.zero || lookups.failed > BigInt.zero)
         Padding(
@@ -500,6 +500,8 @@ class _SettingsWindowState extends State<_SettingsWindow> {
             if (lookups.lookedUp > BigInt.zero) '${_count(lookups.lookedUp)} looked up',
             if (lookups.waiting > BigInt.zero) '${_count(lookups.waiting)} waiting',
             if (lookups.failed > BigInt.zero) '${_count(lookups.failed)} failed',
+            if (lookups.matched > BigInt.zero) '${_count(lookups.matched)} ${lookups.matched == BigInt.one ? 'release' : 'releases'} matched by name',
+            if (lookups.unidentified > BigInt.zero) '${_count(lookups.unidentified)} without an ID',
           ].join(' · '), style: Tok.monoSmall),
         ),
     _futureRow('AcoustID', 'Fingerprints made on this Mac'),
