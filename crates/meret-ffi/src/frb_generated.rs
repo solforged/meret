@@ -1832,6 +1832,8 @@ const _: fn() = || {
         let _: u64 = LookupStatusDto.releases;
         let _: u64 = LookupStatusDto.recordings;
         let _: u64 = LookupStatusDto.people;
+        let _: u64 = LookupStatusDto.unidentified;
+        let _: u64 = LookupStatusDto.matched;
         let _: u64 = LookupStatusDto.looked_up;
         let _: u64 = LookupStatusDto.waiting;
         let _: u64 = LookupStatusDto.failed;
@@ -2970,6 +2972,8 @@ impl SseDecode for crate::api::types::LookupStatusDto {
         let mut var_releases = <u64>::sse_decode(deserializer);
         let mut var_recordings = <u64>::sse_decode(deserializer);
         let mut var_people = <u64>::sse_decode(deserializer);
+        let mut var_unidentified = <u64>::sse_decode(deserializer);
+        let mut var_matched = <u64>::sse_decode(deserializer);
         let mut var_lookedUp = <u64>::sse_decode(deserializer);
         let mut var_waiting = <u64>::sse_decode(deserializer);
         let mut var_failed = <u64>::sse_decode(deserializer);
@@ -2978,6 +2982,8 @@ impl SseDecode for crate::api::types::LookupStatusDto {
             releases: var_releases,
             recordings: var_recordings,
             people: var_people,
+            unidentified: var_unidentified,
+            matched: var_matched,
             looked_up: var_lookedUp,
             waiting: var_waiting,
             failed: var_failed,
@@ -4542,6 +4548,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::LookupStatu
             self.0.releases.into_into_dart().into_dart(),
             self.0.recordings.into_into_dart().into_dart(),
             self.0.people.into_into_dart().into_dart(),
+            self.0.unidentified.into_into_dart().into_dart(),
+            self.0.matched.into_into_dart().into_dart(),
             self.0.looked_up.into_into_dart().into_dart(),
             self.0.waiting.into_into_dart().into_dart(),
             self.0.failed.into_into_dart().into_dart(),
@@ -6103,6 +6111,8 @@ impl SseEncode for crate::api::types::LookupStatusDto {
         <u64>::sse_encode(self.releases, serializer);
         <u64>::sse_encode(self.recordings, serializer);
         <u64>::sse_encode(self.people, serializer);
+        <u64>::sse_encode(self.unidentified, serializer);
+        <u64>::sse_encode(self.matched, serializer);
         <u64>::sse_encode(self.looked_up, serializer);
         <u64>::sse_encode(self.waiting, serializer);
         <u64>::sse_encode(self.failed, serializer);

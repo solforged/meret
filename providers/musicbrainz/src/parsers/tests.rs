@@ -159,3 +159,21 @@ fn work_credits_and_browse_recordings_form_one_lookup() {
     assert!(lookup.threads.iter().all(|t| t.to == subject && t.kind == ThreadKind::RecordingOf && t.to_name == "Cloud Study"));
     assert_eq!(work(&subject, &Value::Null, &Value::Null), Lookup::default());
 }
+
+#[test]
+fn release_hits_carry_counts_names_and_groups() {
+    let value = json!({"releases":[
+        {"id":"r1","score":100,"title":"Fixture Suite","track-count":102,
+         "artist-credit":[{"name":"Ada Brennan","joinphrase":" & ","artist":{"id":"a","name":"Ada Brennan","sort-name":"Brennan, Ada"}},
+                          {"name":"Tomas Vey","artist":{"id":"t","name":"Tomas Vey","sort-name":"Vey, Tomas"}}],
+         "release-group":{"id":"g1"},"media":[{"track-count":40},{"track-count":62}]},
+        {"id":"r2","score":61,"title":"Fixture Suite (Live)"}
+    ]});
+    let hits = release_hits(&value);
+    assert_eq!(hits.len(), 2);
+    let first = &hits[0];
+    assert_eq!((first.subject.value.as_str(), first.artist.as_str(), first.score), ("r1", "Ada Brennan & Tomas Vey", 1.0));
+    assert_eq!((first.tracks, first.discs, first.group.as_deref()), (Some(102), Some(2), Some("g1")));
+    assert_eq!(first.artists, ["Ada Brennan", "Brennan, Ada", "Tomas Vey", "Vey, Tomas"]);
+    assert_eq!((hits[1].tracks, hits[1].discs, hits[1].artists.len()), (None, None, 0));
+}

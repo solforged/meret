@@ -2276,16 +2276,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LookupStatusDto dco_decode_lookup_status_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return LookupStatusDto(
       setting: dco_decode_lookups_dto(arr[0]),
       releases: dco_decode_u_64(arr[1]),
       recordings: dco_decode_u_64(arr[2]),
       people: dco_decode_u_64(arr[3]),
-      lookedUp: dco_decode_u_64(arr[4]),
-      waiting: dco_decode_u_64(arr[5]),
-      failed: dco_decode_u_64(arr[6]),
+      unidentified: dco_decode_u_64(arr[4]),
+      matched: dco_decode_u_64(arr[5]),
+      lookedUp: dco_decode_u_64(arr[6]),
+      waiting: dco_decode_u_64(arr[7]),
+      failed: dco_decode_u_64(arr[8]),
     );
   }
 
@@ -3807,6 +3809,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_releases = sse_decode_u_64(deserializer);
     var var_recordings = sse_decode_u_64(deserializer);
     var var_people = sse_decode_u_64(deserializer);
+    var var_unidentified = sse_decode_u_64(deserializer);
+    var var_matched = sse_decode_u_64(deserializer);
     var var_lookedUp = sse_decode_u_64(deserializer);
     var var_waiting = sse_decode_u_64(deserializer);
     var var_failed = sse_decode_u_64(deserializer);
@@ -3815,6 +3819,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       releases: var_releases,
       recordings: var_recordings,
       people: var_people,
+      unidentified: var_unidentified,
+      matched: var_matched,
       lookedUp: var_lookedUp,
       waiting: var_waiting,
       failed: var_failed,
@@ -5436,6 +5442,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.releases, serializer);
     sse_encode_u_64(self.recordings, serializer);
     sse_encode_u_64(self.people, serializer);
+    sse_encode_u_64(self.unidentified, serializer);
+    sse_encode_u_64(self.matched, serializer);
     sse_encode_u_64(self.lookedUp, serializer);
     sse_encode_u_64(self.waiting, serializer);
     sse_encode_u_64(self.failed, serializer);

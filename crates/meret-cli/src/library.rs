@@ -566,8 +566,8 @@ pub fn lookups(api: &Api, rt: &tokio::runtime::Runtime, answer: Option<meret_api
     let mut last = None;
     loop {
         let l = api.lookups().map_err(anyhow::Error::msg)?;
-        let line = format!("{:?} · tags carry {} releases, {} recordings, {} people · {} looked up, {} waiting, {} failed",
-            l.setting, l.releases, l.recordings, l.people, l.looked_up, l.waiting, l.failed);
+        let line = format!("{:?} · tags carry {} releases, {} recordings, {} people · {} matched by name, {} without an ID · {} looked up, {} waiting, {} failed",
+            l.setting, l.releases, l.recordings, l.people, l.matched, l.unidentified, l.looked_up, l.waiting, l.failed);
         if last.as_ref() != Some(&line) {
             println!("{line}  ({:.1?})", t.elapsed());
             last = Some(line);

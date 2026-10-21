@@ -69,7 +69,7 @@ impl Store {
 
     pub fn finish_job(&self, id: i64, now_ms: i64) -> Result<()> {
         self.writer.write(move |tx| {
-            tx.execute("UPDATE job SET state = 'done', updated_at = ?2 WHERE id = ?1", (id, now_ms))?;
+            tx.execute("UPDATE job SET state = 'done', last_error = NULL, updated_at = ?2 WHERE id = ?1", (id, now_ms))?;
             Ok(())
         })
     }

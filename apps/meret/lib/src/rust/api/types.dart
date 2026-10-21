@@ -570,6 +570,8 @@ class LookupStatusDto {
   final BigInt releases;
   final BigInt recordings;
   final BigInt people;
+  final BigInt unidentified;
+  final BigInt matched;
   final BigInt lookedUp;
   final BigInt waiting;
   final BigInt failed;
@@ -579,6 +581,8 @@ class LookupStatusDto {
     required this.releases,
     required this.recordings,
     required this.people,
+    required this.unidentified,
+    required this.matched,
     required this.lookedUp,
     required this.waiting,
     required this.failed,
@@ -590,6 +594,8 @@ class LookupStatusDto {
       releases.hashCode ^
       recordings.hashCode ^
       people.hashCode ^
+      unidentified.hashCode ^
+      matched.hashCode ^
       lookedUp.hashCode ^
       waiting.hashCode ^
       failed.hashCode;
@@ -603,6 +609,8 @@ class LookupStatusDto {
           releases == other.releases &&
           recordings == other.recordings &&
           people == other.people &&
+          unidentified == other.unidentified &&
+          matched == other.matched &&
           lookedUp == other.lookedUp &&
           waiting == other.waiting &&
           failed == other.failed;

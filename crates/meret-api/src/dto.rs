@@ -90,6 +90,10 @@ pub struct LookupStatusDto {
     pub releases: u64,
     pub recordings: u64,
     pub people: u64,
+    /// Releases without an ID, to match by album title and artist.
+    pub unidentified: u64,
+    /// Releases a match by name identified.
+    pub matched: u64,
     pub looked_up: u64,
     pub waiting: u64,
     pub failed: u64,
@@ -102,6 +106,8 @@ impl LookupStatusDto {
             releases: s.releases,
             recordings: s.recordings,
             people: s.people,
+            unidentified: s.unidentified,
+            matched: s.matched,
             looked_up: s.jobs.done,
             waiting: s.jobs.queued + s.jobs.running,
             failed: s.jobs.failed,

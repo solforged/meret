@@ -1,5 +1,5 @@
 use meret_model::{Provenance, ThreadKind};
-use meret_provider::{Claim, ExternalRef, Field, Lookup, RefKind, ThreadClaim};
+use meret_provider::{CatalogHit, Claim, ExternalRef, Field, Lookup, RefKind, ThreadClaim};
 use serde_json::{Value, json};
 
 fn provenance(subject: &ExternalRef) -> Provenance {
@@ -82,6 +82,34 @@ pub fn release(subject: &ExternalRef, value: &Value) -> Lookup {
         }
     }
     out
+}
+
+/// A release search's results, each with its tracks, discs, every name its
+/// credited people go by, and its release group.
+pub fn release_hits(value: &Value) -> Vec<CatalogHit> {
+    value["releases"].as_array().into_iter().flatten().filter_map(|r| {
+        let id = r["id"].as_str()?;
+        let credits = r["artist-credit"].as_array().map(Vec::as_slice).unwrap_or_default();
+        let artist = credits.iter()
+            .map(|c| format!("{}{}", c["name"].as_str().or_else(|| c["artist"]["name"].as_str()).unwrap_or(""), c["joinphrase"].as_str().unwrap_or("")))
+            .collect();
+        let mut artists: Vec<String> = credits.iter()
+            .flat_map(|c| [c["name"].as_str(), c["artist"]["name"].as_str(), c["artist"]["sort-name"].as_str()])
+            .flatten().map(str::to_owned).collect();
+        artists.dedup();
+        let media = r["media"].as_array();
+        Some(CatalogHit {
+            subject: ExternalRef::mbid(RefKind::Release, id),
+            title: r["title"].as_str()?.into(),
+            artist,
+            length_ms: None,
+            score: r["score"].as_u64().unwrap_or(0) as f32 / 100.0,
+            tracks: r["track-count"].as_u64().map(|n| n as u32),
+            discs: media.map(|m| m.len() as u32),
+            artists,
+            group: r["release-group"]["id"].as_str().map(Into::into),
+        })
+    }).collect()
 }
 
 /// Recording facts, performers and related works.
