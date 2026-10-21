@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -88,6 +89,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
   SettingsDto? _settings;
   FrontDto? _front;
   StatusDto? _status;
+  LookupStatusDto? _lookupStatus;
   NowDto? _now;
   List<OutputDeviceDto>? _devices;
   StreamSubscription<StatusDto>? _statusSub;
@@ -98,6 +100,8 @@ class _SettingsWindowState extends State<_SettingsWindow> {
   RootDto? _confirmRemove;
   bool _saving = false;
   bool _changingFolders = false;
+  bool _savingLookups = false;
+  int _lookupsGeneration = 0;
 
   @override
   void initState() {
@@ -105,13 +109,20 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     _loadSettings();
     _loadFront();
     _loadDevices();
+    _loadLookups();
     _nowSub = widget.core.now().listen((now) {
       if (mounted) setState(() => _now = now);
     });
     _statusSub = widget.core.status().listen((status) {
       final changed = _status != null && _status!.libraryVersion != status.libraryVersion;
+      final lookupsChanged = _status != null && (
+        _status!.lookupsVersion != status.lookupsVersion ||
+        !listEquals(_status!.jobs, status.jobs) ||
+        _status!.sources.where((source) => source.key == 'musicbrainz').firstOrNull !=
+          status.sources.where((source) => source.key == 'musicbrainz').firstOrNull);
       if (mounted) setState(() => _status = status);
       if (changed) _loadFront();
+      if (lookupsChanged) _loadLookups();
     });
   }
 
@@ -140,6 +151,32 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     }
   }
 
+  Future<void> _loadLookups() async {
+    final generation = ++_lookupsGeneration;
+    try {
+      final lookups = await widget.core.lookups();
+      if (!mounted || generation != _lookupsGeneration) return;
+      setState(() => _lookupStatus = lookups);
+      _loadSettings();
+    } catch (error) {
+      if (mounted && generation == _lookupsGeneration) setState(() => _error = error.toString());
+    }
+  }
+
+  Future<void> _setLookups(LookupsDto setting) async {
+    setState(() { _savingLookups = true; _error = null; });
+    try {
+      await widget.core.setLookups(setting);
+      if (!mounted) return;
+      await _loadLookups();
+      if (mounted && _settings != null) widget.onChanged(_settings!);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _savingLookups = false);
+    }
+  }
+
   Future<void> _loadDevices() async {
     try {
       final devices = await widget.core.outputDevices();
@@ -155,6 +192,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
       light: light ?? current.light,
       outputDevice: changeDevice ? outputDevice : current.outputDevice,
       exclusive: exclusive ?? current.exclusive,
+      lookups: current.lookups,
     );
     setState(() { _saving = true; _error = null; });
     try {
@@ -445,7 +483,25 @@ class _SettingsWindowState extends State<_SettingsWindow> {
 
   Widget _lookups() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     _heading('Lookups'),
-    _futureRow('MusicBrainz', 'Recordings and credits from your tags'),
+    _settingRow('MusicBrainz',
+      _lookupStatus == null ? const Text('Reading lookups…', style: Tok.label) : Wrap(spacing: 8, children: [
+        for (final (setting, label) in [(LookupsDto.allowed, 'Allow'), (LookupsDto.off, 'Off')])
+          Semantics(
+            selected: _lookupStatus!.setting == setting,
+            child: _button(label, _savingLookups ? null : () => _setLookups(setting), primary: _lookupStatus!.setting == setting),
+          ),
+      ]),
+      note: 'sends MusicBrainz IDs from tags'),
+    if (_lookupStatus case final lookups?)
+      if (lookups.lookedUp > BigInt.zero || lookups.waiting > BigInt.zero || lookups.failed > BigInt.zero)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text([
+            if (lookups.lookedUp > BigInt.zero) '${_count(lookups.lookedUp)} looked up',
+            if (lookups.waiting > BigInt.zero) '${_count(lookups.waiting)} waiting',
+            if (lookups.failed > BigInt.zero) '${_count(lookups.failed)} failed',
+          ].join(' · '), style: Tok.monoSmall),
+        ),
     _futureRow('AcoustID', 'Fingerprints made on this Mac'),
   ]);
 

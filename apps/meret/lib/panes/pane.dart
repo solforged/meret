@@ -11,20 +11,24 @@ String playsFact(BigInt plays, PlatformInt64? lastPlayedMs) {
   return lastPlayedMs == null ? count : '$count · last ${dayWord(lastPlayedMs.toInt())}';
 }
 
-/// Plate 01's actions row: one gold primary, then the actions that aren't
-/// built yet, greyed, each saying so on hover. Want and Crate arrive with
-/// their stores.
+/// One primary action, with a second choice or the planned Want and Crate actions.
 class PaneActions extends StatelessWidget {
-  const PaneActions({super.key, required this.primary, required this.onPrimary, this.primaryKey});
+  const PaneActions({super.key, required this.primary, required this.onPrimary, this.primaryKey, this.secondary, this.onSecondary});
   final String primary;
   final VoidCallback? onPrimary;
   final Key? primaryKey;
+  final String? secondary;
+  final VoidCallback? onSecondary;
 
   @override
   Widget build(BuildContext context) => Wrap(spacing: 8, runSpacing: 8, children: [
-    _ActionButton(key: primaryKey, label: primary, hint: 'Space', primary: true, onTap: onPrimary),
-    const _ActionButton(label: 'Want', hint: 'W', later: true),
-    const _ActionButton(label: 'Crate', hint: 'C', later: true),
+    _ActionButton(key: primaryKey, label: primary, hint: secondary == null ? 'Space' : '', primary: true, onTap: onPrimary),
+    if (secondary case final label?)
+      _ActionButton(label: label, hint: '', onTap: onSecondary)
+    else ...[
+      const _ActionButton(label: 'Want', hint: 'W', later: true),
+      const _ActionButton(label: 'Crate', hint: 'C', later: true),
+    ],
   ]);
 }
 
@@ -57,8 +61,10 @@ class _ActionButton extends StatelessWidget {
               fontWeight: primary ? FontWeight.w600 : FontWeight.w500,
               color: primary && enabled ? Tok.sky : enabled ? Tok.ink : Tok.faint,
             )),
-            const SizedBox(width: 6),
-            Text(hint, style: Tok.label.copyWith(color: primary && enabled ? Tok.sky.withValues(alpha: 0.6) : Tok.faint, letterSpacing: 0)),
+            if (hint.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Text(hint, style: Tok.label.copyWith(color: primary && enabled ? Tok.sky.withValues(alpha: 0.6) : Tok.faint, letterSpacing: 0)),
+            ],
           ]),
         ),
       ),

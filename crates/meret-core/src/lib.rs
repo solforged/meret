@@ -5,6 +5,7 @@
 mod facets;
 mod local_zone;
 mod listens;
+mod lookups;
 mod now;
 mod scan;
 #[cfg(target_os = "macos")]
@@ -35,7 +36,7 @@ use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError, ZoneFidelity
 use meret_provider::Registry;
 use meret_query::{Input, Term, parse};
 use meret_store::{HotColumns, LibraryFacts, PersonHit, ReleaseHit, Store, TrackRow};
-pub use meret_store::{Colleague, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
+pub use meret_store::{Colleague, OtherRecording, PersonLink, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, watch};
 
@@ -44,7 +45,8 @@ pub use local_zone::{LocalZone, file_uri};
 pub use now::NowState;
 pub use picks::{Pick, Why};
 pub use status::{SourceStatus, StatusState};
-pub use meret_store::{LightLevel, Settings};
+pub use meret_store::{JobCounts, LightLevel, Lookups, Settings};
+pub use lookups::LookupSummary;
 pub use suggestions::{FolderKind, FolderSuggestion};
 pub use views::{GroupRow, Item, List, PageItem, RowsPage, SortKey, View};
 
@@ -169,6 +171,12 @@ pub struct Core {
     events: broadcast::Sender<EngineEvent>,
     scans: Sender<ScanRequest>,
     cover_report: Mutex<meret_library::CoverReport>,
+    /// The HTTP client every lookup shares: per-host pacing and `cache.db`.
+    http: meret_provider::Http,
+    lookups_wake: Sender<()>,
+    /// Taken by the runner when the core starts; tests never start one.
+    lookups_wakes: Mutex<Option<crossbeam_channel::Receiver<()>>>,
+    lookup_state: Mutex<lookups::State>,
     lists: Mutex<VecDeque<Arc<List>>>,
     settings: Mutex<Settings>,
     open_listen: Mutex<Option<listens::Open>>,
@@ -197,6 +205,7 @@ pub fn start(mut config: CoreConfig) -> Result<Arc<Core>> {
     let core = CORE.get_or_init(|| core).clone();
     now::spawn_pump(core.clone());
     scan::spawn_worker(core.clone(), requests);
+    lookups::spawn_runner(core.clone());
     let _ = core.scans.send(ScanRequest::LoadColumns);
     #[cfg(target_os = "macos")]
     fswatch::start(&core);
@@ -211,8 +220,12 @@ pub fn get() -> Option<Arc<Core>> {
 
 impl Core {
     fn new(mut config: CoreConfig, scans: Sender<ScanRequest>) -> Result<Self> {
+        let (lookups_wake, lookups_wakes) = crossbeam_channel::unbounded();
         std::fs::create_dir_all(&config.data_dir)?;
         let store = Store::open(&config.data_dir.join("library.db"))?;
+        let cache = meret_store::HttpCache::open(&config.data_dir.join("cache.db"))?;
+        let http = meret_provider::Http::new(&format!("Meret/{} ( {} )", env!("CARGO_PKG_VERSION"), config.contact))
+            .with_cache(Arc::new(lookups::StoredResponses(cache)), lookups::CACHE_TTL_MS);
         let device_id = store.device_id()?;
         let saved = store.settings()?;
         let has_saved = saved.is_some();
@@ -255,6 +268,7 @@ impl Core {
             .worker_threads(2)
             .thread_name("meret-core")
             .enable_time()
+            .enable_io()
             .build()?;
 
         let status = status::initial(&registry);
@@ -275,6 +289,10 @@ impl Core {
             events: broadcast::channel(256).0,
             scans,
             cover_report: Mutex::new(meret_library::CoverReport::default()),
+            http,
+            lookups_wake,
+            lookups_wakes: Mutex::new(Some(lookups_wakes)),
+            lookup_state: Mutex::new(lookups::State::default()),
             lists: Mutex::new(VecDeque::with_capacity(LISTS)),
             settings: Mutex::new(settings),
             open_listen: Mutex::new(None),
@@ -327,7 +345,14 @@ impl Core {
                 device: settings.output_device.clone(), exclusive: settings.exclusive,
             });
         }
+        let asked = current.lookups != settings.lookups;
         *current = settings;
+        drop(current);
+        if asked {
+            lookups::seed(self);
+            lookups::wake(self);
+            lookups::publish(self);
+        }
         Ok(())
     }
 
@@ -555,13 +580,16 @@ impl Core {
         })
     }
 
-    /// A release pane. None when the release doesn't exist.
+    /// A release pane. None when the release doesn't exist. Opening one puts
+    /// its lookup first in line, so its facts come while you look.
     pub fn release(&self, release: ReleaseId) -> Result<Option<ReleasePage>> {
+        lookups::opened(self, meret_model::EntityKind::Release, release.0);
         Ok(self.store.release_page(release)?)
     }
 
     /// A person pane. None when the person doesn't exist.
     pub fn person(&self, agent: AgentId) -> Result<Option<PersonPage>> {
+        lookups::opened(self, meret_model::EntityKind::Agent, agent.0);
         Ok(self.store.person_page(agent)?)
     }
 
@@ -573,7 +601,14 @@ impl Core {
 
     /// A work pane. None when the work doesn't exist.
     pub fn work(&self, work: WorkId) -> Result<Option<WorkPage>> {
+        lookups::opened(self, meret_model::EntityKind::Work, work.0);
         Ok(self.store.work_page(work)?)
+    }
+
+    /// The MusicBrainz IDs the tags carry and what the lookups have done:
+    /// the consent question's counts, and Settings › Lookups.
+    pub fn lookup_summary(&self) -> Result<LookupSummary> {
+        Ok(lookups::summary(self)?)
     }
 
     /// Plays a work's recordings from row `index`, replacing the queue.

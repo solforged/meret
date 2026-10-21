@@ -8,16 +8,26 @@ pub enum LightLevel {
     AccentAndWash,
 }
 
+/// Whether Meret may look things up online. Asked once, before the first lookup.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Lookups {
+    #[default]
+    Unasked,
+    Allowed,
+    Off,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
     pub light: LightLevel,
     pub output_device: Option<String>,
     pub exclusive: bool,
+    pub lookups: Lookups,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { light: LightLevel::Accent, output_device: None, exclusive: true }
+        Self { light: LightLevel::Accent, output_device: None, exclusive: true, lookups: Lookups::Unasked }
     }
 }
 
@@ -38,6 +48,11 @@ impl Store {
                     },
                     "output_device" => settings.output_device = (!value.is_empty()).then_some(value),
                     "exclusive" => settings.exclusive = value != "false",
+                    "lookups" => settings.lookups = match value.as_str() {
+                        "allowed" => Lookups::Allowed,
+                        "off" => Lookups::Off,
+                        _ => Lookups::Unasked,
+                    },
                     _ => continue,
                 }
                 found = true;
@@ -57,6 +72,11 @@ impl Store {
                 ("light", light),
                 ("output_device", settings.output_device.as_deref().unwrap_or("")),
                 ("exclusive", if settings.exclusive { "true" } else { "false" }),
+                ("lookups", match settings.lookups {
+                    Lookups::Unasked => "unasked",
+                    Lookups::Allowed => "allowed",
+                    Lookups::Off => "off",
+                }),
             ] {
                 tx.execute(
                     "INSERT INTO setting (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -101,8 +121,8 @@ mod tests {
         let path = dir.join("library.db");
         let store = Store::open(&path).unwrap();
         assert_eq!(store.settings().unwrap(), None);
-        assert_eq!(Settings::default(), Settings { light: LightLevel::Accent, output_device: None, exclusive: true });
-        let saved = Settings { light: LightLevel::AccentAndWash, output_device: Some("test-device".into()), exclusive: false };
+        assert_eq!(Settings::default(), Settings { light: LightLevel::Accent, output_device: None, exclusive: true, lookups: Lookups::Unasked });
+        let saved = Settings { light: LightLevel::AccentAndWash, output_device: Some("test-device".into()), exclusive: false, lookups: Lookups::Allowed };
         store.set_settings(saved.clone()).unwrap();
         assert_eq!(store.settings().unwrap(), Some(saved.clone()));
         drop(store);

@@ -67,7 +67,6 @@ class _StatusLineState extends State<StatusLine> {
       onSettings: () => showSettings(context, section: section),
       content: switch (source.key) {
         'local' => _local(status),
-        'musicbrainz' => const Text('Never contacted.', style: Tok.body),
         _ => Text(source.detail, style: Tok.body),
       },
       child: Row(mainAxisSize: MainAxisSize.min, children: [

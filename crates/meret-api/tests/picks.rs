@@ -48,7 +48,7 @@ fn picks_rank_dormant_then_the_trail_then_never_played_by_the_day() {
     listen(&core, 2, 390 * DAY, 10_000);
     let api = Api::new(core.clone());
     let root = api.start_trail(TargetDto::Search { query: "reached".into() });
-    api.follow(root.current, TargetDto::Release { id: 2 }, ThreadKind::Matched).unwrap();
+    api.follow(root.current, TargetDto::Release { id: 2 }, ThreadKind::Matched, "library").unwrap();
 
     let picks = core.picks(5, now).unwrap();
     assert_eq!(picks.iter().map(|p| p.release.0).collect::<Vec<_>>(), [1, 2, 3, 4], "no fifth: it has no file");

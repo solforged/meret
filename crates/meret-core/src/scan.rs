@@ -142,5 +142,6 @@ fn reload_result(core: &Core) -> crate::Result<()> {
     let tracks = cols.len() as u64;
     *core.columns.write() = cols;
     core.status.send_modify(|s| status::set_library(s, tracks));
+    crate::lookups::seed(core);
     Ok(())
 }

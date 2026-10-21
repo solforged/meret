@@ -61,7 +61,7 @@ fn saved_settings_override_startup_output_but_absent_settings_keep_host_defaults
     let (scans, _) = crossbeam_channel::unbounded();
     let core = Core::new(config.clone(), scans).unwrap();
     assert_eq!(core.settings(), Settings { output_device: Some("host-default".into()), exclusive: false, ..Settings::default() });
-    let saved = Settings { light: LightLevel::AccentAndWash, output_device: Some("saved-device".into()), exclusive: true };
+    let saved = Settings { light: LightLevel::AccentAndWash, output_device: Some("saved-device".into()), exclusive: true, ..Settings::default() };
     core.set_settings(saved.clone()).unwrap();
     drop(core);
     let (scans, _) = crossbeam_channel::unbounded();
