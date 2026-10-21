@@ -110,6 +110,11 @@ impl Http {
         }
     }
 
+    /// `base` with `params` percent-encoded as its query string.
+    pub fn url(base: &str, params: &[(&str, &str)]) -> String {
+        reqwest::Url::parse_with_params(base, params).map(String::from).unwrap_or_else(|_| base.to_string())
+    }
+
     pub async fn get_json(&self, url: &str) -> Result<serde_json::Value> {
         if let Some(response) = self.cached_response(url, Context::now_ms()) {
             return match response.status {

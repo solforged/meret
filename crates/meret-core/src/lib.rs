@@ -6,6 +6,7 @@ mod facets;
 mod local_zone;
 mod listens;
 mod lookups;
+mod matching;
 mod now;
 mod scan;
 #[cfg(target_os = "macos")]

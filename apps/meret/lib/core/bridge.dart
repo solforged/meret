@@ -776,6 +776,8 @@ class FakeCore implements CoreBridge {
     releases: _empty ? BigInt.zero : BigInt.from(212),
     recordings: _empty ? BigInt.zero : BigInt.from(1840),
     people: _empty ? BigInt.zero : BigInt.from(28),
+    unidentified: _empty ? BigInt.zero : BigInt.from(40),
+    matched: BigInt.zero,
     lookedUp: BigInt.zero, waiting: BigInt.zero, failed: BigInt.zero,
   );
 
