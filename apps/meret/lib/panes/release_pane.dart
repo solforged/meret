@@ -11,12 +11,14 @@ import 'pane.dart';
 
 /// A release's local edition, tracklist and sourced credits.
 class ReleasePane extends StatefulWidget {
-  const ReleasePane({super.key, required this.core, required this.id, required this.fromStop, required this.onFollow});
+  const ReleasePane({super.key, required this.core, required this.id, required this.fromStop, required this.onFollow, this.libraryVersion, this.lookupsVersion});
 
   final CoreBridge core;
   final PlatformInt64 id;
   final int fromStop;
-  final Future<void> Function(TargetDto, ThreadKind) onFollow;
+  final Future<void> Function(TargetDto, ThreadKind, String) onFollow;
+  final BigInt? libraryVersion;
+  final BigInt? lookupsVersion;
 
   @override
   State<ReleasePane> createState() => _ReleasePaneState();
@@ -42,7 +44,7 @@ class _ReleasePaneState extends State<ReleasePane> {
   @override
   void didUpdateWidget(ReleasePane old) {
     super.didUpdateWidget(old);
-    if (old.id != widget.id || old.core != widget.core) _load();
+    if (old.id != widget.id || old.core != widget.core || old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) _load();
   }
 
   @override
@@ -83,7 +85,7 @@ class _ReleasePaneState extends State<ReleasePane> {
 
   Future<void> _follow(ThreadDto thread) async {
     try {
-      await widget.onFollow(thread.to, thread.kind);
+      await widget.onFollow(thread.to, thread.kind, thread.provider);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     }

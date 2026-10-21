@@ -201,7 +201,10 @@ mod tests {
     }
 
     fn fixture() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("meret-core-memory-{}-{}", std::process::id(),
+        // Tests start together; a counter keeps two fixtures out of one directory.
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let dir = std::env::temp_dir().join(format!("meret-core-memory-{}-{}-{}", std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         let music = dir.join("music");
         std::fs::create_dir_all(&music).unwrap();

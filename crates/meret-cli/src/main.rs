@@ -165,6 +165,18 @@ enum LibraryCmd {
     },
     /// Print Play on's zones with what each does to the sound.
     Zones,
+    /// Print MusicBrainz lookups; `allow` or `off` answers the question,
+    /// and with lookups allowed this waits until the queue is empty.
+    Lookups {
+        #[arg(value_enum)]
+        answer: Option<Answer>,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Answer {
+    Allow,
+    Off,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -265,6 +277,10 @@ fn main() -> Result<()> {
                 LibraryCmd::Now => library::now(&api),
                 LibraryCmd::Picks { limit } => library::picks(&api, limit),
                 LibraryCmd::Zones => library::zones(&api),
+                LibraryCmd::Lookups { answer } => library::lookups(&api, &rt, answer.map(|a| match a {
+                    Answer::Allow => meret_api::LookupsDto::Allowed,
+                    Answer::Off => meret_api::LookupsDto::Off,
+                })),
             }
         }
     }

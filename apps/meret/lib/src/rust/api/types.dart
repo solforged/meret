@@ -230,6 +230,7 @@ class FrontDto {
   final List<RecentDto> addedLately;
   final List<FrontLineDto> needsYou;
   final List<RootDto> roots;
+  final LookupStatusDto? lookups;
 
   const FrontDto({
     required this.tracks,
@@ -239,6 +240,7 @@ class FrontDto {
     required this.addedLately,
     required this.needsYou,
     required this.roots,
+    this.lookups,
   });
 
   @override
@@ -249,7 +251,8 @@ class FrontDto {
       formats.hashCode ^
       addedLately.hashCode ^
       needsYou.hashCode ^
-      roots.hashCode;
+      roots.hashCode ^
+      lookups.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -262,7 +265,8 @@ class FrontDto {
           formats == other.formats &&
           addedLately == other.addedLately &&
           needsYou == other.needsYou &&
-          roots == other.roots;
+          roots == other.roots &&
+          lookups == other.lookups;
 }
 
 class FrontLineDto {
@@ -561,6 +565,51 @@ class ListenDto {
           counted == other.counted;
 }
 
+class LookupStatusDto {
+  final LookupsDto setting;
+  final BigInt releases;
+  final BigInt recordings;
+  final BigInt people;
+  final BigInt lookedUp;
+  final BigInt waiting;
+  final BigInt failed;
+
+  const LookupStatusDto({
+    required this.setting,
+    required this.releases,
+    required this.recordings,
+    required this.people,
+    required this.lookedUp,
+    required this.waiting,
+    required this.failed,
+  });
+
+  @override
+  int get hashCode =>
+      setting.hashCode ^
+      releases.hashCode ^
+      recordings.hashCode ^
+      people.hashCode ^
+      lookedUp.hashCode ^
+      waiting.hashCode ^
+      failed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LookupStatusDto &&
+          runtimeType == other.runtimeType &&
+          setting == other.setting &&
+          releases == other.releases &&
+          recordings == other.recordings &&
+          people == other.people &&
+          lookedUp == other.lookedUp &&
+          waiting == other.waiting &&
+          failed == other.failed;
+}
+
+enum LookupsDto { unasked, allowed, off }
+
 class NowDto {
   final PlatformInt64? trackId;
   final PlatformInt64? releaseId;
@@ -671,6 +720,7 @@ class PersonDto {
   final List<ThreadDto> appearsOn;
   final List<CreditSectionDto> roles;
   final List<ThreadDto> works;
+  final List<CreditSectionDto> groups;
   final List<ThreadDto> workedWith;
   final BigInt plays;
   final PlatformInt64? lastPlayedMs;
@@ -683,6 +733,7 @@ class PersonDto {
     required this.appearsOn,
     required this.roles,
     required this.works,
+    required this.groups,
     required this.workedWith,
     required this.plays,
     this.lastPlayedMs,
@@ -697,6 +748,7 @@ class PersonDto {
       appearsOn.hashCode ^
       roles.hashCode ^
       works.hashCode ^
+      groups.hashCode ^
       workedWith.hashCode ^
       plays.hashCode ^
       lastPlayedMs.hashCode;
@@ -713,6 +765,7 @@ class PersonDto {
           appearsOn == other.appearsOn &&
           roles == other.roles &&
           works == other.works &&
+          groups == other.groups &&
           workedWith == other.workedWith &&
           plays == other.plays &&
           lastPlayedMs == other.lastPlayedMs;
@@ -1144,16 +1197,21 @@ class SettingsDto {
   final LightLevelDto light;
   final String? outputDevice;
   final bool exclusive;
+  final LookupsDto lookups;
 
   const SettingsDto({
     required this.light,
     this.outputDevice,
     required this.exclusive,
+    required this.lookups,
   });
 
   @override
   int get hashCode =>
-      light.hashCode ^ outputDevice.hashCode ^ exclusive.hashCode;
+      light.hashCode ^
+      outputDevice.hashCode ^
+      exclusive.hashCode ^
+      lookups.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1162,7 +1220,8 @@ class SettingsDto {
           runtimeType == other.runtimeType &&
           light == other.light &&
           outputDevice == other.outputDevice &&
-          exclusive == other.exclusive;
+          exclusive == other.exclusive &&
+          lookups == other.lookups;
 }
 
 enum SortKeyDto { library_, title, artist, album, year, length, format }
@@ -1226,6 +1285,7 @@ class StatusDto {
   final BigInt newLeads;
   final BigInt tracks;
   final BigInt libraryVersion;
+  final BigInt lookupsVersion;
 
   const StatusDto({
     required this.sources,
@@ -1234,6 +1294,7 @@ class StatusDto {
     required this.newLeads,
     required this.tracks,
     required this.libraryVersion,
+    required this.lookupsVersion,
   });
 
   @override
@@ -1243,7 +1304,8 @@ class StatusDto {
       guessed.hashCode ^
       newLeads.hashCode ^
       tracks.hashCode ^
-      libraryVersion.hashCode;
+      libraryVersion.hashCode ^
+      lookupsVersion.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1255,7 +1317,8 @@ class StatusDto {
           guessed == other.guessed &&
           newLeads == other.newLeads &&
           tracks == other.tracks &&
-          libraryVersion == other.libraryVersion;
+          libraryVersion == other.libraryVersion &&
+          lookupsVersion == other.lookupsVersion;
 }
 
 class StopDto {
@@ -1325,6 +1388,7 @@ class ThreadDto {
   final ThreadKind kind;
   final String label;
   final String source;
+  final String provider;
   final TargetDto to;
   final String title;
   final String detail;
@@ -1333,6 +1397,7 @@ class ThreadDto {
     required this.kind,
     required this.label,
     required this.source,
+    required this.provider,
     required this.to,
     required this.title,
     required this.detail,
@@ -1343,6 +1408,7 @@ class ThreadDto {
       kind.hashCode ^
       label.hashCode ^
       source.hashCode ^
+      provider.hashCode ^
       to.hashCode ^
       title.hashCode ^
       detail.hashCode;
@@ -1355,6 +1421,7 @@ class ThreadDto {
           kind == other.kind &&
           label == other.label &&
           source == other.source &&
+          provider == other.provider &&
           to == other.to &&
           title == other.title &&
           detail == other.detail;
@@ -1370,6 +1437,7 @@ enum ThreadKind {
   producedBy,
   engineeredBy,
   memberOf,
+  hasMember,
   workedWith,
   recordingOf,
   arrangedAs,
@@ -1672,6 +1740,8 @@ class WorkDto {
   final ThreadDto? partOf;
   final List<ThreadDto> parts;
   final List<TrackRowDto> rows;
+  final List<ThreadDto> others;
+  final BigInt? recordingsKnown;
   final BigInt lengthMs;
   final BigInt plays;
   final PlatformInt64? lastPlayedMs;
@@ -1684,6 +1754,8 @@ class WorkDto {
     this.partOf,
     required this.parts,
     required this.rows,
+    required this.others,
+    this.recordingsKnown,
     required this.lengthMs,
     required this.plays,
     this.lastPlayedMs,
@@ -1698,6 +1770,8 @@ class WorkDto {
       partOf.hashCode ^
       parts.hashCode ^
       rows.hashCode ^
+      others.hashCode ^
+      recordingsKnown.hashCode ^
       lengthMs.hashCode ^
       plays.hashCode ^
       lastPlayedMs.hashCode;
@@ -1714,6 +1788,8 @@ class WorkDto {
           partOf == other.partOf &&
           parts == other.parts &&
           rows == other.rows &&
+          others == other.others &&
+          recordingsKnown == other.recordingsKnown &&
           lengthMs == other.lengthMs &&
           plays == other.plays &&
           lastPlayedMs == other.lastPlayedMs;

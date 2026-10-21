@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1560055284;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1244919127;
 
 // Section: executor
 
@@ -203,10 +203,12 @@ fn wire__crate__api__core__follow_impl(
             let api_from_stop = <u32>::sse_decode(&mut deserializer);
             let api_to = <crate::api::types::TargetDto>::sse_decode(&mut deserializer);
             let api_via = <crate::api::types::ThreadKind>::sse_decode(&mut deserializer);
+            let api_provider = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::core::follow(api_from_stop, api_to, api_via)?;
+                    let output_ok =
+                        crate::api::core::follow(api_from_stop, api_to, api_via, api_provider)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -378,6 +380,38 @@ fn wire__crate__api__core__keep_trail_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::keep_trail(api_name)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__lookups_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "lookups",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::lookups()?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1011,6 +1045,39 @@ fn wire__crate__api__core__search_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::search(api_input)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__set_lookups_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_lookups",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_lookups = <crate::api::types::LookupsDto>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::set_lookups(api_lookups)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1678,6 +1745,7 @@ const _: fn() = || {
         let _: Vec<crate::api::types::RecentDto> = FrontDto.added_lately;
         let _: Vec<crate::api::types::FrontLineDto> = FrontDto.needs_you;
         let _: Vec<crate::api::types::RootDto> = FrontDto.roots;
+        let _: Option<crate::api::types::LookupStatusDto> = FrontDto.lookups;
     }
     {
         let FrontLineDto = None::<crate::api::types::FrontLineDto>.unwrap();
@@ -1759,6 +1827,16 @@ const _: fn() = || {
         let _: bool = ListenDto.counted;
     }
     {
+        let LookupStatusDto = None::<crate::api::types::LookupStatusDto>.unwrap();
+        let _: crate::api::types::LookupsDto = LookupStatusDto.setting;
+        let _: u64 = LookupStatusDto.releases;
+        let _: u64 = LookupStatusDto.recordings;
+        let _: u64 = LookupStatusDto.people;
+        let _: u64 = LookupStatusDto.looked_up;
+        let _: u64 = LookupStatusDto.waiting;
+        let _: u64 = LookupStatusDto.failed;
+    }
+    {
         let NowDto = None::<crate::api::types::NowDto>.unwrap();
         let _: Option<i64> = NowDto.track_id;
         let _: Option<i64> = NowDto.release_id;
@@ -1791,6 +1869,7 @@ const _: fn() = || {
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.appears_on;
         let _: Vec<crate::api::types::CreditSectionDto> = PersonDto.roles;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.works;
+        let _: Vec<crate::api::types::CreditSectionDto> = PersonDto.groups;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.worked_with;
         let _: u64 = PersonDto.plays;
         let _: Option<i64> = PersonDto.last_played_ms;
@@ -1900,6 +1979,7 @@ const _: fn() = || {
         let _: crate::api::types::LightLevelDto = SettingsDto.light;
         let _: Option<String> = SettingsDto.output_device;
         let _: bool = SettingsDto.exclusive;
+        let _: crate::api::types::LookupsDto = SettingsDto.lookups;
     }
     {
         let SourceDto = None::<crate::api::types::SourceDto>.unwrap();
@@ -1922,6 +2002,7 @@ const _: fn() = || {
         let _: u64 = StatusDto.new_leads;
         let _: u64 = StatusDto.tracks;
         let _: u64 = StatusDto.library_version;
+        let _: u64 = StatusDto.lookups_version;
     }
     {
         let StopDto = None::<crate::api::types::StopDto>.unwrap();
@@ -1954,6 +2035,7 @@ const _: fn() = || {
         let _: crate::api::types::ThreadKind = ThreadDto.kind;
         let _: String = ThreadDto.label;
         let _: String = ThreadDto.source;
+        let _: String = ThreadDto.provider;
         let _: crate::api::types::TargetDto = ThreadDto.to;
         let _: String = ThreadDto.title;
         let _: String = ThreadDto.detail;
@@ -2045,6 +2127,8 @@ const _: fn() = || {
         let _: Option<crate::api::types::ThreadDto> = WorkDto.part_of;
         let _: Vec<crate::api::types::ThreadDto> = WorkDto.parts;
         let _: Vec<crate::api::types::TrackRowDto> = WorkDto.rows;
+        let _: Vec<crate::api::types::ThreadDto> = WorkDto.others;
+        let _: Option<u64> = WorkDto.recordings_known;
         let _: u64 = WorkDto.length_ms;
         let _: u64 = WorkDto.plays;
         let _: Option<i64> = WorkDto.last_played_ms;
@@ -2286,6 +2370,8 @@ impl SseDecode for crate::api::types::FrontDto {
         let mut var_addedLately = <Vec<crate::api::types::RecentDto>>::sse_decode(deserializer);
         let mut var_needsYou = <Vec<crate::api::types::FrontLineDto>>::sse_decode(deserializer);
         let mut var_roots = <Vec<crate::api::types::RootDto>>::sse_decode(deserializer);
+        let mut var_lookups =
+            <Option<crate::api::types::LookupStatusDto>>::sse_decode(deserializer);
         return crate::api::types::FrontDto {
             tracks: var_tracks,
             releases: var_releases,
@@ -2294,6 +2380,7 @@ impl SseDecode for crate::api::types::FrontDto {
             added_lately: var_addedLately,
             needs_you: var_needsYou,
             roots: var_roots,
+            lookups: var_lookups,
         };
     }
 }
@@ -2876,6 +2963,41 @@ impl SseDecode for crate::api::types::ListenDto {
     }
 }
 
+impl SseDecode for crate::api::types::LookupStatusDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_setting = <crate::api::types::LookupsDto>::sse_decode(deserializer);
+        let mut var_releases = <u64>::sse_decode(deserializer);
+        let mut var_recordings = <u64>::sse_decode(deserializer);
+        let mut var_people = <u64>::sse_decode(deserializer);
+        let mut var_lookedUp = <u64>::sse_decode(deserializer);
+        let mut var_waiting = <u64>::sse_decode(deserializer);
+        let mut var_failed = <u64>::sse_decode(deserializer);
+        return crate::api::types::LookupStatusDto {
+            setting: var_setting,
+            releases: var_releases,
+            recordings: var_recordings,
+            people: var_people,
+            looked_up: var_lookedUp,
+            waiting: var_waiting,
+            failed: var_failed,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::LookupsDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::LookupsDto::Unasked,
+            1 => crate::api::types::LookupsDto::Allowed,
+            2 => crate::api::types::LookupsDto::Off,
+            _ => unreachable!("Invalid variant for LookupsDto: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::NowDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2968,6 +3090,19 @@ impl SseDecode for Option<crate::api::types::LightDto> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::types::LightDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::types::LookupStatusDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::LookupStatusDto>::sse_decode(
+                deserializer,
+            ));
         } else {
             return None;
         }
@@ -3070,6 +3205,7 @@ impl SseDecode for crate::api::types::PersonDto {
         let mut var_appearsOn = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_roles = <Vec<crate::api::types::CreditSectionDto>>::sse_decode(deserializer);
         let mut var_works = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_groups = <Vec<crate::api::types::CreditSectionDto>>::sse_decode(deserializer);
         let mut var_workedWith = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_plays = <u64>::sse_decode(deserializer);
         let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
@@ -3081,6 +3217,7 @@ impl SseDecode for crate::api::types::PersonDto {
             appears_on: var_appearsOn,
             roles: var_roles,
             works: var_works,
+            groups: var_groups,
             worked_with: var_workedWith,
             plays: var_plays,
             last_played_ms: var_lastPlayedMs,
@@ -3335,10 +3472,12 @@ impl SseDecode for crate::api::types::SettingsDto {
         let mut var_light = <crate::api::types::LightLevelDto>::sse_decode(deserializer);
         let mut var_outputDevice = <Option<String>>::sse_decode(deserializer);
         let mut var_exclusive = <bool>::sse_decode(deserializer);
+        let mut var_lookups = <crate::api::types::LookupsDto>::sse_decode(deserializer);
         return crate::api::types::SettingsDto {
             light: var_light,
             output_device: var_outputDevice,
             exclusive: var_exclusive,
+            lookups: var_lookups,
         };
     }
 }
@@ -3399,6 +3538,7 @@ impl SseDecode for crate::api::types::StatusDto {
         let mut var_newLeads = <u64>::sse_decode(deserializer);
         let mut var_tracks = <u64>::sse_decode(deserializer);
         let mut var_libraryVersion = <u64>::sse_decode(deserializer);
+        let mut var_lookupsVersion = <u64>::sse_decode(deserializer);
         return crate::api::types::StatusDto {
             sources: var_sources,
             jobs: var_jobs,
@@ -3406,6 +3546,7 @@ impl SseDecode for crate::api::types::StatusDto {
             new_leads: var_newLeads,
             tracks: var_tracks,
             library_version: var_libraryVersion,
+            lookups_version: var_lookupsVersion,
         };
     }
 }
@@ -3470,6 +3611,7 @@ impl SseDecode for crate::api::types::ThreadDto {
         let mut var_kind = <crate::api::types::ThreadKind>::sse_decode(deserializer);
         let mut var_label = <String>::sse_decode(deserializer);
         let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_provider = <String>::sse_decode(deserializer);
         let mut var_to = <crate::api::types::TargetDto>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_detail = <String>::sse_decode(deserializer);
@@ -3477,6 +3619,7 @@ impl SseDecode for crate::api::types::ThreadDto {
             kind: var_kind,
             label: var_label,
             source: var_source,
+            provider: var_provider,
             to: var_to,
             title: var_title,
             detail: var_detail,
@@ -3498,21 +3641,22 @@ impl SseDecode for crate::api::types::ThreadKind {
             6 => crate::api::types::ThreadKind::ProducedBy,
             7 => crate::api::types::ThreadKind::EngineeredBy,
             8 => crate::api::types::ThreadKind::MemberOf,
-            9 => crate::api::types::ThreadKind::WorkedWith,
-            10 => crate::api::types::ThreadKind::RecordingOf,
-            11 => crate::api::types::ThreadKind::ArrangedAs,
-            12 => crate::api::types::ThreadKind::CoverOf,
-            13 => crate::api::types::ThreadKind::Sampled,
-            14 => crate::api::types::ThreadKind::SameSession,
-            15 => crate::api::types::ThreadKind::Scored,
-            16 => crate::api::types::ThreadKind::Label,
-            17 => crate::api::types::ThreadKind::Cites,
-            18 => crate::api::types::ThreadKind::SoundsLike,
-            19 => crate::api::types::ThreadKind::ListenedAfter,
-            20 => crate::api::types::ThreadKind::By,
-            21 => crate::api::types::ThreadKind::AlbumArtist,
-            22 => crate::api::types::ThreadKind::AppearsOn,
-            23 => crate::api::types::ThreadKind::Matched,
+            9 => crate::api::types::ThreadKind::HasMember,
+            10 => crate::api::types::ThreadKind::WorkedWith,
+            11 => crate::api::types::ThreadKind::RecordingOf,
+            12 => crate::api::types::ThreadKind::ArrangedAs,
+            13 => crate::api::types::ThreadKind::CoverOf,
+            14 => crate::api::types::ThreadKind::Sampled,
+            15 => crate::api::types::ThreadKind::SameSession,
+            16 => crate::api::types::ThreadKind::Scored,
+            17 => crate::api::types::ThreadKind::Label,
+            18 => crate::api::types::ThreadKind::Cites,
+            19 => crate::api::types::ThreadKind::SoundsLike,
+            20 => crate::api::types::ThreadKind::ListenedAfter,
+            21 => crate::api::types::ThreadKind::By,
+            22 => crate::api::types::ThreadKind::AlbumArtist,
+            23 => crate::api::types::ThreadKind::AppearsOn,
+            24 => crate::api::types::ThreadKind::Matched,
             _ => unreachable!("Invalid variant for ThreadKind: {}", inner),
         };
     }
@@ -3741,6 +3885,8 @@ impl SseDecode for crate::api::types::WorkDto {
         let mut var_partOf = <Option<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_parts = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_rows = <Vec<crate::api::types::TrackRowDto>>::sse_decode(deserializer);
+        let mut var_others = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_recordingsKnown = <Option<u64>>::sse_decode(deserializer);
         let mut var_lengthMs = <u64>::sse_decode(deserializer);
         let mut var_plays = <u64>::sse_decode(deserializer);
         let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
@@ -3752,6 +3898,8 @@ impl SseDecode for crate::api::types::WorkDto {
             part_of: var_partOf,
             parts: var_parts,
             rows: var_rows,
+            others: var_others,
+            recordings_known: var_recordingsKnown,
             length_ms: var_lengthMs,
             plays: var_plays,
             last_played_ms: var_lastPlayedMs,
@@ -3798,41 +3946,43 @@ fn pde_ffi_dispatcher_primary_impl(
         8 => wire__crate__api__core__history_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__core__keep_trail_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__most_played_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__core__open_trail_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__core__picks_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__core__play_on_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__core__play_pick_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__core__play_something_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__core__play_work_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__core__work_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__core__zones_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__lookups_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__most_played_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__open_trail_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__picks_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__core__play_on_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__play_pick_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__core__play_something_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__play_work_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__core__set_lookups_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__core__work_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__core__zones_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3845,8 +3995,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        14 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4096,6 +4246,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::FrontDto> {
             self.0.added_lately.into_into_dart().into_dart(),
             self.0.needs_you.into_into_dart().into_dart(),
             self.0.roots.into_into_dart().into_dart(),
+            self.0.lookups.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4384,6 +4535,54 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ListenDto>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::LookupStatusDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.setting.into_into_dart().into_dart(),
+            self.0.releases.into_into_dart().into_dart(),
+            self.0.recordings.into_into_dart().into_dart(),
+            self.0.people.into_into_dart().into_dart(),
+            self.0.looked_up.into_into_dart().into_dart(),
+            self.0.waiting.into_into_dart().into_dart(),
+            self.0.failed.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::LookupStatusDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::LookupStatusDto>>
+    for crate::api::types::LookupStatusDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::LookupStatusDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::LookupsDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self.0 {
+            crate::api::types::LookupsDto::Unasked => 0.into_dart(),
+            crate::api::types::LookupsDto::Allowed => 1.into_dart(),
+            crate::api::types::LookupsDto::Off => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::LookupsDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::LookupsDto>>
+    for crate::api::types::LookupsDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::LookupsDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::NowDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -4450,6 +4649,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::PersonDto> 
             self.0.appears_on.into_into_dart().into_dart(),
             self.0.roles.into_into_dart().into_dart(),
             self.0.works.into_into_dart().into_dart(),
+            self.0.groups.into_into_dart().into_dart(),
             self.0.worked_with.into_into_dart().into_dart(),
             self.0.plays.into_into_dart().into_dart(),
             self.0.last_played_ms.into_into_dart().into_dart(),
@@ -4741,6 +4941,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::SettingsDto
             self.0.light.into_into_dart().into_dart(),
             self.0.output_device.into_into_dart().into_dart(),
             self.0.exclusive.into_into_dart().into_dart(),
+            self.0.lookups.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4837,6 +5038,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::StatusDto> 
             self.0.new_leads.into_into_dart().into_dart(),
             self.0.tracks.into_into_dart().into_dart(),
             self.0.library_version.into_into_dart().into_dart(),
+            self.0.lookups_version.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4920,6 +5122,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ThreadDto> 
             self.0.kind.into_into_dart().into_dart(),
             self.0.label.into_into_dart().into_dart(),
             self.0.source.into_into_dart().into_dart(),
+            self.0.provider.into_into_dart().into_dart(),
             self.0.to.into_into_dart().into_dart(),
             self.0.title.into_into_dart().into_dart(),
             self.0.detail.into_into_dart().into_dart(),
@@ -4951,21 +5154,22 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ThreadKind>
             crate::api::types::ThreadKind::ProducedBy => 6.into_dart(),
             crate::api::types::ThreadKind::EngineeredBy => 7.into_dart(),
             crate::api::types::ThreadKind::MemberOf => 8.into_dart(),
-            crate::api::types::ThreadKind::WorkedWith => 9.into_dart(),
-            crate::api::types::ThreadKind::RecordingOf => 10.into_dart(),
-            crate::api::types::ThreadKind::ArrangedAs => 11.into_dart(),
-            crate::api::types::ThreadKind::CoverOf => 12.into_dart(),
-            crate::api::types::ThreadKind::Sampled => 13.into_dart(),
-            crate::api::types::ThreadKind::SameSession => 14.into_dart(),
-            crate::api::types::ThreadKind::Scored => 15.into_dart(),
-            crate::api::types::ThreadKind::Label => 16.into_dart(),
-            crate::api::types::ThreadKind::Cites => 17.into_dart(),
-            crate::api::types::ThreadKind::SoundsLike => 18.into_dart(),
-            crate::api::types::ThreadKind::ListenedAfter => 19.into_dart(),
-            crate::api::types::ThreadKind::By => 20.into_dart(),
-            crate::api::types::ThreadKind::AlbumArtist => 21.into_dart(),
-            crate::api::types::ThreadKind::AppearsOn => 22.into_dart(),
-            crate::api::types::ThreadKind::Matched => 23.into_dart(),
+            crate::api::types::ThreadKind::HasMember => 9.into_dart(),
+            crate::api::types::ThreadKind::WorkedWith => 10.into_dart(),
+            crate::api::types::ThreadKind::RecordingOf => 11.into_dart(),
+            crate::api::types::ThreadKind::ArrangedAs => 12.into_dart(),
+            crate::api::types::ThreadKind::CoverOf => 13.into_dart(),
+            crate::api::types::ThreadKind::Sampled => 14.into_dart(),
+            crate::api::types::ThreadKind::SameSession => 15.into_dart(),
+            crate::api::types::ThreadKind::Scored => 16.into_dart(),
+            crate::api::types::ThreadKind::Label => 17.into_dart(),
+            crate::api::types::ThreadKind::Cites => 18.into_dart(),
+            crate::api::types::ThreadKind::SoundsLike => 19.into_dart(),
+            crate::api::types::ThreadKind::ListenedAfter => 20.into_dart(),
+            crate::api::types::ThreadKind::By => 21.into_dart(),
+            crate::api::types::ThreadKind::AlbumArtist => 22.into_dart(),
+            crate::api::types::ThreadKind::AppearsOn => 23.into_dart(),
+            crate::api::types::ThreadKind::Matched => 24.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -5201,6 +5405,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::WorkDto> {
             self.0.part_of.into_into_dart().into_dart(),
             self.0.parts.into_into_dart().into_dart(),
             self.0.rows.into_into_dart().into_dart(),
+            self.0.others.into_into_dart().into_dart(),
+            self.0.recordings_known.into_into_dart().into_dart(),
             self.0.length_ms.into_into_dart().into_dart(),
             self.0.plays.into_into_dart().into_dart(),
             self.0.last_played_ms.into_into_dart().into_dart(),
@@ -5434,6 +5640,7 @@ impl SseEncode for crate::api::types::FrontDto {
         <Vec<crate::api::types::RecentDto>>::sse_encode(self.added_lately, serializer);
         <Vec<crate::api::types::FrontLineDto>>::sse_encode(self.needs_you, serializer);
         <Vec<crate::api::types::RootDto>>::sse_encode(self.roots, serializer);
+        <Option<crate::api::types::LookupStatusDto>>::sse_encode(self.lookups, serializer);
     }
 }
 
@@ -5889,6 +6096,36 @@ impl SseEncode for crate::api::types::ListenDto {
     }
 }
 
+impl SseEncode for crate::api::types::LookupStatusDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::types::LookupsDto>::sse_encode(self.setting, serializer);
+        <u64>::sse_encode(self.releases, serializer);
+        <u64>::sse_encode(self.recordings, serializer);
+        <u64>::sse_encode(self.people, serializer);
+        <u64>::sse_encode(self.looked_up, serializer);
+        <u64>::sse_encode(self.waiting, serializer);
+        <u64>::sse_encode(self.failed, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::LookupsDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::LookupsDto::Unasked => 0,
+                crate::api::types::LookupsDto::Allowed => 1,
+                crate::api::types::LookupsDto::Off => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::types::NowDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5963,6 +6200,16 @@ impl SseEncode for Option<crate::api::types::LightDto> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::types::LightDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::types::LookupStatusDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::LookupStatusDto>::sse_encode(value, serializer);
         }
     }
 }
@@ -6049,6 +6296,7 @@ impl SseEncode for crate::api::types::PersonDto {
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.appears_on, serializer);
         <Vec<crate::api::types::CreditSectionDto>>::sse_encode(self.roles, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.works, serializer);
+        <Vec<crate::api::types::CreditSectionDto>>::sse_encode(self.groups, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.worked_with, serializer);
         <u64>::sse_encode(self.plays, serializer);
         <Option<i64>>::sse_encode(self.last_played_ms, serializer);
@@ -6213,6 +6461,7 @@ impl SseEncode for crate::api::types::SettingsDto {
         <crate::api::types::LightLevelDto>::sse_encode(self.light, serializer);
         <Option<String>>::sse_encode(self.output_device, serializer);
         <bool>::sse_encode(self.exclusive, serializer);
+        <crate::api::types::LookupsDto>::sse_encode(self.lookups, serializer);
     }
 }
 
@@ -6265,6 +6514,7 @@ impl SseEncode for crate::api::types::StatusDto {
         <u64>::sse_encode(self.new_leads, serializer);
         <u64>::sse_encode(self.tracks, serializer);
         <u64>::sse_encode(self.library_version, serializer);
+        <u64>::sse_encode(self.lookups_version, serializer);
     }
 }
 
@@ -6316,6 +6566,7 @@ impl SseEncode for crate::api::types::ThreadDto {
         <crate::api::types::ThreadKind>::sse_encode(self.kind, serializer);
         <String>::sse_encode(self.label, serializer);
         <String>::sse_encode(self.source, serializer);
+        <String>::sse_encode(self.provider, serializer);
         <crate::api::types::TargetDto>::sse_encode(self.to, serializer);
         <String>::sse_encode(self.title, serializer);
         <String>::sse_encode(self.detail, serializer);
@@ -6336,21 +6587,22 @@ impl SseEncode for crate::api::types::ThreadKind {
                 crate::api::types::ThreadKind::ProducedBy => 6,
                 crate::api::types::ThreadKind::EngineeredBy => 7,
                 crate::api::types::ThreadKind::MemberOf => 8,
-                crate::api::types::ThreadKind::WorkedWith => 9,
-                crate::api::types::ThreadKind::RecordingOf => 10,
-                crate::api::types::ThreadKind::ArrangedAs => 11,
-                crate::api::types::ThreadKind::CoverOf => 12,
-                crate::api::types::ThreadKind::Sampled => 13,
-                crate::api::types::ThreadKind::SameSession => 14,
-                crate::api::types::ThreadKind::Scored => 15,
-                crate::api::types::ThreadKind::Label => 16,
-                crate::api::types::ThreadKind::Cites => 17,
-                crate::api::types::ThreadKind::SoundsLike => 18,
-                crate::api::types::ThreadKind::ListenedAfter => 19,
-                crate::api::types::ThreadKind::By => 20,
-                crate::api::types::ThreadKind::AlbumArtist => 21,
-                crate::api::types::ThreadKind::AppearsOn => 22,
-                crate::api::types::ThreadKind::Matched => 23,
+                crate::api::types::ThreadKind::HasMember => 9,
+                crate::api::types::ThreadKind::WorkedWith => 10,
+                crate::api::types::ThreadKind::RecordingOf => 11,
+                crate::api::types::ThreadKind::ArrangedAs => 12,
+                crate::api::types::ThreadKind::CoverOf => 13,
+                crate::api::types::ThreadKind::Sampled => 14,
+                crate::api::types::ThreadKind::SameSession => 15,
+                crate::api::types::ThreadKind::Scored => 16,
+                crate::api::types::ThreadKind::Label => 17,
+                crate::api::types::ThreadKind::Cites => 18,
+                crate::api::types::ThreadKind::SoundsLike => 19,
+                crate::api::types::ThreadKind::ListenedAfter => 20,
+                crate::api::types::ThreadKind::By => 21,
+                crate::api::types::ThreadKind::AlbumArtist => 22,
+                crate::api::types::ThreadKind::AppearsOn => 23,
+                crate::api::types::ThreadKind::Matched => 24,
                 _ => {
                     unimplemented!("");
                 }
@@ -6525,6 +6777,8 @@ impl SseEncode for crate::api::types::WorkDto {
         <Option<crate::api::types::ThreadDto>>::sse_encode(self.part_of, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.parts, serializer);
         <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.others, serializer);
+        <Option<u64>>::sse_encode(self.recordings_known, serializer);
         <u64>::sse_encode(self.length_ms, serializer);
         <u64>::sse_encode(self.plays, serializer);
         <Option<i64>>::sse_encode(self.last_played_ms, serializer);

@@ -165,9 +165,19 @@ pub fn start_trail(to: TargetDto) -> Result<TrailDto, String> {
 }
 
 /// Follows a thread from stop `from_stop`, the pane it was picked in; from
-/// a pane before the last, this starts a branch.
-pub fn follow(from_stop: u32, to: TargetDto, via: ThreadKind) -> Result<TrailDto, String> {
-    api()?.follow(from_stop, to, via)
+/// a pane before the last, this starts a branch. `provider` is the thread's.
+pub fn follow(from_stop: u32, to: TargetDto, via: ThreadKind, provider: String) -> Result<TrailDto, String> {
+    api()?.follow(from_stop, to, via, &provider)
+}
+
+/// Settings › Lookups: the answer, what the tags carry, what's been looked up.
+pub fn lookups() -> Result<LookupStatusDto, String> {
+    api()?.lookups()
+}
+
+/// Answers the MusicBrainz question, from the Front or Settings.
+pub fn set_lookups(lookups: LookupsDto) -> Result<(), String> {
+    api()?.set_lookups(lookups)
 }
 
 /// `[`: one stop back. None at the root.

@@ -26,7 +26,7 @@ abstract interface class CoreBridge {
   Future<void> playWork(PlatformInt64 id, int index);
   Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop});
   Future<TrailDto> startTrail(TargetDto to);
-  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via);
+  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via, String provider);
   Future<TrailDto?> trailBack();
   Future<TrailDto?> trailForward();
   Future<TrailDto> trailGo(int stop);
@@ -46,6 +46,8 @@ abstract interface class CoreBridge {
   Future<void> removeRoot(int id);
   SettingsDto settings();
   Future<void> setSettings(SettingsDto s);
+  Future<LookupStatusDto> lookups();
+  Future<void> setLookups(LookupsDto lookups);
   Future<List<OutputDeviceDto>> outputDevices();
   Future<VolumeDto> volume();
   Future<VolumeDto> setVolume(double scalar);
@@ -95,7 +97,7 @@ class RustCore implements CoreBridge {
   @override
   Future<TrailDto> startTrail(TargetDto to) => rust.startTrail(to: to);
   @override
-  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via) => rust.follow(fromStop: fromStop, to: to, via: via);
+  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via, String provider) => rust.follow(fromStop: fromStop, to: to, via: via, provider: provider);
   @override
   Future<TrailDto?> trailBack() => rust.trailBack();
   @override
@@ -129,6 +131,10 @@ class RustCore implements CoreBridge {
   SettingsDto settings() => rust.settings();
   @override
   Future<void> setSettings(SettingsDto s) => rust.setSettings(s: s);
+  @override
+  Future<LookupStatusDto> lookups() => rust.lookups();
+  @override
+  Future<void> setLookups(LookupsDto lookups) => rust.setLookups(lookups: lookups);
   @override
   Future<List<OutputDeviceDto>> outputDevices() => rust.outputDevices();
   @override
@@ -179,7 +185,7 @@ class FakeCore implements CoreBridge {
   bool _empty = false;
   final _roots = <int, String>{1: '/Music'};
   final _rootIds = <String, int>{'/Music': 1};
-  SettingsDto _settings = const SettingsDto(light: LightLevelDto.accent, exclusive: true);
+  SettingsDto _settings = const SettingsDto(light: LightLevelDto.accent, exclusive: true, lookups: LookupsDto.unasked);
   BigInt _libraryVersion = BigInt.one;
   TrailDto? _trail;
   final _forward = <int, int>{};
@@ -295,13 +301,18 @@ class FakeCore implements CoreBridge {
   StatusDto get _status => StatusDto(
         sources: [
           SourceDto(key: 'local', name: 'This Mac', detail: _empty ? '0' : '48,210', ok: true),
-          const SourceDto(key: 'musicbrainz', name: 'MusicBrainz', detail: 'not used yet', ok: true),
+          SourceDto(key: 'musicbrainz', name: 'MusicBrainz', detail: switch (_settings.lookups) {
+            LookupsDto.unasked => 'asks first',
+            LookupsDto.allowed => 'not used yet',
+            LookupsDto.off => 'off',
+          }, ok: true),
         ],
         jobs: _empty ? [] : [JobDto(verb: 'analysing', done: BigInt.from(1204), total: BigInt.from(3880))],
         guessed: _empty ? BigInt.zero : BigInt.from(312),
         newLeads: _empty ? BigInt.zero : BigInt.from(14),
         tracks: BigInt.from(_total),
         libraryVersion: _libraryVersion,
+        lookupsVersion: BigInt.zero,
       );
 
   int get _total => _empty ? 0 : 48210;
@@ -315,6 +326,7 @@ class FakeCore implements CoreBridge {
     return FrontDto(
       tracks: BigInt.from(48210),
       releases: BigInt.from(8142),
+      lookups: _settings.lookups == LookupsDto.unasked ? await lookups() : null,
       idioms: [
         for (final (label, releases, tracks, idiom) in const [
           ('Albums', 2104, 25210, 'album'),
@@ -485,7 +497,7 @@ class FakeCore implements CoreBridge {
   };
 
   @override
-  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via) async {
+  Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via, String provider) async {
     final trail = _trail;
     if (trail == null) throw 'No trail is open';
     if (to is TargetDto_Search) throw 'A search starts a new trail';
@@ -493,7 +505,7 @@ class FakeCore implements CoreBridge {
       ThreadKind.by, ThreadKind.albumArtist, ThreadKind.appearsOn, ThreadKind.workedWith,
       ThreadKind.composedBy, ThreadKind.lyricsBy, ThreadKind.arrangedBy, ThreadKind.performedBy,
       ThreadKind.conductedBy, ThreadKind.producedBy, ThreadKind.engineeredBy, ThreadKind.recordingOf,
-      ThreadKind.matched,
+      ThreadKind.matched, ThreadKind.hasMember,
     ].contains(via)) {
       throw 'This thread is not followable yet';
     }
@@ -511,7 +523,7 @@ class FakeCore implements CoreBridge {
     _trail = TrailDto(rootQuery: trail.rootQuery, current: index, kept: trail.kept, name: trail.name, stops: [
       ...trail.stops,
       StopDto(index: index, parent: fromStop, target: to, title: title, via: _threadLabel(via),
-        viaSource: via == ThreadKind.matched ? 'your library' : 'tags',
+        viaSource: switch (provider) { 'musicbrainz' => 'MB', 'library' => 'your library', _ => 'tags' },
         onPath: false, isFork: false, isPeek: false),
     ], meetings: [
       ...trail.meetings,
@@ -526,6 +538,7 @@ class FakeCore implements CoreBridge {
     ThreadKind.albumArtist => 'album artist',
     ThreadKind.appearsOn => 'on',
     ThreadKind.workedWith => 'worked with',
+    ThreadKind.hasMember => 'has member',
     ThreadKind.composedBy => 'composed by',
     ThreadKind.lyricsBy => 'lyrics by',
     ThreadKind.arrangedBy => 'arranged by',
@@ -758,6 +771,22 @@ class FakeCore implements CoreBridge {
   }
 
   @override
+  Future<LookupStatusDto> lookups() async => LookupStatusDto(
+    setting: _settings.lookups,
+    releases: _empty ? BigInt.zero : BigInt.from(212),
+    recordings: _empty ? BigInt.zero : BigInt.from(1840),
+    people: _empty ? BigInt.zero : BigInt.from(28),
+    lookedUp: BigInt.zero, waiting: BigInt.zero, failed: BigInt.zero,
+  );
+
+  @override
+  Future<void> setLookups(LookupsDto lookups) async {
+    _settings = SettingsDto(light: _settings.light, outputDevice: _settings.outputDevice,
+      exclusive: _settings.exclusive, lookups: lookups);
+    _statuses.add(_status);
+  }
+
+  @override
   Future<List<OutputDeviceDto>> outputDevices() async => [
     OutputDeviceDto(id: 'speakers', name: 'MacBook Pro Speakers', isDefault: true,
       canBeExclusive: true, sampleRates: Uint32List.fromList([44100, 48000, 96000]), maxBits: 24),
@@ -979,7 +1008,7 @@ class FakeCore implements CoreBridge {
     return ReleaseDto(
       id: id, title: first.album, cover: null, artist: first.albumArtist, year: first.year,
       artistLinks: first.albumArtistId == null ? [] : [
-        ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags',
+        ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags', provider: 'local_tags',
           to: TargetDto.person(id: first.albumArtistId!), title: first.albumArtist!, detail: ''),
       ],
       idiom: first.albumArtist == 'Yasunori Mitsuda' ? 'Score' : first.albumArtist == 'Bill Evans Trio' ? 'Session' : 'Album',
@@ -989,15 +1018,15 @@ class FakeCore implements CoreBridge {
       plays: BigInt.from(id.toInt() == 1 ? 212 : 0), lastPlayedMs: id.toInt() == 1 ? PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch) : null,
       credits: [
         if (first.albumArtistId != null)
-          ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags',
+          ThreadDto(kind: ThreadKind.albumArtist, label: 'album artist', source: 'tags', provider: 'local_tags',
             to: TargetDto.person(id: first.albumArtistId!), title: first.albumArtist!, detail: ''),
         for (final entry in artists.entries)
           if (entry.key != first.albumArtistId || entry.value.length != rows.length)
-            ThreadDto(kind: ThreadKind.by, label: 'by', source: 'tags',
+            ThreadDto(kind: ThreadKind.by, label: 'by', source: 'tags', provider: 'local_tags',
               to: TargetDto.person(id: entry.key), title: entry.value.first.artist!,
               detail: entry.value.map((row) => '${row.disc}-${row.number.toString().padLeft(2, '0')}').toSet().join(', ')),
         if (id.toInt() == 1)
-          ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags',
+          ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags', provider: 'local_tags',
             to: TargetDto.person(id: _personId('Yasunori Mitsuda')), title: 'Yasunori Mitsuda', detail: '1 track'),
       ],
     );
@@ -1020,7 +1049,7 @@ class FakeCore implements CoreBridge {
       tracks += credited;
       final first = rows.first;
       final own = first.albumArtistId == id;
-      final thread = ThreadDto(kind: ThreadKind.appearsOn, label: 'on', source: 'tags',
+      final thread = ThreadDto(kind: ThreadKind.appearsOn, label: 'on', source: 'tags', provider: 'local_tags',
         to: TargetDto.release(id: first.releaseId), title: first.album,
         detail: '${first.year} · ${own ? '${rows.length} tracks' : '$credited of ${rows.length} tracks'}');
       (own ? releases : appearsOn).add(thread);
@@ -1033,22 +1062,28 @@ class FakeCore implements CoreBridge {
     return PersonDto(id: id, name: name, tracks: tracks, releases: releases, appearsOn: appearsOn,
       roles: name == 'Yasunori Mitsuda' ? [
         CreditSectionDto(title: 'Composed', threads: [
-          ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags',
+          ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags', provider: 'local_tags',
             to: TargetDto.release(id: PlatformInt64Util.from(1)), title: _releases.first.$1,
             detail: '1998 · 1 of ${_releaseRows(PlatformInt64Util.from(1)).length} tracks'),
         ]),
       ] : [],
       works: name == 'Yasunori Mitsuda' ? [_workThread(ThreadKind.composedBy, detail: '1 track')] : [],
+      groups: name == 'Joanne Hogg' ? [
+        CreditSectionDto(title: 'Member of', threads: [
+          ThreadDto(kind: ThreadKind.hasMember, label: 'has member', source: 'MB', provider: 'musicbrainz',
+            to: TargetDto.person(id: _personId('Iona')), title: 'Iona', detail: ''),
+        ]),
+      ] : [],
       plays: BigInt.from(index == 0 ? 1240 : 0), lastPlayedMs: index == 0 ? PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch) : null, workedWith: [
       for (final person in coworkers.take(12))
-        ThreadDto(kind: ThreadKind.workedWith, label: 'worked with', source: 'tags',
+        ThreadDto(kind: ThreadKind.workedWith, label: 'worked with', source: 'tags', provider: 'local_tags',
           to: TargetDto.person(id: person), title: _personNames[person.toInt() - 1],
           detail: '${shared[person]} ${shared[person] == 1 ? 'release' : 'releases'} together'),
     ]);
   }
 
   static ThreadDto _workThread(ThreadKind kind, {String detail = ''}) => ThreadDto(
-    kind: kind, label: _threadLabel(kind), source: 'tags',
+    kind: kind, label: _threadLabel(kind), source: 'tags', provider: 'local_tags',
     to: TargetDto.work(id: PlatformInt64Util.from(1)), title: _releases.first.$4.first, detail: detail,
   );
 
@@ -1059,10 +1094,15 @@ class FakeCore implements CoreBridge {
     return WorkDto(
       id: id, title: _releases.first.$4.first, composer: 'Yasunori Mitsuda',
       composerLinks: [
-        ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags',
+        ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags', provider: 'local_tags',
           to: TargetDto.person(id: _personId('Yasunori Mitsuda')), title: 'Yasunori Mitsuda', detail: ''),
       ],
       parts: [], rows: [row], lengthMs: row.lengthMs ?? BigInt.zero, plays: BigInt.zero,
+      recordingsKnown: BigInt.two,
+      others: [
+        ThreadDto(kind: ThreadKind.by, label: 'by', source: 'MB', provider: 'musicbrainz',
+          to: TargetDto.person(id: _personId('Yasunori Mitsuda')), title: 'Chrono Cross — live', detail: 'Yasunori Mitsuda · 3:42'),
+      ],
     );
   }
 
@@ -1190,7 +1230,7 @@ class FakeCore implements CoreBridge {
   Future<void> playOn(String zone) async {
     final id = zone.replaceFirst('local:', '');
     if (!(await outputDevices()).any((device) => device.id == id)) throw 'no zone $zone';
-    _settings = SettingsDto(light: _settings.light, outputDevice: id, exclusive: _settings.exclusive);
+    _settings = SettingsDto(light: _settings.light, outputDevice: id, exclusive: _settings.exclusive, lookups: _settings.lookups);
   }
 
   @override

@@ -6,13 +6,15 @@ import '../theme/tokens.dart';
 import 'pane.dart';
 import 'release_pane.dart';
 
-/// Releases and people connected by the library's local credits.
+/// Releases, works and people connected by sourced credits.
 class PersonPane extends StatefulWidget {
-  const PersonPane({super.key, required this.core, required this.id, required this.onFollow});
+  const PersonPane({super.key, required this.core, required this.id, required this.onFollow, this.libraryVersion, this.lookupsVersion});
 
   final CoreBridge core;
   final PlatformInt64 id;
-  final Future<void> Function(TargetDto, ThreadKind) onFollow;
+  final Future<void> Function(TargetDto, ThreadKind, String) onFollow;
+  final BigInt? libraryVersion;
+  final BigInt? lookupsVersion;
 
   @override
   State<PersonPane> createState() => _PersonPaneState();
@@ -32,7 +34,7 @@ class _PersonPaneState extends State<PersonPane> {
   @override
   void didUpdateWidget(PersonPane old) {
     super.didUpdateWidget(old);
-    if (old.id != widget.id || old.core != widget.core) _load();
+    if (old.id != widget.id || old.core != widget.core || old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) _load();
   }
 
   Future<void> _load() async {
@@ -52,7 +54,7 @@ class _PersonPaneState extends State<PersonPane> {
 
   Future<void> _follow(ThreadDto thread) async {
     try {
-      await widget.onFollow(thread.to, thread.kind);
+      await widget.onFollow(thread.to, thread.kind, thread.provider);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     }
@@ -89,6 +91,7 @@ class _PersonPaneState extends State<PersonPane> {
       ..._section('Appears on', person.appearsOn),
       for (final role in person.roles) ..._section(role.title, role.threads),
       ..._section('Works', person.works),
+      for (final group in person.groups) ..._section(group.title, group.threads),
       ..._section('Worked with', person.workedWith),
       const SliverToBoxAdapter(child: SizedBox(height: 20)),
     ]);

@@ -61,6 +61,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LightDto dco_decode_box_autoadd_light_dto(dynamic raw);
 
   @protected
+  LookupStatusDto dco_decode_box_autoadd_lookup_status_dto(dynamic raw);
+
+  @protected
   PickDto dco_decode_box_autoadd_pick_dto(dynamic raw);
 
   @protected
@@ -256,6 +259,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ListenDto dco_decode_listen_dto(dynamic raw);
 
   @protected
+  LookupStatusDto dco_decode_lookup_status_dto(dynamic raw);
+
+  @protected
+  LookupsDto dco_decode_lookups_dto(dynamic raw);
+
+  @protected
   NowDto dco_decode_now_dto(dynamic raw);
 
   @protected
@@ -275,6 +284,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LightDto? dco_decode_opt_box_autoadd_light_dto(dynamic raw);
+
+  @protected
+  LookupStatusDto? dco_decode_opt_box_autoadd_lookup_status_dto(dynamic raw);
 
   @protected
   PickDto? dco_decode_opt_box_autoadd_pick_dto(dynamic raw);
@@ -444,6 +456,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LightDto sse_decode_box_autoadd_light_dto(SseDeserializer deserializer);
+
+  @protected
+  LookupStatusDto sse_decode_box_autoadd_lookup_status_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PickDto sse_decode_box_autoadd_pick_dto(SseDeserializer deserializer);
@@ -665,6 +682,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ListenDto sse_decode_listen_dto(SseDeserializer deserializer);
 
   @protected
+  LookupStatusDto sse_decode_lookup_status_dto(SseDeserializer deserializer);
+
+  @protected
+  LookupsDto sse_decode_lookups_dto(SseDeserializer deserializer);
+
+  @protected
   NowDto sse_decode_now_dto(SseDeserializer deserializer);
 
   @protected
@@ -688,6 +711,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LightDto? sse_decode_opt_box_autoadd_light_dto(SseDeserializer deserializer);
+
+  @protected
+  LookupStatusDto? sse_decode_opt_box_autoadd_lookup_status_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PickDto? sse_decode_opt_box_autoadd_pick_dto(SseDeserializer deserializer);
@@ -877,6 +905,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_light_dto(
     LightDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_lookup_status_dto(
+    LookupStatusDto self,
     SseSerializer serializer,
   );
 
@@ -1160,6 +1194,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_listen_dto(ListenDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_lookup_status_dto(
+    LookupStatusDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_lookups_dto(LookupsDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_now_dto(NowDto self, SseSerializer serializer);
 
   @protected
@@ -1189,6 +1232,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_light_dto(
     LightDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_lookup_status_dto(
+    LookupStatusDto? self,
     SseSerializer serializer,
   );
 

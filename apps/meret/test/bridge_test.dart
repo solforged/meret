@@ -183,7 +183,7 @@ void main() {
     final row = ((await core.rows('', _libraryView, 0, 1)).items.single as ItemDto_Track).row;
     final previous = await core.startTrail(TargetDto.search(query: row.title));
     final root = await core.startTrail(const TargetDto.search(query: ''));
-    final releaseTrail = await core.follow(root.current, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn);
+    final releaseTrail = await core.follow(root.current, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn, 'local_tags');
     final releaseStop = releaseTrail.current;
     expect(releaseTrail.stops.last.title, row.album);
     expect(releaseTrail.stops.last.via, 'on');
@@ -203,7 +203,7 @@ void main() {
     expect(person.name, row.artist);
     expect(person.tracks, 1);
     expect([...person.releases, ...person.appearsOn].single.to, TargetDto.release(id: row.releaseId));
-    final personTrail = await core.follow(releaseStop, credit.to, credit.kind);
+    final personTrail = await core.follow(releaseStop, credit.to, credit.kind, credit.provider);
     final personStop = personTrail.current;
     expect(personTrail.stops.last.title, person.name);
     expect(personTrail.stops.where((stop) => stop.onPath), hasLength(3));
@@ -218,13 +218,13 @@ void main() {
     expect(previousTrail.current, previous.current);
     expect((await core.trailForward())!.current, root.current);
     expect((await core.trailForward())!.current, releaseStop);
-    final reopened = await core.follow(releaseStop, credit.to, credit.kind);
+    final reopened = await core.follow(releaseStop, credit.to, credit.kind, credit.provider);
     expect(reopened.current, personStop);
     expect(reopened.stops, hasLength(3));
-    final loop = await core.follow(personStop, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn);
+    final loop = await core.follow(personStop, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn, 'local_tags');
     expect(loop.current, releaseStop);
     expect(loop.stops, hasLength(3));
-    await core.follow(releaseStop, credit.to, credit.kind);
+    await core.follow(releaseStop, credit.to, credit.kind, credit.provider);
 
     try {
       final started = core.now().firstWhere((now) => now.title == row.title && now.path.isNotEmpty);

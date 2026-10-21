@@ -29,6 +29,7 @@ class _FrontPaneState extends State<FrontPane> {
   List<FolderSuggestionDto>? _suggestions;
   String? _error;
   bool _adding = false;
+  bool _answeringLookups = false;
   int _generation = 0;
 
   @override
@@ -77,6 +78,19 @@ class _FrontPaneState extends State<FrontPane> {
       if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  Future<void> _setLookups(LookupsDto setting) async {
+    if (_answeringLookups) return;
+    setState(() { _answeringLookups = true; _error = null; });
+    try {
+      await widget.core.setLookups(setting);
+      if (mounted) await _load();
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _answeringLookups = false);
     }
   }
 
@@ -162,6 +176,21 @@ class _FrontPaneState extends State<FrontPane> {
   ]);
 
   Widget _needs(FrontDto front) => _section('Needs you', [
+    if (front.lookups case final lookups?)
+      _door(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text('MusicBrainz lookups', style: Tok.body),
+        Text([
+          'sends MusicBrainz IDs from tags',
+          if (lookups.releases > BigInt.zero) _count(lookups.releases, 'release'),
+          if (lookups.recordings > BigInt.zero) _count(lookups.recordings, 'track'),
+          if (lookups.people > BigInt.zero) '${_n(lookups.people)} ${lookups.people == BigInt.one ? 'person' : 'people'}',
+        ].join(' · '), style: Tok.label),
+        const SizedBox(height: 6),
+        PaneActions(
+          primary: 'Allow', onPrimary: _answeringLookups ? null : () => _setLookups(LookupsDto.allowed),
+          secondary: 'Not now', onSecondary: _answeringLookups ? null : () => _setLookups(LookupsDto.off),
+        ),
+      ])),
     for (final need in front.needsYou)
       _door(query: need.query, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
@@ -386,13 +415,13 @@ class _FrontPaneState extends State<FrontPane> {
           // Three columns once each gets 400 px; beside a pinned Now that is a 1600 px window.
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: box.maxWidth >= 1200 ? [
             _column([_collection(front), _formats(front)]),
-            _column([_recent(front), if (front.needsYou.isNotEmpty) _needs(front), _folders(front)]),
+            _column([_recent(front), if (front.needsYou.isNotEmpty || front.lookups != null) _needs(front), _folders(front)]),
             _column([_memory()], last: true),
           ] : box.maxWidth >= 620 ? [
             _column([_collection(front), _formats(front)]),
-            _column([_recent(front), if (front.needsYou.isNotEmpty) _needs(front), _folders(front), _memory()], last: true),
+            _column([_recent(front), if (front.needsYou.isNotEmpty || front.lookups != null) _needs(front), _folders(front), _memory()], last: true),
           ] : [
-            _column([_collection(front), _formats(front), _recent(front), if (front.needsYou.isNotEmpty) _needs(front), _folders(front), _memory()], last: true),
+            _column([_collection(front), _formats(front), _recent(front), if (front.needsYou.isNotEmpty || front.lookups != null) _needs(front), _folders(front), _memory()], last: true),
           ]),
       ])),
     );
