@@ -21,7 +21,7 @@ use rusqlite::{OptionalExtension, Transaction, params};
 
 use crate::diff::diff;
 use crate::tags::{Tags, read_tags};
-use crate::walk::{FileStat, walk};
+use crate::walk::{FileStat, Walk, walk};
 
 /// Files read and written per batch. Small enough for steady progress,
 /// large enough that commits don't dominate.
@@ -63,6 +63,8 @@ pub struct ScanReport {
     pub removed: usize,
     /// Files whose tags couldn't be read. They're kept, without a track.
     pub unreadable: usize,
+    /// Folders the walk couldn't list, relative to the root; their files were left as they were.
+    pub unlisted: Vec<String>,
     /// The root wasn't there; it was marked offline and nothing changed.
     pub offline: bool,
 }
@@ -161,16 +163,24 @@ fn scan_in(store: &Store, root: RootId, dirs: &[String], progress: &(dyn Fn(Scan
     let mark: Option<(u64, String)> = None;
 
     progress(ScanProgress { phase: Phase::Walking, done: 0, total: 0 });
-    let found: Vec<FileStat> = if whole {
+    let seen: Walk = if whole {
         walk(&dir)
     } else {
-        dirs.iter().flat_map(|sub| walk(&dir.join(sub)).into_iter().map(move |mut f| {
-            f.rel_path = format!("{sub}/{}", f.rel_path);
-            f
-        })).collect()
+        let mut all = Walk::default();
+        for sub in dirs {
+            let w = walk(&dir.join(sub));
+            let under = |rel: String| if rel.is_empty() { sub.clone() } else { format!("{sub}/{rel}") };
+            all.files.extend(w.files.into_iter().map(|mut f| {
+                f.rel_path = under(std::mem::take(&mut f.rel_path));
+                f
+            }));
+            all.unreadable.extend(w.unreadable.into_iter().map(under));
+        }
+        all
     };
+    let found = &seen.files;
     report.found = found.len();
-    let known = store.read(|c| {
+    let mut known = store.read(|c| {
         let row = |r: &rusqlite::Row<'_>| Ok(FileStat {
             rel_path: r.get(0)?,
             size: r.get::<_, i64>(1)? as u64,
@@ -191,7 +201,12 @@ fn scan_in(store: &Store, root: RootId, dirs: &[String], progress: &(dyn Fn(Scan
         }
         Ok(known)
     })?;
-    let d = diff(&known, &found);
+    // A folder the walk couldn't list says nothing about its files: they stay as they were.
+    if !seen.unreadable.is_empty() {
+        report.unlisted = seen.unreadable.clone();
+        known.retain(|f| !seen.unseen(&f.rel_path));
+    }
+    let d = diff(&known, found);
 
     // A move is only trusted when the new file starts with the same bytes.
     let mut to_read = d.added;
@@ -1028,6 +1043,32 @@ mod tests {
         let report = scan(&store, root, &|_| {}).unwrap();
         assert_eq!(report.added, 1);
         assert_eq!(store.load_columns().unwrap().len(), 2);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_the_walk_cannot_list_keeps_its_files() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, store) = library();
+        let music = dir.join("music");
+        put(&music, "open/1.flac", Some(("One", "Hogg", "First", 1)));
+        put(&music, "shut/2.flac", Some(("Two", "Hogg", "First", 2)));
+        let root = add_root(&store, &music).unwrap();
+        scan(&store, root, &|_| {}).unwrap();
+
+        // As macOS refuses ~/Music/Music to an app without Media & Apple Music access.
+        std::fs::set_permissions(music.join("shut"), std::fs::Permissions::from_mode(0o000)).unwrap();
+        let whole = scan(&store, root, &|_| {}).unwrap();
+        let some = rescan_dirs(&store, root, &["shut".into()], &|_| {}).unwrap();
+        std::fs::set_permissions(music.join("shut"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!((whole.removed, whole.unlisted.as_slice()), (0, ["shut".to_string()].as_slice()));
+        assert_eq!((some.removed, some.unlisted.as_slice()), (0, ["shut".to_string()].as_slice()));
+        assert_eq!(store.load_columns().unwrap().len(), 2);
+
+        // Listed again, a file that really went is still found missing.
+        std::fs::remove_file(music.join("shut/2.flac")).unwrap();
+        assert_eq!(scan(&store, root, &|_| {}).unwrap().removed, 1);
         std::fs::remove_dir_all(dir).ok();
     }
 

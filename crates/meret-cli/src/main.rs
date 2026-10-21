@@ -272,10 +272,14 @@ fn main() -> Result<()> {
 
 fn scan(root: PathBuf, stat_only: bool) -> Result<()> {
     let t = Instant::now();
-    let files = meret_library::walk(&root);
+    let seen = meret_library::walk(&root);
+    let files = seen.files;
     let walked = t.elapsed();
     let bytes: u64 = files.iter().map(|f| f.size).sum();
     println!("walked {} audio files ({:.1} GB) in {walked:.2?}", files.len(), bytes as f64 / 1e9);
+    for dir in &seen.unreadable {
+        println!("couldn't list {}", root.join(dir).display());
+    }
     if stat_only {
         return Ok(());
     }
