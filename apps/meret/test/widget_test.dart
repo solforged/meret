@@ -21,6 +21,7 @@ import 'package:meret/panes/search_pane.dart';
 import 'package:meret/panes/person_pane.dart';
 import 'package:meret/panes/release_pane.dart';
 import 'package:meret/panes/table_pane.dart';
+import 'package:meret/panes/work_pane.dart';
 import 'package:meret/shell/pane_row.dart';
 import 'package:meret/shell/query_line.dart';
 import 'package:meret/theme/light.dart';
@@ -1206,6 +1207,59 @@ void main() {
     expect((await core.trail())!.current, 1);
   });
 
+  testWidgets('tag work links open recordings, play them and connect a composer’s roles and works', (tester) async {
+    final core = _RecordingCore();
+    final row = await _firstTrack(core);
+    final release = await core.release(row.releaseId);
+    final workThread = release.rowWorks.first!;
+    final workId = (workThread.to as TargetDto_Work).id;
+    await core.startTrail(TargetDto.release(id: release.id));
+    await _surface(tester, core);
+    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(release.id);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.byKey(const ValueKey('release-work-0')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<WorkPane>(find.byType(WorkPane)).id, workId);
+    expect(core.releasesPlayed, isEmpty, reason: 'the work link does not play its release row');
+    final work = await core.work(workId);
+    await tester.tap(find.byKey(const ValueKey('work-row-0')));
+    await tester.pump();
+    expect(core.worksPlayed, [(workId, 0)]);
+    expect((await core.now().first).trackId, work.rows.first.trackId);
+
+    await tester.tap(find.byKey(ValueKey('work-album-${work.rows.first.trackId}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect((await core.trail())!.stops.firstWhere((stop) => stop.onPath && stop.index == 0).target,
+      TargetDto.release(id: release.id));
+    expect(find.byType(WorkPane), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final composer = work.composerLinks.single;
+    await tester.tap(find.descendant(of: find.byType(WorkPane),
+      matching: find.byKey(ValueKey('thread-${composer.kind.name}-${composer.to}'))));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final person = await core.person((composer.to as TargetDto_Person).id);
+    expect(find.descendant(of: find.byType(PersonPane), matching: find.text(person.roles.single.title)), findsOneWidget);
+    final role = person.roles.single.threads.single;
+    expect(find.descendant(of: find.byType(PersonPane),
+      matching: find.byKey(ValueKey('thread-${role.kind.name}-${role.to}'))), findsOneWidget);
+    final personWork = person.works.single;
+    await tester.tap(find.descendant(of: find.byType(PersonPane),
+      matching: find.byKey(ValueKey('thread-${personWork.kind.name}-${personWork.to}'))));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<WorkPane>(find.byType(WorkPane)).id, workId);
+    final trail = (await core.trail())!;
+    expect(trail.stops.firstWhere((stop) => stop.index == trail.current).target, workThread.to);
+  });
+
   testWidgets('Command-Enter follows the selected table row and a strip star goes back', (tester) async {
     final core = FakeCore();
     final row = await _firstTrack(core);
@@ -1331,6 +1385,7 @@ class _RecordingCore extends FakeCore {
   final playedViews = <ViewDto>[];
   int frontCalls = 0;
   final releasesPlayed = <(int, int, int?)>[];
+  final worksPlayed = <(PlatformInt64, int)>[];
   final seeks = <BigInt>[];
   final transports = <TransportDto>[];
   final started = <TargetDto>[];
@@ -1387,6 +1442,12 @@ class _RecordingCore extends FakeCore {
     return super.playRelease(id: id, index: index, fromStop: fromStop);
   }
 
+  @override
+  Future<void> playWork(PlatformInt64 id, int index) {
+    worksPlayed.add((id, index));
+    return super.playWork(id, index);
+  }
+
 }
 
 class _InvalidCore extends FakeCore {
@@ -1430,6 +1491,7 @@ class _ArtworkCore extends FakeCore {
       lengthMs: release.lengthMs,
       formats: release.formats,
       rows: release.rows,
+      rowWorks: release.rowWorks,
       credits: release.credits,
       plays: release.plays,
       lastPlayedMs: release.lastPlayedMs,

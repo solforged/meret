@@ -124,6 +124,14 @@ Future<ReleaseDto> release({required PlatformInt64 id}) =>
 Future<PersonDto> person({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiCorePerson(id: id);
 
+/// A work pane: its composer, its parts, and every recording of it.
+Future<WorkDto> work({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiCoreWork(id: id);
+
+/// Replaces the queue with a work's recordings from row `index`.
+Future<void> playWork({required PlatformInt64 id, required int index}) =>
+    RustLib.instance.api.crateApiCorePlayWork(id: id, index: index);
+
 /// Plays a release's tracklist from row `index`, replacing the queue.
 /// `from_stop` is the pane it was played from; that stop is marked played.
 Future<void> playRelease({

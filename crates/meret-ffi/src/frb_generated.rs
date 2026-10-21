@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1046208838;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1560055284;
 
 // Section: executor
 
@@ -781,6 +781,40 @@ fn wire__crate__api__core__play_something_impl(
         },
     )
 }
+fn wire__crate__api__core__play_work_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "play_work",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <i64>::sse_decode(&mut deserializer);
+            let api_index = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::play_work(api_id, api_index)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__release_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1515,6 +1549,39 @@ fn wire__crate__api__core__watch_status_impl(
         },
     )
 }
+fn wire__crate__api__core__work_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "work",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::work(api_id)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__zones_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1557,6 +1624,11 @@ const _: fn() = || {
         let _: u64 = AnchorDto.item;
         let _: f64 = AnchorDto.position_ms;
         let _: f64 = AnchorDto.rate;
+    }
+    {
+        let CreditSectionDto = None::<crate::api::types::CreditSectionDto>.unwrap();
+        let _: String = CreditSectionDto.title;
+        let _: Vec<crate::api::types::ThreadDto> = CreditSectionDto.threads;
     }
     {
         let DormantDto = None::<crate::api::types::DormantDto>.unwrap();
@@ -1717,6 +1789,8 @@ const _: fn() = || {
         let _: u32 = PersonDto.tracks;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.releases;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.appears_on;
+        let _: Vec<crate::api::types::CreditSectionDto> = PersonDto.roles;
+        let _: Vec<crate::api::types::ThreadDto> = PersonDto.works;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.worked_with;
         let _: u64 = PersonDto.plays;
         let _: Option<i64> = PersonDto.last_played_ms;
@@ -1774,6 +1848,7 @@ const _: fn() = || {
         let _: u64 = ReleaseDto.length_ms;
         let _: Vec<String> = ReleaseDto.formats;
         let _: Vec<crate::api::types::TrackRowDto> = ReleaseDto.rows;
+        let _: Vec<Option<crate::api::types::ThreadDto>> = ReleaseDto.row_works;
         let _: Vec<crate::api::types::ThreadDto> = ReleaseDto.credits;
         let _: u64 = ReleaseDto.plays;
         let _: Option<i64> = ReleaseDto.last_played_ms;
@@ -1870,6 +1945,9 @@ const _: fn() = || {
         crate::api::types::TargetDto::Person { id } => {
             let _: i64 = id;
         }
+        crate::api::types::TargetDto::Work { id } => {
+            let _: i64 = id;
+        }
     }
     {
         let ThreadDto = None::<crate::api::types::ThreadDto>.unwrap();
@@ -1959,6 +2037,19 @@ const _: fn() = || {
         let _: Option<String> = VolumeDto.reason;
     }
     {
+        let WorkDto = None::<crate::api::types::WorkDto>.unwrap();
+        let _: i64 = WorkDto.id;
+        let _: String = WorkDto.title;
+        let _: Option<String> = WorkDto.composer;
+        let _: Vec<crate::api::types::ThreadDto> = WorkDto.composer_links;
+        let _: Option<crate::api::types::ThreadDto> = WorkDto.part_of;
+        let _: Vec<crate::api::types::ThreadDto> = WorkDto.parts;
+        let _: Vec<crate::api::types::TrackRowDto> = WorkDto.rows;
+        let _: u64 = WorkDto.length_ms;
+        let _: u64 = WorkDto.plays;
+        let _: Option<i64> = WorkDto.last_played_ms;
+    }
+    {
         let ZoneDto = None::<crate::api::types::ZoneDto>.unwrap();
         let _: String = ZoneDto.id;
         let _: String = ZoneDto.name;
@@ -2040,6 +2131,18 @@ impl SseDecode for crate::api::types::ColumnDto {
             4 => crate::api::types::ColumnDto::Added,
             5 => crate::api::types::ColumnDto::Dr,
             _ => unreachable!("Invalid variant for ColumnDto: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::CreditSectionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_threads = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        return crate::api::types::CreditSectionDto {
+            title: var_title,
+            threads: var_threads,
         };
     }
 }
@@ -2395,6 +2498,20 @@ impl SseDecode for Vec<String> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::CreditSectionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::CreditSectionDto>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::types::DormantDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2500,6 +2617,20 @@ impl SseDecode for Vec<crate::api::types::ListenDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::types::ListenDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<Option<crate::api::types::ThreadDto>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<Option<crate::api::types::ThreadDto>>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -2854,6 +2985,17 @@ impl SseDecode for Option<crate::api::types::PickDto> {
     }
 }
 
+impl SseDecode for Option<crate::api::types::ThreadDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::ThreadDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::types::TrailDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2926,6 +3068,8 @@ impl SseDecode for crate::api::types::PersonDto {
         let mut var_tracks = <u32>::sse_decode(deserializer);
         let mut var_releases = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_appearsOn = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_roles = <Vec<crate::api::types::CreditSectionDto>>::sse_decode(deserializer);
+        let mut var_works = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_workedWith = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_plays = <u64>::sse_decode(deserializer);
         let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
@@ -2935,6 +3079,8 @@ impl SseDecode for crate::api::types::PersonDto {
             tracks: var_tracks,
             releases: var_releases,
             appears_on: var_appearsOn,
+            roles: var_roles,
+            works: var_works,
             worked_with: var_workedWith,
             plays: var_plays,
             last_played_ms: var_lastPlayedMs,
@@ -3065,6 +3211,8 @@ impl SseDecode for crate::api::types::ReleaseDto {
         let mut var_lengthMs = <u64>::sse_decode(deserializer);
         let mut var_formats = <Vec<String>>::sse_decode(deserializer);
         let mut var_rows = <Vec<crate::api::types::TrackRowDto>>::sse_decode(deserializer);
+        let mut var_rowWorks =
+            <Vec<Option<crate::api::types::ThreadDto>>>::sse_decode(deserializer);
         let mut var_credits = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_plays = <u64>::sse_decode(deserializer);
         let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
@@ -3081,6 +3229,7 @@ impl SseDecode for crate::api::types::ReleaseDto {
             length_ms: var_lengthMs,
             formats: var_formats,
             rows: var_rows,
+            row_works: var_rowWorks,
             credits: var_credits,
             plays: var_plays,
             last_played_ms: var_lastPlayedMs,
@@ -3303,6 +3452,10 @@ impl SseDecode for crate::api::types::TargetDto {
             2 => {
                 let mut var_id = <i64>::sse_decode(deserializer);
                 return crate::api::types::TargetDto::Person { id: var_id };
+            }
+            3 => {
+                let mut var_id = <i64>::sse_decode(deserializer);
+                return crate::api::types::TargetDto::Work { id: var_id };
             }
             _ => {
                 unimplemented!("");
@@ -3578,6 +3731,34 @@ impl SseDecode for crate::api::types::VolumeDto {
     }
 }
 
+impl SseDecode for crate::api::types::WorkDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <i64>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_composer = <Option<String>>::sse_decode(deserializer);
+        let mut var_composerLinks = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_partOf = <Option<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_parts = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_rows = <Vec<crate::api::types::TrackRowDto>>::sse_decode(deserializer);
+        let mut var_lengthMs = <u64>::sse_decode(deserializer);
+        let mut var_plays = <u64>::sse_decode(deserializer);
+        let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
+        return crate::api::types::WorkDto {
+            id: var_id,
+            title: var_title,
+            composer: var_composer,
+            composer_links: var_composerLinks,
+            part_of: var_partOf,
+            parts: var_parts,
+            rows: var_rows,
+            length_ms: var_lengthMs,
+            plays: var_plays,
+            last_played_ms: var_lastPlayedMs,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::ZoneDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3628,28 +3809,30 @@ fn pde_ffi_dispatcher_primary_impl(
         20 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
         21 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
         22 => wire__crate__api__core__play_something_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__core__zones_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__core__play_work_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__core__work_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__core__zones_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3663,7 +3846,7 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         14 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3714,6 +3897,27 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ColumnDto>>
     for crate::api::types::ColumnDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::ColumnDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::CreditSectionDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.title.into_into_dart().into_dart(),
+            self.0.threads.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::CreditSectionDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::CreditSectionDto>>
+    for crate::api::types::CreditSectionDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::CreditSectionDto> {
         self.into()
     }
 }
@@ -4244,6 +4448,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::PersonDto> 
             self.0.tracks.into_into_dart().into_dart(),
             self.0.releases.into_into_dart().into_dart(),
             self.0.appears_on.into_into_dart().into_dart(),
+            self.0.roles.into_into_dart().into_dart(),
+            self.0.works.into_into_dart().into_dart(),
             self.0.worked_with.into_into_dart().into_dart(),
             self.0.plays.into_into_dart().into_dart(),
             self.0.last_played_ms.into_into_dart().into_dart(),
@@ -4403,6 +4609,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ReleaseDto>
             self.0.length_ms.into_into_dart().into_dart(),
             self.0.formats.into_into_dart().into_dart(),
             self.0.rows.into_into_dart().into_dart(),
+            self.0.row_works.into_into_dart().into_dart(),
             self.0.credits.into_into_dart().into_dart(),
             self.0.plays.into_into_dart().into_dart(),
             self.0.last_played_ms.into_into_dart().into_dart(),
@@ -4685,6 +4892,9 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TargetDto> 
             }
             crate::api::types::TargetDto::Person { id } => {
                 [2.into_dart(), id.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::types::TargetDto::Work { id } => {
+                [3.into_dart(), id.into_into_dart().into_dart()].into_dart()
             }
             _ => {
                 unimplemented!("");
@@ -4981,6 +5191,35 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::VolumeDto>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::WorkDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.composer.into_into_dart().into_dart(),
+            self.0.composer_links.into_into_dart().into_dart(),
+            self.0.part_of.into_into_dart().into_dart(),
+            self.0.parts.into_into_dart().into_dart(),
+            self.0.rows.into_into_dart().into_dart(),
+            self.0.length_ms.into_into_dart().into_dart(),
+            self.0.plays.into_into_dart().into_dart(),
+            self.0.last_played_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::WorkDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::WorkDto>>
+    for crate::api::types::WorkDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::WorkDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ZoneDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -5071,6 +5310,14 @@ impl SseEncode for crate::api::types::ColumnDto {
             },
             serializer,
         );
+    }
+}
+
+impl SseEncode for crate::api::types::CreditSectionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.title, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.threads, serializer);
     }
 }
 
@@ -5344,6 +5591,16 @@ impl SseEncode for Vec<String> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::CreditSectionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::CreditSectionDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::types::DormantDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5430,6 +5687,16 @@ impl SseEncode for Vec<crate::api::types::ListenDto> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::types::ListenDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<Option<crate::api::types::ThreadDto>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <Option<crate::api::types::ThreadDto>>::sse_encode(item, serializer);
         }
     }
 }
@@ -5710,6 +5977,16 @@ impl SseEncode for Option<crate::api::types::PickDto> {
     }
 }
 
+impl SseEncode for Option<crate::api::types::ThreadDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::ThreadDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::types::TrailDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5770,6 +6047,8 @@ impl SseEncode for crate::api::types::PersonDto {
         <u32>::sse_encode(self.tracks, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.releases, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.appears_on, serializer);
+        <Vec<crate::api::types::CreditSectionDto>>::sse_encode(self.roles, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.works, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.worked_with, serializer);
         <u64>::sse_encode(self.plays, serializer);
         <Option<i64>>::sse_encode(self.last_played_ms, serializer);
@@ -5867,6 +6146,7 @@ impl SseEncode for crate::api::types::ReleaseDto {
         <u64>::sse_encode(self.length_ms, serializer);
         <Vec<String>>::sse_encode(self.formats, serializer);
         <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
+        <Vec<Option<crate::api::types::ThreadDto>>>::sse_encode(self.row_works, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.credits, serializer);
         <u64>::sse_encode(self.plays, serializer);
         <Option<i64>>::sse_encode(self.last_played_ms, serializer);
@@ -6017,6 +6297,10 @@ impl SseEncode for crate::api::types::TargetDto {
             }
             crate::api::types::TargetDto::Person { id } => {
                 <i32>::sse_encode(2, serializer);
+                <i64>::sse_encode(id, serializer);
+            }
+            crate::api::types::TargetDto::Work { id } => {
+                <i32>::sse_encode(3, serializer);
                 <i64>::sse_encode(id, serializer);
             }
             _ => {
@@ -6228,6 +6512,22 @@ impl SseEncode for crate::api::types::VolumeDto {
         <Option<f32>>::sse_encode(self.scalar, serializer);
         <bool>::sse_encode(self.settable, serializer);
         <Option<String>>::sse_encode(self.reason, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::WorkDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.composer, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.composer_links, serializer);
+        <Option<crate::api::types::ThreadDto>>::sse_encode(self.part_of, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.parts, serializer);
+        <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
+        <u64>::sse_encode(self.length_ms, serializer);
+        <u64>::sse_encode(self.plays, serializer);
+        <Option<i64>>::sse_encode(self.last_played_ms, serializer);
     }
 }
 

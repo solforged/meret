@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use meret_core::Core;
 use meret_core::{PageItem, View};
-use meret_model::{AgentId, EntityRef, ReleaseId};
+use meret_model::{AgentId, EntityRef, ReleaseId, WorkId};
 use meret_query::{Input, parse};
 use meret_store::{ColumnId, plan};
 
@@ -261,7 +261,9 @@ impl Api {
     /// From a pane before the last, this starts a branch.
     pub fn follow(&self, from_stop: u32, to: TargetDto, via: ThreadKind) -> Result<TrailDto, String> {
         let source = match via {
-            ThreadKind::By | ThreadKind::AlbumArtist | ThreadKind::AppearsOn | ThreadKind::WorkedWith => LOCAL_TAGS,
+            ThreadKind::By | ThreadKind::AlbumArtist | ThreadKind::AppearsOn | ThreadKind::WorkedWith
+            | ThreadKind::ComposedBy | ThreadKind::LyricsBy | ThreadKind::ArrangedBy | ThreadKind::PerformedBy
+            | ThreadKind::ConductedBy | ThreadKind::ProducedBy | ThreadKind::EngineeredBy | ThreadKind::RecordingOf => LOCAL_TAGS,
             ThreadKind::Matched => "library",
             other => return Err(format!("\"{}\" threads come with providers, which aren't built yet", other.label())),
         };
@@ -337,6 +339,7 @@ impl Api {
                 TargetDto::Search { query } => Ok(Some(query.clone())),
                 TargetDto::Release { id } => self.core.store.release_title(ReleaseId(*id)),
                 TargetDto::Person { id } => self.core.store.agent_name(AgentId(*id)),
+                TargetDto::Work { id } => self.core.store.work_title(WorkId(*id)),
             };
             name.ok().flatten().unwrap_or_else(|| "gone".into())
         })
@@ -358,6 +361,20 @@ impl Api {
             Ok(None) => Err("that person is gone".into()),
             Err(e) => Err(e.to_string()),
         }
+    }
+
+    /// A work pane.
+    pub fn work(&self, id: i64) -> Result<WorkDto, String> {
+        match self.core.work(WorkId(id)) {
+            Ok(Some(page)) => Ok(page.into()),
+            Ok(None) => Err("that work is gone".into()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// Plays a work's recordings from row `index`, replacing the queue.
+    pub fn play_work(&self, id: i64, index: u32) -> Result<(), String> {
+        self.core.play_work(WorkId(id), index as usize).map_err(|e| e.to_string())
     }
 
     /// Plays a release's tracklist from row `index`, replacing the queue.
@@ -392,6 +409,7 @@ impl Api {
                     EntityRef::Search => return Ok(summary.root_query.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| "Everything".into())),
                     EntityRef::Release(id) => self.core.store.release_title(id),
                     EntityRef::Agent(id) => self.core.store.agent_name(id),
+                    EntityRef::Work(id) => self.core.store.work_title(id),
                     _ => return Ok("gone".into()),
                 };
                 Ok(name.map_err(|e| e.to_string())?.unwrap_or_else(|| "gone".into()))

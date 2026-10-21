@@ -13,13 +13,28 @@ pub struct Tags {
     pub album: Option<String>,
     pub album_artist: Option<String>,
     pub album_artists: Vec<String>,
-    pub composer: Option<String>,
+    /// Composers, arrangers, performers and the rest, in tag order.
+    pub credits: Vec<RoleTag>,
     pub genre: Option<String>,
     pub track: Option<u32>,
     pub disc: Option<u32>,
     pub year: Option<u16>,
+    /// The composition this is a recording of, and a movement within it.
+    pub work: Option<String>,
+    pub movement: Option<String>,
+    pub movement_number: Option<u32>,
+    /// Who wrote the work when the recording credits someone else, as in an
+    /// arrangement of a folk tune: ORIGINAL_COMPOSER in Vorbis comments.
+    pub original_composer: Option<String>,
+    pub label: Option<String>,
+    pub catalog_number: Option<String>,
     pub mb_recording: Option<String>,
     pub mb_release: Option<String>,
+    pub mb_release_group: Option<String>,
+    pub mb_work: Option<String>,
+    /// One per artist, in the artist tag's order.
+    pub mb_artists: Vec<String>,
+    pub mb_album_artists: Vec<String>,
     pub isrc: Option<String>,
     pub length_ms: u64,
     pub sample_rate: Option<u32>,
@@ -31,6 +46,28 @@ pub struct Tags {
     pub codec: String,
     pub lossless: bool,
 }
+
+/// One role's tag: every value as written. A performer value may name an
+/// instrument in parentheses: "Joji Hirota (shakuhachi)".
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RoleTag {
+    /// As the store's `credit.role`: composer, lyricist, arranger,
+    /// conductor, performer, producer, engineer.
+    pub role: &'static str,
+    pub values: Vec<String>,
+}
+
+/// Tag keys read as credits, and the role each one writes.
+const ROLES: [(ItemKey, &str); 8] = [
+    (ItemKey::Composer, "composer"),
+    (ItemKey::Lyricist, "lyricist"),
+    (ItemKey::Arranger, "arranger"),
+    (ItemKey::Conductor, "conductor"),
+    (ItemKey::Performer, "performer"),
+    (ItemKey::Producer, "producer"),
+    (ItemKey::Engineer, "engineer"),
+    (ItemKey::MixEngineer, "engineer"),
+];
 
 #[derive(Debug, thiserror::Error)]
 #[error("{path}: {message}")]
@@ -73,20 +110,64 @@ pub fn read_tags(path: &Path) -> Result<Tags, TagError> {
         ..Default::default()
     };
     let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else { return Ok(t) };
-    let s = |k: ItemKey| tag.get_string(k).map(str::to_owned);
+    let s = |k: ItemKey| tag.get_string(k).map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned);
+    let all = |k: ItemKey| tag.get_strings(k).map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned).collect::<Vec<_>>();
     t.title = tag.title().map(|c| c.into_owned());
     t.artist = credit_tags(tag, ItemKey::TrackArtist, ItemKey::TrackArtists, &mut t.artists);
     t.album = tag.album().map(|c| c.into_owned());
     t.genre = tag.genre().map(|c| c.into_owned());
     t.album_artist = credit_tags(tag, ItemKey::AlbumArtist, ItemKey::AlbumArtists, &mut t.album_artists);
-    t.composer = s(ItemKey::Composer);
+    for (key, role) in ROLES {
+        let values = all(key);
+        if values.is_empty() {
+            continue;
+        }
+        match t.credits.iter_mut().find(|c| c.role == role) {
+            Some(credit) => credit.values.extend(values),
+            None => t.credits.push(RoleTag { role, values }),
+        }
+    }
     t.track = tag.track();
     t.disc = tag.disk();
     t.year = tag.date().map(|d| d.year).filter(|&y| y > 0);
+    t.work = s(ItemKey::Work);
+    t.movement = s(ItemKey::Movement);
+    t.movement_number = s(ItemKey::MovementNumber).and_then(|n| n.split('/').next()?.trim().parse().ok());
+    t.label = s(ItemKey::Label);
+    t.catalog_number = s(ItemKey::CatalogNumber);
     t.mb_recording = s(ItemKey::MusicBrainzRecordingId);
     t.mb_release = s(ItemKey::MusicBrainzReleaseId);
+    t.mb_release_group = s(ItemKey::MusicBrainzReleaseGroupId);
+    t.mb_work = s(ItemKey::MusicBrainzWorkId);
+    t.mb_artists = mbids(all(ItemKey::MusicBrainzArtistId));
+    t.mb_album_artists = mbids(all(ItemKey::MusicBrainzReleaseArtistId));
     t.isrc = s(ItemKey::Isrc);
+    if matches!(file.file_type(), FileType::Flac | FileType::Vorbis | FileType::Opus | FileType::Speex) {
+        t.original_composer = vorbis_comment(path, file.file_type(), "ORIGINAL_COMPOSER");
+    }
     Ok(t)
+}
+
+/// Several IDs may share one value, split by `/` or `;` as Picard writes them.
+fn mbids(values: Vec<String>) -> Vec<String> {
+    values.iter().flat_map(|v| v.split(['/', ';'])).map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned).collect()
+}
+
+/// A Vorbis comment the generic tag has no key for.
+fn vorbis_comment(path: &Path, file_type: FileType, key: &str) -> Option<String> {
+    use lofty::config::ParseOptions;
+    use lofty::file::AudioFile;
+    let mut f = std::fs::File::open(path).ok()?;
+    let options = ParseOptions::new().read_properties(false).read_cover_art(false);
+    let comments = match file_type {
+        FileType::Flac => lofty::flac::FlacFile::read_from(&mut f, options).ok()?.vorbis_comments()?.clone(),
+        FileType::Vorbis => lofty::ogg::VorbisFile::read_from(&mut f, options).ok()?.vorbis_comments().clone(),
+        FileType::Opus => lofty::ogg::OpusFile::read_from(&mut f, options).ok()?.vorbis_comments().clone(),
+        FileType::Speex => lofty::ogg::SpeexFile::read_from(&mut f, options).ok()?.vorbis_comments().clone(),
+        _ => return None,
+    };
+    let values: Vec<&str> = comments.get_all(key).map(str::trim).filter(|v| !v.is_empty()).collect();
+    (!values.is_empty()).then(|| values.join("; "))
 }
 
 fn credit_tags(tag: &lofty::tag::Tag, single: ItemKey, multiple: ItemKey, people: &mut Vec<String>) -> Option<String> {
@@ -134,4 +215,3 @@ mod tests {
         assert_eq!(values, ["Earth, Wind & Fire"]);
     }
 }
-

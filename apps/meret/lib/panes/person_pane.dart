@@ -77,11 +77,18 @@ class _PersonPaneState extends State<PersonPane> {
     if (person == null) return Text(_error ?? 'Reading person…', style: Tok.label.copyWith(color: _error == null ? Tok.faint : Tok.warn));
     return CustomScrollView(slivers: [
       SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('${person.tracks} ${person.tracks == 1 ? 'track' : 'tracks'} · ${person.releases.length} ${person.releases.length == 1 ? 'release' : 'releases'} · ${playsFact(person.plays, person.lastPlayedMs)}', style: Tok.label),
+        Text([
+          '${person.tracks} ${person.tracks == 1 ? 'track' : 'tracks'}',
+          if (person.releases.isNotEmpty) '${person.releases.length} ${person.releases.length == 1 ? 'release' : 'releases'}',
+          if (person.works.isNotEmpty) '${person.works.length} ${person.works.length == 1 ? 'work' : 'works'}',
+          playsFact(person.plays, person.lastPlayedMs),
+        ].join(' · '), style: Tok.label),
         if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
       ])),
       ..._section('Releases', person.releases),
       ..._section('Appears on', person.appearsOn),
+      for (final role in person.roles) ..._section(role.title, role.threads),
+      ..._section('Works', person.works),
       ..._section('Worked with', person.workedWith),
       const SliverToBoxAdapter(child: SizedBox(height: 20)),
     ]);

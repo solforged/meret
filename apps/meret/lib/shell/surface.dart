@@ -14,6 +14,7 @@ import '../panes/pane.dart';
 import '../panes/person_pane.dart';
 import '../panes/release_pane.dart';
 import '../panes/search_pane.dart';
+import '../panes/work_pane.dart';
 import '../settings/settings_window.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
@@ -285,6 +286,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       ),
       TargetDto_Release(:final id) => ReleasePane(core: widget.core, id: id, fromStop: stop.index, onFollow: follow),
       TargetDto_Person(:final id) => PersonPane(core: widget.core, id: id, onFollow: follow),
+      TargetDto_Work(:final id) => WorkPane(core: widget.core, id: id, onFollow: follow),
     };
     return Pane(
       key: ValueKey('stop-${stop.index}-${stop.target}'),
@@ -292,12 +294,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         TargetDto_Search() => 'Search',
         TargetDto_Release() => 'Release',
         TargetDto_Person() => 'Person',
+        TargetDto_Work() => 'Work',
       },
       title: stop.title,
       via: stop.via,
       source: stop.viaSource,
       body: body,
-      showTitle: stop.target is! TargetDto_Release,
+      showTitle: stop.target is! TargetDto_Release && stop.target is! TargetDto_Work,
       compact: stop.target is TargetDto_Search,
       onSpineTap: () => _report(_navigate(() => widget.core.trailGo(stop.index), direction: -1)),
     );

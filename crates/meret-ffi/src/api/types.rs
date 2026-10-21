@@ -4,7 +4,7 @@ use flutter_rust_bridge::frb;
 pub use meret_api::{
     AnchorDto, ColumnDto, FidelityDto, FrontDto, FrontLineDto, HistogramDto, HitDto, HitKind, IdiomLineDto, JobDto,
     NowDto, PersonDto, QueryDto, QueryKind, RecentDto, ReleaseDto, RootDto, RowsDto, SearchDto, SourceDto, StageDto,
-    StatusDto, StopDto, TargetDto, ThreadDto, ThreadKind, TrackRowDto, TrailDto, TransportDto,
+    StatusDto, StopDto, TargetDto, ThreadDto, ThreadKind, TrackRowDto, TrailDto, TransportDto, CreditSectionDto, WorkDto,
 };
 pub use meret_api::LightDto;
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
@@ -399,6 +399,7 @@ pub enum _TargetDto {
     Search { query: String },
     Release { id: i64 },
     Person { id: i64 },
+    Work { id: i64 },
 }
 
 #[frb(mirror(ThreadKind))]
@@ -453,6 +454,7 @@ pub struct _ReleaseDto {
     pub length_ms: u64,
     pub formats: Vec<String>,
     pub rows: Vec<TrackRowDto>,
+    pub row_works: Vec<Option<ThreadDto>>,
     pub credits: Vec<ThreadDto>,
     pub plays: u64,
     pub last_played_ms: Option<i64>,
@@ -465,7 +467,29 @@ pub struct _PersonDto {
     pub tracks: u32,
     pub releases: Vec<ThreadDto>,
     pub appears_on: Vec<ThreadDto>,
+    pub roles: Vec<CreditSectionDto>,
+    pub works: Vec<ThreadDto>,
     pub worked_with: Vec<ThreadDto>,
+    pub plays: u64,
+    pub last_played_ms: Option<i64>,
+}
+
+#[frb(mirror(CreditSectionDto))]
+pub struct _CreditSectionDto {
+    pub title: String,
+    pub threads: Vec<ThreadDto>,
+}
+
+#[frb(mirror(WorkDto))]
+pub struct _WorkDto {
+    pub id: i64,
+    pub title: String,
+    pub composer: Option<String>,
+    pub composer_links: Vec<ThreadDto>,
+    pub part_of: Option<ThreadDto>,
+    pub parts: Vec<ThreadDto>,
+    pub rows: Vec<TrackRowDto>,
+    pub length_ms: u64,
     pub plays: u64,
     pub last_played_ms: Option<i64>,
 }
