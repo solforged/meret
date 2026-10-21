@@ -354,13 +354,14 @@ extension TargetDtoPatterns on TargetDto {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( TargetDto_Search value)?  search,TResult Function( TargetDto_Release value)?  release,TResult Function( TargetDto_Person value)?  person,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( TargetDto_Search value)?  search,TResult Function( TargetDto_Release value)?  release,TResult Function( TargetDto_Person value)?  person,TResult Function( TargetDto_Work value)?  work,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case TargetDto_Search() when search != null:
 return search(_that);case TargetDto_Release() when release != null:
 return release(_that);case TargetDto_Person() when person != null:
-return person(_that);case _:
+return person(_that);case TargetDto_Work() when work != null:
+return work(_that);case _:
   return orElse();
 
 }
@@ -378,13 +379,14 @@ return person(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( TargetDto_Search value)  search,required TResult Function( TargetDto_Release value)  release,required TResult Function( TargetDto_Person value)  person,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( TargetDto_Search value)  search,required TResult Function( TargetDto_Release value)  release,required TResult Function( TargetDto_Person value)  person,required TResult Function( TargetDto_Work value)  work,}){
 final _that = this;
 switch (_that) {
 case TargetDto_Search():
 return search(_that);case TargetDto_Release():
 return release(_that);case TargetDto_Person():
-return person(_that);}
+return person(_that);case TargetDto_Work():
+return work(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -398,13 +400,14 @@ return person(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( TargetDto_Search value)?  search,TResult? Function( TargetDto_Release value)?  release,TResult? Function( TargetDto_Person value)?  person,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( TargetDto_Search value)?  search,TResult? Function( TargetDto_Release value)?  release,TResult? Function( TargetDto_Person value)?  person,TResult? Function( TargetDto_Work value)?  work,}){
 final _that = this;
 switch (_that) {
 case TargetDto_Search() when search != null:
 return search(_that);case TargetDto_Release() when release != null:
 return release(_that);case TargetDto_Person() when person != null:
-return person(_that);case _:
+return person(_that);case TargetDto_Work() when work != null:
+return work(_that);case _:
   return null;
 
 }
@@ -421,12 +424,13 @@ return person(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String query)?  search,TResult Function( PlatformInt64 id)?  release,TResult Function( PlatformInt64 id)?  person,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String query)?  search,TResult Function( PlatformInt64 id)?  release,TResult Function( PlatformInt64 id)?  person,TResult Function( PlatformInt64 id)?  work,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case TargetDto_Search() when search != null:
 return search(_that.query);case TargetDto_Release() when release != null:
 return release(_that.id);case TargetDto_Person() when person != null:
-return person(_that.id);case _:
+return person(_that.id);case TargetDto_Work() when work != null:
+return work(_that.id);case _:
   return orElse();
 
 }
@@ -444,12 +448,13 @@ return person(_that.id);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String query)  search,required TResult Function( PlatformInt64 id)  release,required TResult Function( PlatformInt64 id)  person,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String query)  search,required TResult Function( PlatformInt64 id)  release,required TResult Function( PlatformInt64 id)  person,required TResult Function( PlatformInt64 id)  work,}) {final _that = this;
 switch (_that) {
 case TargetDto_Search():
 return search(_that.query);case TargetDto_Release():
 return release(_that.id);case TargetDto_Person():
-return person(_that.id);}
+return person(_that.id);case TargetDto_Work():
+return work(_that.id);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -463,12 +468,13 @@ return person(_that.id);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String query)?  search,TResult? Function( PlatformInt64 id)?  release,TResult? Function( PlatformInt64 id)?  person,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String query)?  search,TResult? Function( PlatformInt64 id)?  release,TResult? Function( PlatformInt64 id)?  person,TResult? Function( PlatformInt64 id)?  work,}) {final _that = this;
 switch (_that) {
 case TargetDto_Search() when search != null:
 return search(_that.query);case TargetDto_Release() when release != null:
 return release(_that.id);case TargetDto_Person() when person != null:
-return person(_that.id);case _:
+return person(_that.id);case TargetDto_Work() when work != null:
+return work(_that.id);case _:
   return null;
 
 }
@@ -672,6 +678,74 @@ class _$TargetDto_PersonCopyWithImpl<$Res>
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') $Res call({Object? id = null,}) {
   return _then(TargetDto_Person(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as PlatformInt64,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class TargetDto_Work extends TargetDto {
+  const TargetDto_Work({required this.id}): super._();
+  
+
+ final  PlatformInt64 id;
+
+/// Create a copy of TargetDto
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$TargetDto_WorkCopyWith<TargetDto_Work> get copyWith => _$TargetDto_WorkCopyWithImpl<TargetDto_Work>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is TargetDto_Work&&(identical(other.id, id) || other.id == id));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,id);
+}
+
+@override
+String toString() {
+    return 'TargetDto.work(id: $id)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $TargetDto_WorkCopyWith<$Res> implements $TargetDtoCopyWith<$Res> {
+  factory $TargetDto_WorkCopyWith(TargetDto_Work value, $Res Function(TargetDto_Work) _then) = _$TargetDto_WorkCopyWithImpl;
+@useResult
+$Res call({
+ PlatformInt64 id
+});
+
+
+
+
+}
+/// @nodoc
+class _$TargetDto_WorkCopyWithImpl<$Res>
+    implements $TargetDto_WorkCopyWith<$Res> {
+  _$TargetDto_WorkCopyWithImpl(this._self, this._then);
+
+  final TargetDto_Work _self;
+  final $Res Function(TargetDto_Work) _then;
+
+/// Create a copy of TargetDto
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? id = null,}) {
+  return _then(TargetDto_Work(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as PlatformInt64,
   ));

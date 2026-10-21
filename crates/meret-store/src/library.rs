@@ -364,6 +364,7 @@ impl Store {
                 Term::Text { text } => self.tracks_with_text(std::slice::from_ref(text))?,
                 Term::Person { role, name } => self.tracks_by_person(name, *role)?,
                 Term::Named { field: NameField::Release, value } => self.tracks_on_release_named(value)?,
+                Term::Named { field: NameField::Work, value } => self.tracks_in_work_named(value)?,
                 _ => vec![],
             };
             and(&mut rows, clause.negated, tracks);

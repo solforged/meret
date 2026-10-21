@@ -404,7 +404,96 @@ fn ingest(
     )?;
     tx.execute("UPDATE recording SET artist_credit = ?2 WHERE id = ?1", params![recording, t.artist])?;
     credit_people(tx, EntityKind::Recording, recording, &artist, "artist", rev, provenance)?;
+    for role in &t.credits {
+        credit(tx, EntityKind::Recording, recording, &crate::splitting::role_people(&role.values), role.role, rev, provenance)?;
+    }
+    let work = work(tx, &t, rev, provenance)?;
+    tx.execute("UPDATE recording SET work_id = ?2 WHERE id = ?1", params![recording, work])?;
+    if t.label.is_some() || t.catalog_number.is_some() {
+        tx.execute(
+            "UPDATE edition SET label = COALESCE(label, ?2), catalog_no = COALESCE(catalog_no, ?3)
+             WHERE release_id = ?1 AND is_default = 1",
+            params![release, t.label, t.catalog_number],
+        )?;
+    }
+    external_ids(tx, &t, recording, release, work, &artist, &album_artists, rev)?;
     search::index_recording(tx, recording)
+}
+
+/// A recording's work: the WORK tag, and a movement within it when MOVEMENTNAME
+/// is set. The work's composer is ORIGINAL_COMPOSER when the file has one,
+/// since then COMPOSER names whoever wrote this arrangement.
+fn work(tx: &Transaction<'_>, t: &Tags, rev: i64, provenance: i64) -> rusqlite::Result<Option<i64>> {
+    let Some(title) = &t.work else { return Ok(None) };
+    let composers: Vec<String> = match &t.original_composer {
+        Some(original) => vec![original.clone()],
+        None => t.credits.iter().filter(|c| c.role == "composer").flat_map(|c| c.values.clone()).collect(),
+    };
+    let written = (!composers.is_empty()).then(|| composers.join("; "));
+    let find_or_add = |title: &str, parent: Option<i64>, position: Option<u32>| -> rusqlite::Result<i64> {
+        let found: Option<i64> = tx
+            .query_row(
+                "SELECT id FROM work WHERE title = ?1 AND parent_id IS ?2 AND composer_credit IS ?3 LIMIT 1",
+                params![title, parent, written],
+                |r| r.get(0),
+            )
+            .optional()?;
+        match found {
+            Some(id) => Ok(id),
+            None => tx.query_row(
+                "INSERT INTO work (parent_id, position, title, composer_credit, rev) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
+                params![parent, position, title, written, rev],
+                |r| r.get(0),
+            ),
+        }
+    };
+    let id = find_or_add(title, None, None)?;
+    tx.execute(
+        "DELETE FROM credit WHERE subject_kind = ?1 AND subject_id = ?2 AND provenance_id = ?3",
+        params![EntityKind::Work as i64, id, provenance],
+    )?;
+    credit(tx, EntityKind::Work, id, &crate::splitting::role_people(&composers), "composer", rev, provenance)?;
+    match &t.movement {
+        Some(movement) => find_or_add(movement, Some(id), t.movement_number).map(Some),
+        None => Ok(Some(id)),
+    }
+}
+
+/// MusicBrainz IDs and ISRCs, kept for lookups. An artist ID is kept only
+/// when the tag has one per person, so it can't land on the wrong one.
+#[allow(clippy::too_many_arguments)]
+fn external_ids(
+    tx: &Transaction<'_>,
+    t: &Tags,
+    recording: i64,
+    release: i64,
+    work: Option<i64>,
+    artists: &[String],
+    album_artists: &[String],
+    rev: i64,
+) -> rusqlite::Result<()> {
+    let mut ids: Vec<(EntityKind, i64, &str, &str)> = vec![];
+    if let Some(v) = &t.mb_recording { ids.push((EntityKind::Recording, recording, "mbid", v)); }
+    if let Some(v) = &t.isrc { ids.push((EntityKind::Recording, recording, "isrc", v)); }
+    if let Some(v) = &t.mb_release { ids.push((EntityKind::Release, release, "mbid", v)); }
+    if let Some(v) = &t.mb_release_group { ids.push((EntityKind::Release, release, "mb_release_group", v)); }
+    if let (Some(v), Some(work)) = (&t.mb_work, work) { ids.push((EntityKind::Work, work, "mbid", v)); }
+    let mut agents = vec![];
+    for (names, mbids) in [(artists, &t.mb_artists), (album_artists, &t.mb_album_artists)] {
+        if names.len() == mbids.len() {
+            for (name, mbid) in names.iter().zip(mbids) {
+                agents.push((meret_store::credits::agent(tx, name, rev)?, mbid.as_str()));
+            }
+        }
+    }
+    ids.extend(agents.iter().map(|(agent, mbid)| (EntityKind::Agent, *agent, "mbid", *mbid)));
+    for (kind, id, namespace, value) in ids {
+        tx.execute(
+            "INSERT OR IGNORE INTO external_id (entity_kind, entity_id, namespace, value) VALUES (?1, ?2, ?3, ?4)",
+            params![kind as i64, id, namespace, value],
+        )?;
+    }
+    Ok(())
 }
 
 /// A release is its title and album artist, as tagged.
@@ -491,13 +580,27 @@ fn credit_people(
     rev: i64,
     provenance: i64,
 ) -> rusqlite::Result<()> {
-    for (sort, name) in names.iter().enumerate() {
+    let people: Vec<(String, Option<String>)> = names.iter().map(|n| (n.clone(), None)).collect();
+    credit(tx, kind, subject, &people, role, rev, provenance)
+}
+
+/// Credits each person in `role`, with a detail such as an instrument.
+fn credit(
+    tx: &Transaction<'_>,
+    kind: EntityKind,
+    subject: i64,
+    people: &[(String, Option<String>)],
+    role: &str,
+    rev: i64,
+    provenance: i64,
+) -> rusqlite::Result<()> {
+    for (sort, (name, detail)) in people.iter().enumerate() {
         let agent = meret_store::credits::agent(tx, name, rev)?;
         tx.execute(
-            "INSERT INTO credit (subject_kind, subject_id, agent_id, role, sort, provenance_id, rev)
-             SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT EXISTS (
+            "INSERT INTO credit (subject_kind, subject_id, agent_id, role, detail, sort, provenance_id, rev)
+             SELECT ?1, ?2, ?3, ?4, ?8, ?5, ?6, ?7 WHERE NOT EXISTS (
                 SELECT 1 FROM credit WHERE subject_kind = ?1 AND subject_id = ?2 AND agent_id = ?3 AND role = ?4 AND provenance_id = ?6)",
-            params![kind as i64, subject, agent, role, sort as i64, provenance, rev],
+            params![kind as i64, subject, agent, role, sort as i64, provenance, rev, detail],
         )?;
     }
     Ok(())
@@ -572,6 +675,90 @@ mod tests {
         let cols = store.load_columns().unwrap();
         let rows = store.track_rows(&cols.track).unwrap();
         rows.into_iter().find(|r| r.path.as_deref() == Some(&*path.to_string_lossy())).map(|r| r.track)
+    }
+
+    /// A tone with these Vorbis comments, any key included.
+    fn put_comments(dir: &Path, rel: &str, comments: &[(&str, &str)]) {
+        let path = dir.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::copy(TONE, &path).unwrap();
+        let mut tag = lofty::ogg::tag::VorbisComments::default();
+        for (key, value) in comments {
+            tag.push((*key).into(), (*value).into());
+        }
+        tag.save_to_path(&path, WriteOptions::default()).unwrap();
+    }
+
+    #[test]
+    fn roles_and_works_from_tags_answer_queries_and_fill_pages() {
+        let (dir, store) = library();
+        let music = dir.join("music");
+        let arranged = [("ALBUM", "Civ"), ("ARTIST", "Ada Vellum"), ("COMPOSER", "Ada Vellum"), ("WORK", "Ode to Joy"),
+            ("ORIGINAL_COMPOSER", "Dora Klee")];
+        put_comments(&music, "civ/09.flac", &[arranged.as_slice(), &[("TITLE", "Peace"), ("TRACKNUMBER", "9"),
+            ("ARRANGER", "Bo Strand; not separately itemized in the consulted release metadata"),
+            ("PERFORMER", "Cy Reed (ney)")]].concat());
+        put_comments(&music, "civ/10.flac", &[arranged.as_slice(), &[("TITLE", "War"), ("TRACKNUMBER", "10")]].concat());
+        put_comments(&music, "nine/4.flac", &[("ALBUM", "Ninth"), ("ARTIST", "Fen Orchestra"), ("TITLE", "Presto"),
+            ("COMPOSER", "Dora Klee"), ("CONDUCTOR", "Eli Marsh"), ("WORK", "Symphony No. 9"), ("MOVEMENTNAME", "IV. Presto"),
+            ("MOVEMENT", "4"), ("MUSICBRAINZ_WORKID", "w-4"), ("MUSICBRAINZ_TRACKID", "rec-4"), ("LABEL", "Fen Records")]);
+        let root = add_root(&store, &music).unwrap();
+        scan(&store, root, &|_| {}).unwrap();
+
+        let cols = store.load_columns().unwrap();
+        let rows = |q: &str| {
+            let meret_query::Input::Search(q) = meret_query::parse(q).unwrap() else { unreachable!() };
+            store.answer_residual(meret_store::plan(&q, &cols, 0), &cols).unwrap().map(|r| r.len())
+        };
+        assert_eq!(rows("composer:klee"), Some(3), "the work's composer composed its arrangements and its movements");
+        assert_eq!(rows("composer:vellum"), Some(2));
+        assert_eq!(rows("arranged:strand"), Some(1));
+        assert_eq!(rows("played:reed"), Some(1));
+        assert_eq!(rows("performer:vellum"), Some(2), "the artist tag still says who performs");
+        assert_eq!(rows("conducted:marsh"), Some(1));
+        assert_eq!(rows("by:klee"), Some(3));
+        assert_eq!(rows("klee"), Some(3), "work composers are searchable text");
+        assert_eq!(rows("work:\"ode to joy\""), Some(2));
+        assert_eq!(rows("work:symphony"), Some(1), "a movement is found by its work");
+
+        let civ = store.release_hits(&["civ".into()], 1).unwrap().1[0].release;
+        let page = store.release_page(civ).unwrap().unwrap();
+        let roles: Vec<_> = page.roles.iter().map(|c| (c.role.as_str(), c.name.as_str(), c.detail.as_deref(), c.positions.clone())).collect();
+        assert_eq!(roles, [
+            ("composer", "Ada Vellum", None, vec![(1, 9), (1, 10)]),
+            ("arranger", "Bo Strand", None, vec![(1, 9)]),
+            ("performer", "Cy Reed", Some("ney"), vec![(1, 9)]),
+        ], "a note in a credit tag names no one");
+        assert_eq!(page.works.len(), 2);
+        assert_eq!(page.works[0].1, page.works[1].1, "both arrangements record one work");
+
+        let klee = store.people_hits(&["klee".into()], 1).unwrap().1[0].agent;
+        let person = store.person_page(klee).unwrap().unwrap();
+        assert_eq!(person.tracks, 3);
+        assert_eq!(person.works.iter().map(|w| (w.title.as_str(), w.tracks)).collect::<Vec<_>>(), [("Ode to Joy", 2), ("Symphony No. 9", 1)]);
+        assert_eq!(person.roles.iter().map(|(role, releases)| (role.as_str(), releases.len())).collect::<Vec<_>>(), [("composer", 1)]);
+
+        let symphony = person.works[1].work;
+        let work = store.work_page(symphony).unwrap().unwrap();
+        assert_eq!(work.composers.iter().map(|(_, name)| name.as_str()).collect::<Vec<_>>(), ["Dora Klee"]);
+        assert_eq!(work.parts.iter().map(|p| (p.title.as_str(), p.tracks)).collect::<Vec<_>>(), [("IV. Presto", 1)]);
+        assert_eq!(work.tracks.len(), 1);
+        let movement = store.work_page(work.parts[0].work).unwrap().unwrap();
+        assert_eq!(movement.parent.map(|(_, title)| title).as_deref(), Some("Symphony No. 9"));
+        assert_eq!(movement.composer.as_deref(), Some("Dora Klee"), "a movement's composer is its work's");
+
+        let ids: Vec<(i64, String, String)> = store.read(|c| c.prepare("SELECT entity_kind, namespace, value FROM external_id ORDER BY value")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect()).unwrap();
+        assert_eq!(ids, [(2, "mbid".to_string(), "rec-4".to_string()), (1, "mbid".into(), "w-4".into())]);
+
+        // Rescanning changed files keeps one work and one set of credits.
+        scan(&store, root, &|_| {}).unwrap();
+        std::fs::remove_file(music.join("civ/10.flac")).unwrap();
+        put_comments(&music, "civ/10.flac", &[arranged.as_slice(), &[("TITLE", "War"), ("TRACKNUMBER", "10")]].concat());
+        scan(&store, root, &|_| {}).unwrap();
+        assert_eq!(store.read(|c| c.query_row("SELECT COUNT(*) FROM work", [], |r| r.get::<_, i64>(0))).unwrap(), 3);
+        assert_eq!(store.release_page(civ).unwrap().unwrap().roles.len(), 3);
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]
@@ -737,7 +924,6 @@ mod tests {
         assert_eq!(rows("by:iona"), Some(2), "an exact name excludes Iona Brown");
         assert_eq!(rows("by:ion"), Some(3), "without an exact name, contains matching remains");
         assert_eq!(rows("performer:hogg"), Some(1));
-        assert_eq!(rows("composer:hogg"), Some(0), "no composers are read yet");
         assert_eq!(rows("release:sky"), Some(2));
         assert_eq!(rows("game:chrono"), Some(0), "nothing says what game a track is from yet");
         assert_eq!(rows("-game:chrono"), Some(6));

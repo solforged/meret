@@ -29,8 +29,12 @@ fn rowid(kind: EntityKind, id: i64) -> i64 {
 }
 
 const RECORDING_ROW: &str = "SELECT ?1, 2, r.id, search_fold(r.title),
-       search_fold(COALESCE((SELECT group_concat(a.name, ' · ') FROM credit c JOIN agent a ON a.id = c.agent_id
-                 WHERE c.subject_kind = 2 AND c.subject_id = r.id), '')),
+       search_fold(COALESCE((SELECT group_concat(name, ' · ') FROM (
+                   SELECT a.name FROM credit c JOIN agent a ON a.id = c.agent_id
+                   WHERE c.subject_kind = 2 AND c.subject_id = r.id
+                   UNION
+                   SELECT a.name FROM work w JOIN credit c ON c.subject_kind = 1 AND c.subject_id IN (w.id, w.parent_id)
+                   JOIN agent a ON a.id = c.agent_id WHERE w.id = r.work_id)), '')),
        search_fold(COALESCE((SELECT group_concat(x, ' · ') FROM (
                    SELECT DISTINCT rl.title AS x FROM track t JOIN medium m ON m.id = t.medium_id
                    JOIN edition e ON e.id = m.edition_id JOIN release rl ON rl.id = e.release_id
@@ -185,13 +189,16 @@ const PRESENT: &str = "EXISTS (SELECT 1 FROM source s JOIN file f ON f.id = s.fi
     JOIN root r ON r.id = f.root_id
     WHERE s.track_id = {t}.id AND s.kind = 'file' AND f.state = 'present' AND r.state <> 'removed')";
 
-/// The tracks credited to agent `{a}`: as a recording's artist, or on a
-/// release they are the album artist of.
+/// The tracks credited to agent `{a}`: in any role on a recording, on a
+/// release they are the album artist of, or recording a work they wrote.
 const AGENT_TRACKS: &str = "SELECT t.id FROM credit c JOIN track t ON t.recording_id = c.subject_id
         WHERE c.subject_kind = 2 AND c.agent_id = {a}
     UNION
     SELECT t.id FROM credit c JOIN edition e ON e.release_id = c.subject_id JOIN medium m ON m.edition_id = e.id
-        JOIN track t ON t.medium_id = m.id WHERE c.subject_kind = 3 AND c.agent_id = {a}";
+        JOIN track t ON t.medium_id = m.id WHERE c.subject_kind = 3 AND c.agent_id = {a}
+    UNION
+    SELECT t.id FROM credit c JOIN work w ON c.subject_id IN (w.id, w.parent_id) JOIN recording r ON r.work_id = w.id
+        JOIN track t ON t.recording_id = r.id WHERE c.subject_kind = 1 AND c.agent_id = {a}";
 
 /// How many candidates hits are ranked from. A word like "the" matches far
 /// more; the best of them sort first by name.
@@ -262,14 +269,28 @@ impl Store {
                  UNION
                  SELECT t.id FROM credit c JOIN edition e ON e.release_id = c.subject_id
                      JOIN medium m ON m.edition_id = e.id JOIN track t ON t.medium_id = m.id
-                     WHERE c.subject_kind = 3 AND c.agent_id IN ({agents})"
+                     WHERE c.subject_kind = 3 AND c.agent_id IN ({agents})
+                 UNION
+                 SELECT t.id FROM credit c JOIN work w ON c.subject_id IN (w.id, w.parent_id)
+                     JOIN recording r ON r.work_id = w.id JOIN track t ON t.recording_id = r.id
+                     WHERE c.subject_kind = 1 AND c.agent_id IN ({agents})"
             ),
             Some(role) => {
-                params.push(credit_role(role).to_string());
-                let n = params.len();
+                let roles = format!("c.role IN ({})", credit_roles(role).iter().map(|r| format!("'{r}'")).collect::<Vec<_>>().join(", "));
+                let sung = if role == Role::Sung { VOCALS } else { "1" };
+                // A work's composer composed every recording of it and of its movements.
+                let works = if role == Role::Composer {
+                    format!(
+                        " UNION SELECT t.id FROM credit c JOIN work w ON c.subject_id IN (w.id, w.parent_id)
+                             JOIN recording r ON r.work_id = w.id JOIN track t ON t.recording_id = r.id
+                         WHERE c.subject_kind = 1 AND c.role = 'composer' AND c.agent_id IN ({agents})"
+                    )
+                } else {
+                    String::new()
+                };
                 format!(
                     "SELECT t.id FROM credit c JOIN track t ON t.recording_id = c.subject_id
-                     WHERE c.subject_kind = 2 AND c.role = ?{n} AND c.agent_id IN ({agents})"
+                     WHERE c.subject_kind = 2 AND {roles} AND {sung} AND c.agent_id IN ({agents}){works}"
                 )
             }
         };
@@ -292,6 +313,23 @@ impl Store {
                          AND NOT EXISTS (SELECT 1 FROM release WHERE title = ?{n} COLLATE NOCASE))"
                 ),
                 params,
+            )
+        })
+    }
+
+    /// Recordings of a work or of its movements. Exact titles take
+    /// precedence over contains matches.
+    pub fn tracks_in_work_named(&self, title: &str) -> Result<Vec<TrackId>> {
+        let like = format!("%{}%", escape_like(&fold_str(title)));
+        self.read(|c| {
+            ids(
+                c,
+                "WITH exact AS (SELECT id FROM work WHERE title = ?1 COLLATE NOCASE),
+                 named AS (SELECT id FROM exact
+                     UNION SELECT id FROM work WHERE search_fold(title) LIKE ?2 ESCAPE '\\' AND NOT EXISTS (SELECT 1 FROM exact))
+                 SELECT t.id FROM track t JOIN recording r ON r.id = t.recording_id JOIN work w ON w.id = r.work_id
+                 WHERE w.id IN named OR w.parent_id IN named",
+                vec![title.to_owned(), like],
             )
         })
     }
@@ -373,14 +411,26 @@ impl Store {
     }
 }
 
-/// The credit role a query role reads. The scan writes a file's artist tag
-/// as `artist`, which is who performs it.
-fn credit_role(role: Role) -> &'static str {
+/// The credit roles a query role reads. The scan writes a file's artist
+/// tag as `artist`, which is who performs it, and PERFORMER values as
+/// `performer` with the instrument as the detail.
+fn credit_roles(role: Role) -> &'static [&'static str] {
     match role {
-        Role::Performer => "artist",
-        other => other.as_str(),
+        Role::Performer => &["artist", "performer"],
+        Role::Sung => &["performer"],
+        Role::Composer => &["composer"],
+        Role::Arranger => &["arranger"],
+        Role::Lyricist => &["lyricist"],
+        Role::Conductor => &["conductor"],
+        Role::Producer => &["producer"],
+        Role::Engineer => &["engineer"],
+        Role::Member => &["member"],
     }
 }
+
+/// A performer credit for singing, by its detail.
+const VOCALS: &str = "(c.detail LIKE '%vocal%' OR c.detail LIKE '%voice%' OR c.detail LIKE '%sing%'
+    OR c.detail IN ('soprano', 'mezzo-soprano', 'alto', 'contralto', 'tenor', 'baritone', 'bass', 'choir'))";
 
 fn escape_like(s: &str) -> String {
     s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")

@@ -8,7 +8,7 @@ use meret_core::{Facet, FacetColumn, Facets, GroupRow, SortKey, View};
 use meret_graph::Trail;
 use meret_model::signal::Fidelity;
 use meret_model::thread::source_label;
-use meret_model::{AgentId, EntityRef, Idiom, ReleaseId};
+use meret_model::{AgentId, EntityRef, Idiom, ReleaseId, WorkId};
 use meret_query::{NameField, Term};
 use meret_store::TrackRow;
 
@@ -705,6 +705,7 @@ pub enum TargetDto {
     Search { query: String },
     Release { id: i64 },
     Person { id: i64 },
+    Work { id: i64 },
 }
 
 impl TargetDto {
@@ -714,6 +715,7 @@ impl TargetDto {
             TargetDto::Search { query } => (EntityRef::Search, Some(query.clone())),
             TargetDto::Release { id } => (EntityRef::Release(ReleaseId(*id)), None),
             TargetDto::Person { id } => (EntityRef::Agent(AgentId(*id)), None),
+            TargetDto::Work { id } => (EntityRef::Work(WorkId(*id)), None),
         }
     }
 
@@ -722,10 +724,26 @@ impl TargetDto {
             EntityRef::Search => TargetDto::Search { query: root_query.unwrap_or_default().into() },
             EntityRef::Release(r) => TargetDto::Release { id: r.0 },
             EntityRef::Agent(a) => TargetDto::Person { id: a.0 },
-            // Only `Api` writes the trail, and it only opens these three.
+            EntityRef::Work(w) => TargetDto::Work { id: w.0 },
+            // Only `Api` writes the trail, and it only opens these four.
             other => unreachable!("{other:?} is not a pane yet"),
         }
     }
+}
+
+/// The thread a credit role draws to a person, and how a person pane heads
+/// the releases they have in that role.
+pub(crate) fn role_thread(role: &str) -> Option<(ThreadKind, &'static str)> {
+    Some(match role {
+        "composer" => (ThreadKind::ComposedBy, "Composed"),
+        "lyricist" => (ThreadKind::LyricsBy, "Lyrics"),
+        "arranger" => (ThreadKind::ArrangedBy, "Arranged"),
+        "performer" => (ThreadKind::PerformedBy, "Performed"),
+        "conductor" => (ThreadKind::ConductedBy, "Conducted"),
+        "producer" => (ThreadKind::ProducedBy, "Produced"),
+        "engineer" => (ThreadKind::EngineeredBy, "Engineered"),
+        _ => return None,
+    })
 }
 
 /// A thread out of a pane. Following it opens `to` to the right.
@@ -771,7 +789,10 @@ pub struct ReleaseDto {
     pub formats: Vec<String>,
     /// The tracklist; row i plays with `play_release(id, i)`.
     pub rows: Vec<TrackRowDto>,
-    /// The album artist, then each track artist and where they are.
+    /// The work each row is a recording of, where its tags say.
+    pub row_works: Vec<Option<ThreadDto>>,
+    /// The album artist, each track artist and where they are, then
+    /// composers, arrangers, performers and the other roles.
     pub credits: Vec<ThreadDto>,
     /// Counted plays of this release, and the newest one (Unix ms).
     pub plays: u64,
@@ -803,23 +824,41 @@ impl ReleaseDto {
             ThreadDto::local(ThreadKind::AlbumArtist, TargetDto::Person { id: agent.0 }, name.clone(), String::new())
         }).collect();
         let mut credits = artist_links.clone();
-        for a in p.artists {
-            let everywhere = a.positions.len() == rows.len();
-            // The album artist on every track is already said.
-            if everywhere && p.album_artists.iter().any(|(id, _)| *id == a.agent) {
-                continue;
-            }
-            let detail = if everywhere {
+        let positions = |positions: &[(u32, u32)]| {
+            if positions.len() == rows.len() {
                 format!("all {} tracks", rows.len())
-            } else if a.positions.len() > 6 {
-                format!("{} tracks", a.positions.len())
+            } else if positions.len() > 6 {
+                format!("{} tracks", positions.len())
             } else {
                 let multi = discs.len() > 1;
-                a.positions.iter().map(|&(d, n)| if multi { format!("{d}-{n:02}") } else { n.to_string() }).collect::<Vec<_>>().join(", ")
-            };
+                positions.iter().map(|&(d, n)| if multi { format!("{d}-{n:02}") } else { n.to_string() }).collect::<Vec<_>>().join(", ")
+            }
+        };
+        for a in p.artists {
+            // The album artist on every track is already said.
+            if a.positions.len() == rows.len() && p.album_artists.iter().any(|(id, _)| *id == a.agent) {
+                continue;
+            }
+            let detail = positions(&a.positions);
             credits.push(ThreadDto::local(ThreadKind::By, TargetDto::Person { id: a.agent.0 }, a.name, detail));
         }
-
+        for c in p.roles {
+            let Some((kind, _)) = role_thread(&c.role) else { continue };
+            // A soundtrack's composer is often its artist on the same tracks; one line says it.
+            if credits.iter().any(|t| t.kind == ThreadKind::By && t.to == (TargetDto::Person { id: c.agent.0 }) && t.detail == positions(&c.positions)) {
+                continue;
+            }
+            let detail = match c.detail {
+                Some(plays) => format!("{plays} · {}", positions(&c.positions)),
+                None => positions(&c.positions),
+            };
+            credits.push(ThreadDto::local(kind, TargetDto::Person { id: c.agent.0 }, c.name, detail));
+        }
+        let row_works = rows.iter().map(|row| {
+            p.works.iter().find(|(track, _, _)| track.0 == row.track_id).map(|(_, work, title)| {
+                ThreadDto::local(ThreadKind::RecordingOf, TargetDto::Work { id: work.0 }, title.clone(), String::new())
+            })
+        }).collect();
         ReleaseDto {
             id: p.release.0,
             title: p.title,
@@ -834,6 +873,7 @@ impl ReleaseDto {
             formats: formats.into_iter().map(|(f, _)| f)
                 .chain((!other_formats.is_empty()).then(|| format!("also {}", other_formats.join(", ")))).collect(),
             rows,
+            row_works,
             credits,
             plays: p.plays,
             last_played_ms: p.last_played,
@@ -846,12 +886,17 @@ impl ReleaseDto {
 pub struct PersonDto {
     pub id: i64,
     pub name: String,
-    /// Their tracks: all of their own releases', and theirs on others'.
+    /// Every track they're on, in any role.
     pub tracks: u32,
     /// Releases they're the album artist of, by year.
     pub releases: Vec<ThreadDto>,
     /// Other people's releases they're on, by year.
     pub appears_on: Vec<ThreadDto>,
+    /// Releases they're credited on in other roles: "Composed", "Arranged",
+    /// "Performed"…, each by year.
+    pub roles: Vec<CreditSectionDto>,
+    /// Works they wrote, by title.
+    pub works: Vec<ThreadDto>,
     /// People who share releases with them, most shared first.
     pub worked_with: Vec<ThreadDto>,
     /// Counted plays of their recordings and the releases they front.
@@ -859,13 +904,20 @@ pub struct PersonDto {
     pub last_played_ms: Option<i64>,
 }
 
+/// A headed list of threads on a pane.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CreditSectionDto {
+    pub title: String,
+    pub threads: Vec<ThreadDto>,
+}
+
 impl From<PersonPage> for PersonDto {
     fn from(p: PersonPage) -> Self {
         let n = |n: u32, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
-        let release = |r: meret_core::PersonRelease, own: bool| {
+        let release = |r: meret_core::PersonRelease, kind: ThreadKind, own: bool| {
             let count = if own { n(r.tracks, "track", "tracks") } else { format!("{} of {}", r.theirs, n(r.tracks, "track", "tracks")) };
             let detail = r.year.map(|y| format!("{y} · {count}")).unwrap_or(count);
-            ThreadDto::local(ThreadKind::AppearsOn, TargetDto::Release { id: r.release.0 }, r.title, detail)
+            ThreadDto::local(kind, TargetDto::Release { id: r.release.0 }, r.title, detail)
         };
         PersonDto {
             id: p.agent.0,
@@ -873,8 +925,15 @@ impl From<PersonPage> for PersonDto {
             tracks: p.tracks,
             plays: p.plays,
             last_played_ms: p.last_played,
-            releases: p.releases.into_iter().map(|r| release(r, true)).collect(),
-            appears_on: p.appears_on.into_iter().map(|r| release(r, false)).collect(),
+            releases: p.releases.into_iter().map(|r| release(r, ThreadKind::AppearsOn, true)).collect(),
+            appears_on: p.appears_on.into_iter().map(|r| release(r, ThreadKind::AppearsOn, false)).collect(),
+            roles: p.roles.into_iter().filter_map(|(role, releases)| {
+                let (kind, title) = role_thread(&role)?;
+                Some(CreditSectionDto { title: title.into(), threads: releases.into_iter().map(|r| release(r, kind, false)).collect() })
+            }).collect(),
+            works: p.works.into_iter().map(|w| {
+                ThreadDto::local(ThreadKind::ComposedBy, TargetDto::Work { id: w.work.0 }, w.title, n(w.tracks, "track", "tracks"))
+            }).collect(),
             worked_with: p
                 .worked_with
                 .into_iter()
@@ -883,6 +942,50 @@ impl From<PersonPage> for PersonDto {
                     ThreadDto::local(ThreadKind::WorkedWith, TargetDto::Person { id: c.agent.0 }, c.name, detail)
                 })
                 .collect(),
+        }
+    }
+}
+
+/// A work pane: a composition, its composer, its parts, and every
+/// recording of it in the library.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorkDto {
+    pub id: i64,
+    pub title: String,
+    /// The composer as written.
+    pub composer: Option<String>,
+    /// Each composer as a thread target; `composer` keeps the written credit.
+    pub composer_links: Vec<ThreadDto>,
+    /// The work this is a movement or part of.
+    pub part_of: Option<ThreadDto>,
+    /// Its movements or parts, in order.
+    pub parts: Vec<ThreadDto>,
+    /// Recordings of it and its parts; row i plays with `play_work(id, i)`.
+    pub rows: Vec<TrackRowDto>,
+    pub length_ms: u64,
+    pub plays: u64,
+    pub last_played_ms: Option<i64>,
+}
+
+impl From<meret_core::WorkPage> for WorkDto {
+    fn from(p: meret_core::WorkPage) -> Self {
+        let n = |n: u32| format!("{n} {}", if n == 1 { "track" } else { "tracks" });
+        let rows: Vec<TrackRowDto> = p.tracks.into_iter().map(TrackRowDto::from).collect();
+        WorkDto {
+            id: p.work.0,
+            title: p.title,
+            composer: p.composer,
+            composer_links: p.composers.into_iter().map(|(agent, name)| {
+                ThreadDto::local(ThreadKind::ComposedBy, TargetDto::Person { id: agent.0 }, name, String::new())
+            }).collect(),
+            part_of: p.parent.map(|(work, title)| ThreadDto::local(ThreadKind::RecordingOf, TargetDto::Work { id: work.0 }, title, String::new())),
+            parts: p.parts.into_iter().map(|w| {
+                ThreadDto::local(ThreadKind::RecordingOf, TargetDto::Work { id: w.work.0 }, w.title, n(w.tracks))
+            }).collect(),
+            length_ms: rows.iter().filter_map(|r| r.length_ms).sum(),
+            rows,
+            plays: p.plays,
+            last_played_ms: p.last_played,
         }
     }
 }
@@ -1206,6 +1309,8 @@ mod cover_tests {
             cover: Some(art(None)),
             tracks: vec![],
             artists: vec![],
+            roles: vec![],
+            works: vec![],
             plays: 0,
             last_played: None,
         };
@@ -1224,7 +1329,8 @@ mod cover_tests {
         };
         let page = ReleasePage {
             release: ReleaseId(9), title: "Tyranny".into(), year: None, idiom: None,
-            album_artist: None, album_artists: vec![], cover: None, tracks: vec![track], artists: vec![], plays: 0, last_played: None,
+            album_artist: None, album_artists: vec![], cover: None, tracks: vec![track], artists: vec![], roles: vec![], works: vec![],
+            plays: 0, last_played: None,
         };
         let dto = ReleaseDto::from_page(page, Path::new("/tmp/art"));
         assert_eq!(dto.formats, ["FLAC 16/44.1", "also MP3"]);

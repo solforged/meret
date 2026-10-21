@@ -35,6 +35,24 @@ class AnchorDto {
 
 enum ColumnDto { year, length, plays, lastPlayed, added, dr }
 
+class CreditSectionDto {
+  final String title;
+  final List<ThreadDto> threads;
+
+  const CreditSectionDto({required this.title, required this.threads});
+
+  @override
+  int get hashCode => title.hashCode ^ threads.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CreditSectionDto &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          threads == other.threads;
+}
+
 class DormantDto {
   final PlatformInt64 releaseId;
   final String title;
@@ -651,6 +669,8 @@ class PersonDto {
   final int tracks;
   final List<ThreadDto> releases;
   final List<ThreadDto> appearsOn;
+  final List<CreditSectionDto> roles;
+  final List<ThreadDto> works;
   final List<ThreadDto> workedWith;
   final BigInt plays;
   final PlatformInt64? lastPlayedMs;
@@ -661,6 +681,8 @@ class PersonDto {
     required this.tracks,
     required this.releases,
     required this.appearsOn,
+    required this.roles,
+    required this.works,
     required this.workedWith,
     required this.plays,
     this.lastPlayedMs,
@@ -673,6 +695,8 @@ class PersonDto {
       tracks.hashCode ^
       releases.hashCode ^
       appearsOn.hashCode ^
+      roles.hashCode ^
+      works.hashCode ^
       workedWith.hashCode ^
       plays.hashCode ^
       lastPlayedMs.hashCode;
@@ -687,6 +711,8 @@ class PersonDto {
           tracks == other.tracks &&
           releases == other.releases &&
           appearsOn == other.appearsOn &&
+          roles == other.roles &&
+          works == other.works &&
           workedWith == other.workedWith &&
           plays == other.plays &&
           lastPlayedMs == other.lastPlayedMs;
@@ -868,6 +894,7 @@ class ReleaseDto {
   final BigInt lengthMs;
   final List<String> formats;
   final List<TrackRowDto> rows;
+  final List<ThreadDto?> rowWorks;
   final List<ThreadDto> credits;
   final BigInt plays;
   final PlatformInt64? lastPlayedMs;
@@ -885,6 +912,7 @@ class ReleaseDto {
     required this.lengthMs,
     required this.formats,
     required this.rows,
+    required this.rowWorks,
     required this.credits,
     required this.plays,
     this.lastPlayedMs,
@@ -904,6 +932,7 @@ class ReleaseDto {
       lengthMs.hashCode ^
       formats.hashCode ^
       rows.hashCode ^
+      rowWorks.hashCode ^
       credits.hashCode ^
       plays.hashCode ^
       lastPlayedMs.hashCode;
@@ -925,6 +954,7 @@ class ReleaseDto {
           lengthMs == other.lengthMs &&
           formats == other.formats &&
           rows == other.rows &&
+          rowWorks == other.rowWorks &&
           credits == other.credits &&
           plays == other.plays &&
           lastPlayedMs == other.lastPlayedMs;
@@ -1288,6 +1318,7 @@ sealed class TargetDto with _$TargetDto {
       TargetDto_Release;
   const factory TargetDto.person({required PlatformInt64 id}) =
       TargetDto_Person;
+  const factory TargetDto.work({required PlatformInt64 id}) = TargetDto_Work;
 }
 
 class ThreadDto {
@@ -1631,6 +1662,61 @@ class VolumeDto {
           scalar == other.scalar &&
           settable == other.settable &&
           reason == other.reason;
+}
+
+class WorkDto {
+  final PlatformInt64 id;
+  final String title;
+  final String? composer;
+  final List<ThreadDto> composerLinks;
+  final ThreadDto? partOf;
+  final List<ThreadDto> parts;
+  final List<TrackRowDto> rows;
+  final BigInt lengthMs;
+  final BigInt plays;
+  final PlatformInt64? lastPlayedMs;
+
+  const WorkDto({
+    required this.id,
+    required this.title,
+    this.composer,
+    required this.composerLinks,
+    this.partOf,
+    required this.parts,
+    required this.rows,
+    required this.lengthMs,
+    required this.plays,
+    this.lastPlayedMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      composer.hashCode ^
+      composerLinks.hashCode ^
+      partOf.hashCode ^
+      parts.hashCode ^
+      rows.hashCode ^
+      lengthMs.hashCode ^
+      plays.hashCode ^
+      lastPlayedMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WorkDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          composer == other.composer &&
+          composerLinks == other.composerLinks &&
+          partOf == other.partOf &&
+          parts == other.parts &&
+          rows == other.rows &&
+          lengthMs == other.lengthMs &&
+          plays == other.plays &&
+          lastPlayedMs == other.lastPlayedMs;
 }
 
 class ZoneDto {

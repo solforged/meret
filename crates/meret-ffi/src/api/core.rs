@@ -143,6 +143,16 @@ pub fn person(id: i64) -> Result<PersonDto, String> {
     api()?.person(id)
 }
 
+/// A work pane: its composer, its parts, and every recording of it.
+pub fn work(id: i64) -> Result<WorkDto, String> {
+    api()?.work(id)
+}
+
+/// Replaces the queue with a work's recordings from row `index`.
+pub fn play_work(id: i64, index: u32) -> Result<(), String> {
+    api()?.play_work(id, index)
+}
+
 /// Plays a release's tracklist from row `index`, replacing the queue.
 /// `from_stop` is the pane it was played from; that stop is marked played.
 pub fn play_release(id: i64, index: u32, from_stop: Option<u32>) -> Result<(), String> {

@@ -107,7 +107,7 @@ class _ReleasePaneState extends State<ReleasePane> {
     ),
   );
 
-  Widget _row(TrackRowDto row, int index, String? albumArtist) {
+  Widget _row(TrackRowDto row, int index, String? albumArtist, ThreadDto? work) {
     final light = Light.of(context);
     final lit = light.track == row.trackId.toInt();
     return Semantics(
@@ -130,7 +130,21 @@ class _ReleasePaneState extends State<ReleasePane> {
             ),
             child: Row(children: [
               SizedBox(width: 42, child: Text(_position(row), style: Tok.monoSmall)),
-              Expanded(child: Text(row.title, style: Tok.body.copyWith(color: lit ? light.accent : Tok.ink), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Expanded(child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(row.title, style: Tok.body.copyWith(color: lit ? light.accent : Tok.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (work != null) Semantics(
+                    button: true,
+                    child: GestureDetector(
+                      key: ValueKey('release-work-$index'),
+                      onTap: () => _follow(work),
+                      child: Text(work.title, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ],
+              )),
               // Compilations credit each track; say who when it isn't the album artist.
               if (row.artist != null && row.artist != albumArtist)
                 Flexible(child: Padding(
@@ -206,9 +220,11 @@ class _ReleasePaneState extends State<ReleasePane> {
             child: Text('${release.credits.length - _credits} more', style: Tok.label.copyWith(color: Tok.gold)),
           ))),
         SliverToBoxAdapter(child: _heading('Tracklist')),
-        SliverFixedExtentList(
-          itemExtent: 30,
-          delegate: SliverChildBuilderDelegate((_, i) => _row(release.rows[i], i, release.artist), childCount: release.rows.length),
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (_, i) => _row(release.rows[i], i, release.artist, release.rowWorks[i]),
+            childCount: release.rows.length,
+          ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 20)),
       ]),
@@ -273,6 +289,9 @@ class ThreadLine extends StatelessWidget {
   final ThreadDto thread;
   final VoidCallback onFollow;
 
+  /// Room for the longest label, "engineered by".
+  static const _label = 108.0;
+
   @override
   Widget build(BuildContext context) => Semantics(
     key: ValueKey('thread-${thread.kind.name}-${thread.to}'),
@@ -288,13 +307,13 @@ class ThreadLine extends StatelessWidget {
           decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SizedBox(width: 86, child: Text(thread.label, style: Tok.body.copyWith(color: Tok.gold2, fontStyle: FontStyle.italic))),
+              SizedBox(width: _label, child: Text(thread.label, style: Tok.body.copyWith(color: Tok.gold2, fontStyle: FontStyle.italic))),
               Expanded(child: Text(thread.title, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 8),
               Text(thread.source, style: Tok.label.copyWith(color: Tok.dim, fontSize: 10)),
             ]),
             if (thread.detail.isNotEmpty) Padding(
-              padding: const EdgeInsets.only(left: 86, top: 2),
+              padding: const EdgeInsets.only(left: _label, top: 2),
               child: Text(thread.detail, style: Tok.label),
             ),
           ]),

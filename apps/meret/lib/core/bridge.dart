@@ -22,6 +22,8 @@ abstract interface class CoreBridge {
   Future<SearchDto> search(String input);
   Future<ReleaseDto> release(PlatformInt64 id);
   Future<PersonDto> person(PlatformInt64 id);
+  Future<WorkDto> work(PlatformInt64 id);
+  Future<void> playWork(PlatformInt64 id, int index);
   Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop});
   Future<TrailDto> startTrail(TargetDto to);
   Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via);
@@ -83,6 +85,10 @@ class RustCore implements CoreBridge {
   Future<ReleaseDto> release(PlatformInt64 id) => rust.release(id: id);
   @override
   Future<PersonDto> person(PlatformInt64 id) => rust.person(id: id);
+  @override
+  Future<WorkDto> work(PlatformInt64 id) => rust.work(id: id);
+  @override
+  Future<void> playWork(PlatformInt64 id, int index) => rust.playWork(id: id, index: index);
   @override
   Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop}) =>
       rust.playRelease(id: id, index: index, fromStop: fromStop);
@@ -475,6 +481,7 @@ class FakeCore implements CoreBridge {
     TargetDto_Search(:final query) => query.isEmpty ? 'Everything' : query,
     TargetDto_Release(:final id) => (await release(id)).title,
     TargetDto_Person(:final id) => (await person(id)).name,
+    TargetDto_Work(:final id) => (await work(id)).title,
   };
 
   @override
@@ -482,7 +489,12 @@ class FakeCore implements CoreBridge {
     final trail = _trail;
     if (trail == null) throw 'No trail is open';
     if (to is TargetDto_Search) throw 'A search starts a new trail';
-    if (!const [ThreadKind.by, ThreadKind.albumArtist, ThreadKind.appearsOn, ThreadKind.workedWith, ThreadKind.matched].contains(via)) {
+    if (!const [
+      ThreadKind.by, ThreadKind.albumArtist, ThreadKind.appearsOn, ThreadKind.workedWith,
+      ThreadKind.composedBy, ThreadKind.lyricsBy, ThreadKind.arrangedBy, ThreadKind.performedBy,
+      ThreadKind.conductedBy, ThreadKind.producedBy, ThreadKind.engineeredBy, ThreadKind.recordingOf,
+      ThreadKind.matched,
+    ].contains(via)) {
       throw 'This thread is not followable yet';
     }
     if (!trail.stops.any((stop) => stop.index == fromStop)) throw 'Unknown trail stop';
@@ -514,6 +526,14 @@ class FakeCore implements CoreBridge {
     ThreadKind.albumArtist => 'album artist',
     ThreadKind.appearsOn => 'on',
     ThreadKind.workedWith => 'worked with',
+    ThreadKind.composedBy => 'composed by',
+    ThreadKind.lyricsBy => 'lyrics by',
+    ThreadKind.arrangedBy => 'arranged by',
+    ThreadKind.performedBy => 'performed by',
+    ThreadKind.conductedBy => 'conducted by',
+    ThreadKind.producedBy => 'produced by',
+    ThreadKind.engineeredBy => 'engineered by',
+    ThreadKind.recordingOf => 'recording of',
     ThreadKind.matched => 'matched',
     _ => throw 'This thread is not followable yet',
   };
@@ -965,6 +985,7 @@ class FakeCore implements CoreBridge {
       idiom: first.albumArtist == 'Yasunori Mitsuda' ? 'Score' : first.albumArtist == 'Bill Evans Trio' ? 'Session' : 'Album',
       tracks: rows.length, discs: rows.map((row) => row.disc).toSet().length,
       lengthMs: length, formats: sortedFormats, rows: rows,
+      rowWorks: [for (final row in rows) row.trackId.toInt() == 1 ? _workThread(ThreadKind.recordingOf) : null],
       plays: BigInt.from(id.toInt() == 1 ? 212 : 0), lastPlayedMs: id.toInt() == 1 ? PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch) : null,
       credits: [
         if (first.albumArtistId != null)
@@ -975,6 +996,9 @@ class FakeCore implements CoreBridge {
             ThreadDto(kind: ThreadKind.by, label: 'by', source: 'tags',
               to: TargetDto.person(id: entry.key), title: entry.value.first.artist!,
               detail: entry.value.map((row) => '${row.disc}-${row.number.toString().padLeft(2, '0')}').toSet().join(', ')),
+        if (id.toInt() == 1)
+          ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags',
+            to: TargetDto.person(id: _personId('Yasunori Mitsuda')), title: 'Yasunori Mitsuda', detail: '1 track'),
       ],
     );
   }
@@ -1007,12 +1031,46 @@ class FakeCore implements CoreBridge {
     }
     final coworkers = shared.keys.toList()..sort((a, b) => shared[b]!.compareTo(shared[a]!));
     return PersonDto(id: id, name: name, tracks: tracks, releases: releases, appearsOn: appearsOn,
+      roles: name == 'Yasunori Mitsuda' ? [
+        CreditSectionDto(title: 'Composed', threads: [
+          ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags',
+            to: TargetDto.release(id: PlatformInt64Util.from(1)), title: _releases.first.$1,
+            detail: '1998 · 1 of ${_releaseRows(PlatformInt64Util.from(1)).length} tracks'),
+        ]),
+      ] : [],
+      works: name == 'Yasunori Mitsuda' ? [_workThread(ThreadKind.composedBy, detail: '1 track')] : [],
       plays: BigInt.from(index == 0 ? 1240 : 0), lastPlayedMs: index == 0 ? PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch) : null, workedWith: [
       for (final person in coworkers.take(12))
         ThreadDto(kind: ThreadKind.workedWith, label: 'worked with', source: 'tags',
           to: TargetDto.person(id: person), title: _personNames[person.toInt() - 1],
           detail: '${shared[person]} ${shared[person] == 1 ? 'release' : 'releases'} together'),
     ]);
+  }
+
+  static ThreadDto _workThread(ThreadKind kind, {String detail = ''}) => ThreadDto(
+    kind: kind, label: _threadLabel(kind), source: 'tags',
+    to: TargetDto.work(id: PlatformInt64Util.from(1)), title: _releases.first.$4.first, detail: detail,
+  );
+
+  @override
+  Future<WorkDto> work(PlatformInt64 id) async {
+    if (_empty || id.toInt() != 1) throw 'Work no longer exists';
+    final row = _row(0);
+    return WorkDto(
+      id: id, title: _releases.first.$4.first, composer: 'Yasunori Mitsuda',
+      composerLinks: [
+        ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'tags',
+          to: TargetDto.person(id: _personId('Yasunori Mitsuda')), title: 'Yasunori Mitsuda', detail: ''),
+      ],
+      parts: [], rows: [row], lengthMs: row.lengthMs ?? BigInt.zero, plays: BigInt.zero,
+    );
+  }
+
+  @override
+  Future<void> playWork(PlatformInt64 id, int index) async {
+    final rows = (await work(id)).rows;
+    if (index < 0 || index >= rows.length) throw RangeError.index(index, rows);
+    _playQueue(rows.sublist(index));
   }
 
   @override

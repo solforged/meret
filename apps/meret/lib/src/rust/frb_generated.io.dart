@@ -68,6 +68,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TargetDto dco_decode_box_autoadd_target_dto(dynamic raw);
 
   @protected
+  ThreadDto dco_decode_box_autoadd_thread_dto(dynamic raw);
+
+  @protected
   TrackRowDto dco_decode_box_autoadd_track_row_dto(dynamic raw);
 
   @protected
@@ -90,6 +93,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ColumnDto dco_decode_column_dto(dynamic raw);
+
+  @protected
+  CreditSectionDto dco_decode_credit_section_dto(dynamic raw);
 
   @protected
   DormantDto dco_decode_dormant_dto(dynamic raw);
@@ -161,6 +167,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<CreditSectionDto> dco_decode_list_credit_section_dto(dynamic raw);
+
+  @protected
   List<DormantDto> dco_decode_list_dormant_dto(dynamic raw);
 
   @protected
@@ -186,6 +195,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ListenDto> dco_decode_list_listen_dto(dynamic raw);
+
+  @protected
+  List<ThreadDto?> dco_decode_list_opt_box_autoadd_thread_dto(dynamic raw);
 
   @protected
   List<OutputDeviceDto> dco_decode_list_output_device_dto(dynamic raw);
@@ -264,6 +276,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PickDto? dco_decode_opt_box_autoadd_pick_dto(dynamic raw);
+
+  @protected
+  ThreadDto? dco_decode_opt_box_autoadd_thread_dto(dynamic raw);
 
   @protected
   TrailDto? dco_decode_opt_box_autoadd_trail_dto(dynamic raw);
@@ -383,6 +398,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VolumeDto dco_decode_volume_dto(dynamic raw);
 
   @protected
+  WorkDto dco_decode_work_dto(dynamic raw);
+
+  @protected
   ZoneDto dco_decode_zone_dto(dynamic raw);
 
   @protected
@@ -435,6 +453,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TargetDto sse_decode_box_autoadd_target_dto(SseDeserializer deserializer);
 
   @protected
+  ThreadDto sse_decode_box_autoadd_thread_dto(SseDeserializer deserializer);
+
+  @protected
   TrackRowDto sse_decode_box_autoadd_track_row_dto(
     SseDeserializer deserializer,
   );
@@ -461,6 +482,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ColumnDto sse_decode_column_dto(SseDeserializer deserializer);
+
+  @protected
+  CreditSectionDto sse_decode_credit_section_dto(SseDeserializer deserializer);
 
   @protected
   DormantDto sse_decode_dormant_dto(SseDeserializer deserializer);
@@ -534,6 +558,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<CreditSectionDto> sse_decode_list_credit_section_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<DormantDto> sse_decode_list_dormant_dto(SseDeserializer deserializer);
 
   @protected
@@ -565,6 +594,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ListenDto> sse_decode_list_listen_dto(SseDeserializer deserializer);
+
+  @protected
+  List<ThreadDto?> sse_decode_list_opt_box_autoadd_thread_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<OutputDeviceDto> sse_decode_list_output_device_dto(
@@ -655,6 +689,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PickDto? sse_decode_opt_box_autoadd_pick_dto(SseDeserializer deserializer);
+
+  @protected
+  ThreadDto? sse_decode_opt_box_autoadd_thread_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TrailDto? sse_decode_opt_box_autoadd_trail_dto(SseDeserializer deserializer);
@@ -774,6 +813,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VolumeDto sse_decode_volume_dto(SseDeserializer deserializer);
 
   @protected
+  WorkDto sse_decode_work_dto(SseDeserializer deserializer);
+
+  @protected
   ZoneDto sse_decode_zone_dto(SseDeserializer deserializer);
 
   @protected
@@ -852,6 +894,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_thread_dto(
+    ThreadDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_track_row_dto(
     TrackRowDto self,
     SseSerializer serializer,
@@ -883,6 +931,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_column_dto(ColumnDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_credit_section_dto(
+    CreditSectionDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_dormant_dto(DormantDto self, SseSerializer serializer);
@@ -960,6 +1014,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_credit_section_dto(
+    List<CreditSectionDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_dormant_dto(
     List<DormantDto> self,
     SseSerializer serializer,
@@ -998,6 +1058,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_listen_dto(
     List<ListenDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_opt_box_autoadd_thread_dto(
+    List<ThreadDto?> self,
     SseSerializer serializer,
   );
 
@@ -1131,6 +1197,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_thread_dto(
+    ThreadDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_trail_dto(
     TrailDto? self,
     SseSerializer serializer,
@@ -1258,6 +1330,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_volume_dto(VolumeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_work_dto(WorkDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_zone_dto(ZoneDto self, SseSerializer serializer);

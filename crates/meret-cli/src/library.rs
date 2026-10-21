@@ -288,19 +288,34 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<(ThreadKind, TargetDto
             if let Some(cover) = &r.cover {
                 println!("    cover {cover}");
             }
-            for row in &r.rows {
+            for (row, work) in r.rows.iter().zip(&r.row_works) {
                 let artist = row.artist.as_deref().filter(|a| Some(*a) != r.artist.as_deref()).unwrap_or("");
                 println!("    {}-{:02} {:<44.44} {artist}", row.disc, row.number, row.title);
+                if let Some(work) = work {
+                    println!("          recording of {}", work.title);
+                }
             }
-            r.credits.iter().map(|c| (c.kind, c.to.clone(), thread_line(&c.label, c))).collect()
+            r.credits.iter().chain(r.row_works.iter().flatten())
+                .map(|c| (c.kind, c.to.clone(), thread_line(&c.label, c))).collect()
         }
         TargetDto::Person { id } => {
             let p = api.person(*id).map_err(|e| anyhow!(e))?;
             println!("\n{} · {} tracks  ({:.2?})", p.name, p.tracks, t.elapsed());
-            [("releases", &p.releases), ("on", &p.appears_on), ("worked with", &p.worked_with)]
+            [("releases", &p.releases), ("on", &p.appears_on)]
                 .into_iter()
-                .flat_map(|(group, list)| list.iter().map(move |c| (c.kind, c.to.clone(), thread_line(group, c))))
+                .chain(p.roles.iter().map(|s| (s.title.as_str(), &s.threads)))
+                .chain([("works", &p.works), ("worked with", &p.worked_with)])
+                .flat_map(|(group, list)| list.iter().map(move |c| (c.kind, c.to.clone(), thread_line(&group.to_lowercase(), c))))
                 .collect()
+        }
+        TargetDto::Work { id } => {
+            let w = api.work(*id).map_err(|e| anyhow!(e))?;
+            println!("\n{} · {} · {} recordings  ({:.2?})", w.title, w.composer.as_deref().unwrap_or("no composer"), w.rows.len(), t.elapsed());
+            for row in &w.rows {
+                println!("    {:<44.44} {:<24.24} {}", row.title, row.artist.as_deref().unwrap_or(""), row.album);
+            }
+            w.composer_links.iter().chain(&w.part_of).chain(&w.parts)
+                .map(|c| (c.kind, c.to.clone(), thread_line(&c.label, c))).collect()
         }
     };
     print_lines(&lines);
