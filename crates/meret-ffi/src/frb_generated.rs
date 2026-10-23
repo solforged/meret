@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1244919127;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 326729823;
 
 // Section: executor
 
@@ -241,6 +241,39 @@ fn wire__crate__api__core__front_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::front()?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__game_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "game",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::game(api_id)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -640,6 +673,40 @@ fn wire__crate__api__core__picks_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::picks(api_limit)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__play_game_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "play_game",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <i64>::sse_decode(&mut deserializer);
+            let api_index = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::play_game(api_id, api_index)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1755,6 +1822,22 @@ const _: fn() = || {
         let _: Option<String> = FrontLineDto.query;
     }
     {
+        let GameDto = None::<crate::api::types::GameDto>.unwrap();
+        let _: i64 = GameDto.id;
+        let _: String = GameDto.title;
+        let _: Option<u16> = GameDto.year;
+        let _: Option<String> = GameDto.developers;
+        let _: Option<String> = GameDto.platforms;
+        let _: Option<String> = GameDto.series;
+        let _: Vec<crate::api::types::ThreadDto> = GameDto.composers;
+        let _: Vec<crate::api::types::ThreadDto> = GameDto.soundtracks;
+        let _: Vec<crate::api::types::ThreadDto> = GameDto.same_series;
+        let _: Vec<crate::api::types::TrackRowDto> = GameDto.rows;
+        let _: u64 = GameDto.length_ms;
+        let _: u64 = GameDto.plays;
+        let _: Option<i64> = GameDto.last_played_ms;
+    }
+    {
         let GroupDto = None::<crate::api::types::GroupDto>.unwrap();
         let _: i64 = GroupDto.release_id;
         let _: String = GroupDto.title;
@@ -1872,6 +1955,7 @@ const _: fn() = || {
         let _: Vec<crate::api::types::CreditSectionDto> = PersonDto.roles;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.works;
         let _: Vec<crate::api::types::CreditSectionDto> = PersonDto.groups;
+        let _: Vec<crate::api::types::ThreadDto> = PersonDto.games;
         let _: Vec<crate::api::types::ThreadDto> = PersonDto.worked_with;
         let _: u64 = PersonDto.plays;
         let _: Option<i64> = PersonDto.last_played_ms;
@@ -1931,6 +2015,7 @@ const _: fn() = || {
         let _: Vec<crate::api::types::TrackRowDto> = ReleaseDto.rows;
         let _: Vec<Option<crate::api::types::ThreadDto>> = ReleaseDto.row_works;
         let _: Vec<crate::api::types::ThreadDto> = ReleaseDto.credits;
+        let _: Vec<crate::api::types::ThreadDto> = ReleaseDto.games;
         let _: u64 = ReleaseDto.plays;
         let _: Option<i64> = ReleaseDto.last_played_ms;
     }
@@ -2029,6 +2114,9 @@ const _: fn() = || {
             let _: i64 = id;
         }
         crate::api::types::TargetDto::Work { id } => {
+            let _: i64 = id;
+        }
+        crate::api::types::TargetDto::Game { id } => {
             let _: i64 = id;
         }
     }
@@ -2399,6 +2487,40 @@ impl SseDecode for crate::api::types::FrontLineDto {
             count: var_count,
             note: var_note,
             query: var_query,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::GameDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <i64>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_year = <Option<u16>>::sse_decode(deserializer);
+        let mut var_developers = <Option<String>>::sse_decode(deserializer);
+        let mut var_platforms = <Option<String>>::sse_decode(deserializer);
+        let mut var_series = <Option<String>>::sse_decode(deserializer);
+        let mut var_composers = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_soundtracks = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_sameSeries = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_rows = <Vec<crate::api::types::TrackRowDto>>::sse_decode(deserializer);
+        let mut var_lengthMs = <u64>::sse_decode(deserializer);
+        let mut var_plays = <u64>::sse_decode(deserializer);
+        let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
+        return crate::api::types::GameDto {
+            id: var_id,
+            title: var_title,
+            year: var_year,
+            developers: var_developers,
+            platforms: var_platforms,
+            series: var_series,
+            composers: var_composers,
+            soundtracks: var_soundtracks,
+            same_series: var_sameSeries,
+            rows: var_rows,
+            length_ms: var_lengthMs,
+            plays: var_plays,
+            last_played_ms: var_lastPlayedMs,
         };
     }
 }
@@ -3212,6 +3334,7 @@ impl SseDecode for crate::api::types::PersonDto {
         let mut var_roles = <Vec<crate::api::types::CreditSectionDto>>::sse_decode(deserializer);
         let mut var_works = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_groups = <Vec<crate::api::types::CreditSectionDto>>::sse_decode(deserializer);
+        let mut var_games = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_workedWith = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_plays = <u64>::sse_decode(deserializer);
         let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
@@ -3224,6 +3347,7 @@ impl SseDecode for crate::api::types::PersonDto {
             roles: var_roles,
             works: var_works,
             groups: var_groups,
+            games: var_games,
             worked_with: var_workedWith,
             plays: var_plays,
             last_played_ms: var_lastPlayedMs,
@@ -3357,6 +3481,7 @@ impl SseDecode for crate::api::types::ReleaseDto {
         let mut var_rowWorks =
             <Vec<Option<crate::api::types::ThreadDto>>>::sse_decode(deserializer);
         let mut var_credits = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
+        let mut var_games = <Vec<crate::api::types::ThreadDto>>::sse_decode(deserializer);
         let mut var_plays = <u64>::sse_decode(deserializer);
         let mut var_lastPlayedMs = <Option<i64>>::sse_decode(deserializer);
         return crate::api::types::ReleaseDto {
@@ -3374,6 +3499,7 @@ impl SseDecode for crate::api::types::ReleaseDto {
             rows: var_rows,
             row_works: var_rowWorks,
             credits: var_credits,
+            games: var_games,
             plays: var_plays,
             last_played_ms: var_lastPlayedMs,
         };
@@ -3604,6 +3730,10 @@ impl SseDecode for crate::api::types::TargetDto {
                 let mut var_id = <i64>::sse_decode(deserializer);
                 return crate::api::types::TargetDto::Work { id: var_id };
             }
+            4 => {
+                let mut var_id = <i64>::sse_decode(deserializer);
+                return crate::api::types::TargetDto::Game { id: var_id };
+            }
             _ => {
                 unimplemented!("");
             }
@@ -3655,14 +3785,17 @@ impl SseDecode for crate::api::types::ThreadKind {
             14 => crate::api::types::ThreadKind::Sampled,
             15 => crate::api::types::ThreadKind::SameSession,
             16 => crate::api::types::ThreadKind::Scored,
-            17 => crate::api::types::ThreadKind::Label,
-            18 => crate::api::types::ThreadKind::Cites,
-            19 => crate::api::types::ThreadKind::SoundsLike,
-            20 => crate::api::types::ThreadKind::ListenedAfter,
-            21 => crate::api::types::ThreadKind::By,
-            22 => crate::api::types::ThreadKind::AlbumArtist,
-            23 => crate::api::types::ThreadKind::AppearsOn,
-            24 => crate::api::types::ThreadKind::Matched,
+            17 => crate::api::types::ThreadKind::SoundtrackOf,
+            18 => crate::api::types::ThreadKind::Soundtrack,
+            19 => crate::api::types::ThreadKind::SameSeries,
+            20 => crate::api::types::ThreadKind::Label,
+            21 => crate::api::types::ThreadKind::Cites,
+            22 => crate::api::types::ThreadKind::SoundsLike,
+            23 => crate::api::types::ThreadKind::ListenedAfter,
+            24 => crate::api::types::ThreadKind::By,
+            25 => crate::api::types::ThreadKind::AlbumArtist,
+            26 => crate::api::types::ThreadKind::AppearsOn,
+            27 => crate::api::types::ThreadKind::Matched,
             _ => unreachable!("Invalid variant for ThreadKind: {}", inner),
         };
     }
@@ -3948,47 +4081,49 @@ fn pde_ffi_dispatcher_primary_impl(
         4 => wire__crate__api__core__flush_memory_impl(port, ptr, rust_vec_len, data_len),
         5 => wire__crate__api__core__follow_impl(port, ptr, rust_vec_len, data_len),
         6 => wire__crate__api__core__front_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__core__histogram_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__core__history_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__core__keep_trail_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__lookups_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__core__most_played_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__core__open_trail_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__core__picks_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__core__play_on_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__core__play_pick_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__core__play_something_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__core__play_work_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__core__set_lookups_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__core__work_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__core__zones_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__core__game_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__core__histogram_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__core__history_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__keep_trail_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__lookups_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__most_played_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__core__open_trail_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__core__picks_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__play_game_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__play_on_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__core__play_pick_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__play_something_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__core__play_work_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__core__set_lookups_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__core__work_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__core__zones_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4001,8 +4136,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        15 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4288,6 +4423,38 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::FrontLineDt
     for crate::api::types::FrontLineDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::FrontLineDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::GameDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.year.into_into_dart().into_dart(),
+            self.0.developers.into_into_dart().into_dart(),
+            self.0.platforms.into_into_dart().into_dart(),
+            self.0.series.into_into_dart().into_dart(),
+            self.0.composers.into_into_dart().into_dart(),
+            self.0.soundtracks.into_into_dart().into_dart(),
+            self.0.same_series.into_into_dart().into_dart(),
+            self.0.rows.into_into_dart().into_dart(),
+            self.0.length_ms.into_into_dart().into_dart(),
+            self.0.plays.into_into_dart().into_dart(),
+            self.0.last_played_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::GameDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::GameDto>>
+    for crate::api::types::GameDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::GameDto> {
         self.into()
     }
 }
@@ -4658,6 +4825,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::PersonDto> 
             self.0.roles.into_into_dart().into_dart(),
             self.0.works.into_into_dart().into_dart(),
             self.0.groups.into_into_dart().into_dart(),
+            self.0.games.into_into_dart().into_dart(),
             self.0.worked_with.into_into_dart().into_dart(),
             self.0.plays.into_into_dart().into_dart(),
             self.0.last_played_ms.into_into_dart().into_dart(),
@@ -4819,6 +4987,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ReleaseDto>
             self.0.rows.into_into_dart().into_dart(),
             self.0.row_works.into_into_dart().into_dart(),
             self.0.credits.into_into_dart().into_dart(),
+            self.0.games.into_into_dart().into_dart(),
             self.0.plays.into_into_dart().into_dart(),
             self.0.last_played_ms.into_into_dart().into_dart(),
         ]
@@ -5106,6 +5275,9 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TargetDto> 
             crate::api::types::TargetDto::Work { id } => {
                 [3.into_dart(), id.into_into_dart().into_dart()].into_dart()
             }
+            crate::api::types::TargetDto::Game { id } => {
+                [4.into_dart(), id.into_into_dart().into_dart()].into_dart()
+            }
             _ => {
                 unimplemented!("");
             }
@@ -5170,14 +5342,17 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ThreadKind>
             crate::api::types::ThreadKind::Sampled => 14.into_dart(),
             crate::api::types::ThreadKind::SameSession => 15.into_dart(),
             crate::api::types::ThreadKind::Scored => 16.into_dart(),
-            crate::api::types::ThreadKind::Label => 17.into_dart(),
-            crate::api::types::ThreadKind::Cites => 18.into_dart(),
-            crate::api::types::ThreadKind::SoundsLike => 19.into_dart(),
-            crate::api::types::ThreadKind::ListenedAfter => 20.into_dart(),
-            crate::api::types::ThreadKind::By => 21.into_dart(),
-            crate::api::types::ThreadKind::AlbumArtist => 22.into_dart(),
-            crate::api::types::ThreadKind::AppearsOn => 23.into_dart(),
-            crate::api::types::ThreadKind::Matched => 24.into_dart(),
+            crate::api::types::ThreadKind::SoundtrackOf => 17.into_dart(),
+            crate::api::types::ThreadKind::Soundtrack => 18.into_dart(),
+            crate::api::types::ThreadKind::SameSeries => 19.into_dart(),
+            crate::api::types::ThreadKind::Label => 20.into_dart(),
+            crate::api::types::ThreadKind::Cites => 21.into_dart(),
+            crate::api::types::ThreadKind::SoundsLike => 22.into_dart(),
+            crate::api::types::ThreadKind::ListenedAfter => 23.into_dart(),
+            crate::api::types::ThreadKind::By => 24.into_dart(),
+            crate::api::types::ThreadKind::AlbumArtist => 25.into_dart(),
+            crate::api::types::ThreadKind::AppearsOn => 26.into_dart(),
+            crate::api::types::ThreadKind::Matched => 27.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -5659,6 +5834,25 @@ impl SseEncode for crate::api::types::FrontLineDto {
         <u64>::sse_encode(self.count, serializer);
         <String>::sse_encode(self.note, serializer);
         <Option<String>>::sse_encode(self.query, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::GameDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<u16>>::sse_encode(self.year, serializer);
+        <Option<String>>::sse_encode(self.developers, serializer);
+        <Option<String>>::sse_encode(self.platforms, serializer);
+        <Option<String>>::sse_encode(self.series, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.composers, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.soundtracks, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.same_series, serializer);
+        <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
+        <u64>::sse_encode(self.length_ms, serializer);
+        <u64>::sse_encode(self.plays, serializer);
+        <Option<i64>>::sse_encode(self.last_played_ms, serializer);
     }
 }
 
@@ -6307,6 +6501,7 @@ impl SseEncode for crate::api::types::PersonDto {
         <Vec<crate::api::types::CreditSectionDto>>::sse_encode(self.roles, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.works, serializer);
         <Vec<crate::api::types::CreditSectionDto>>::sse_encode(self.groups, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.games, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.worked_with, serializer);
         <u64>::sse_encode(self.plays, serializer);
         <Option<i64>>::sse_encode(self.last_played_ms, serializer);
@@ -6406,6 +6601,7 @@ impl SseEncode for crate::api::types::ReleaseDto {
         <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
         <Vec<Option<crate::api::types::ThreadDto>>>::sse_encode(self.row_works, serializer);
         <Vec<crate::api::types::ThreadDto>>::sse_encode(self.credits, serializer);
+        <Vec<crate::api::types::ThreadDto>>::sse_encode(self.games, serializer);
         <u64>::sse_encode(self.plays, serializer);
         <Option<i64>>::sse_encode(self.last_played_ms, serializer);
     }
@@ -6563,6 +6759,10 @@ impl SseEncode for crate::api::types::TargetDto {
                 <i32>::sse_encode(3, serializer);
                 <i64>::sse_encode(id, serializer);
             }
+            crate::api::types::TargetDto::Game { id } => {
+                <i32>::sse_encode(4, serializer);
+                <i64>::sse_encode(id, serializer);
+            }
             _ => {
                 unimplemented!("");
             }
@@ -6605,14 +6805,17 @@ impl SseEncode for crate::api::types::ThreadKind {
                 crate::api::types::ThreadKind::Sampled => 14,
                 crate::api::types::ThreadKind::SameSession => 15,
                 crate::api::types::ThreadKind::Scored => 16,
-                crate::api::types::ThreadKind::Label => 17,
-                crate::api::types::ThreadKind::Cites => 18,
-                crate::api::types::ThreadKind::SoundsLike => 19,
-                crate::api::types::ThreadKind::ListenedAfter => 20,
-                crate::api::types::ThreadKind::By => 21,
-                crate::api::types::ThreadKind::AlbumArtist => 22,
-                crate::api::types::ThreadKind::AppearsOn => 23,
-                crate::api::types::ThreadKind::Matched => 24,
+                crate::api::types::ThreadKind::SoundtrackOf => 17,
+                crate::api::types::ThreadKind::Soundtrack => 18,
+                crate::api::types::ThreadKind::SameSeries => 19,
+                crate::api::types::ThreadKind::Label => 20,
+                crate::api::types::ThreadKind::Cites => 21,
+                crate::api::types::ThreadKind::SoundsLike => 22,
+                crate::api::types::ThreadKind::ListenedAfter => 23,
+                crate::api::types::ThreadKind::By => 24,
+                crate::api::types::ThreadKind::AlbumArtist => 25,
+                crate::api::types::ThreadKind::AppearsOn => 26,
+                crate::api::types::ThreadKind::Matched => 27,
                 _ => {
                     unimplemented!("");
                 }

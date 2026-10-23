@@ -5,6 +5,7 @@
 mod facets;
 mod local_zone;
 mod listens;
+mod games;
 mod lookups;
 mod matching;
 mod now;
@@ -32,12 +33,12 @@ use meret_engine::output::null::NullBackend;
 use meret_engine::{Engine, EngineEvent};
 use meret_graph::TrailHistory;
 use meret_jobs::Scheduler;
-use meret_model::{AgentId, Idiom, ReleaseId, RootId, TrackId, WorkId};
+use meret_model::{AgentId, GameId, Idiom, ReleaseId, RootId, TrackId, WorkId};
 use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError, ZoneFidelity, ZoneInfo};
 use meret_provider::Registry;
 use meret_query::{Input, Term, parse};
 use meret_store::{HotColumns, LibraryFacts, PersonHit, ReleaseHit, Store, TrackRow};
-pub use meret_store::{Colleague, OtherRecording, PersonLink, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
+pub use meret_store::{Colleague, GameLink, GamePage, OtherRecording, PersonLink, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, watch};
 
@@ -615,6 +616,17 @@ impl Core {
     /// Plays a work's recordings from row `index`, replacing the queue.
     pub fn play_work(&self, work: WorkId, index: usize) -> Result<()> {
         let page = self.store.work_page(work)?.ok_or_else(|| CoreError::Query("that work is gone".into()))?;
+        self.play(queue_items(page.tracks.into_iter().skip(index)))
+    }
+
+    /// A game pane. None when the game doesn't exist.
+    pub fn game(&self, game: GameId) -> Result<Option<GamePage>> {
+        Ok(self.store.game_page(game)?)
+    }
+
+    /// Plays a game's soundtracks from row `index`, replacing the queue.
+    pub fn play_game(&self, game: GameId, index: usize) -> Result<()> {
+        let page = self.store.game_page(game)?.ok_or_else(|| CoreError::Query("that game is gone".into()))?;
         self.play(queue_items(page.tracks.into_iter().skip(index)))
     }
 

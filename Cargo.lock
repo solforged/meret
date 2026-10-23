@@ -1335,6 +1335,7 @@ dependencies = [
  "parking_lot",
  "provider-music-assistant",
  "provider-musicbrainz",
+ "provider-wikidata",
  "rusqlite",
  "serde_json",
  "thiserror",
@@ -1753,6 +1754,15 @@ dependencies = [
  "meret-model",
  "meret-provider",
  "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "provider-wikidata"
+version = "0.1.0"
+dependencies = [
+ "meret-provider",
  "serde_json",
  "tokio",
 ]

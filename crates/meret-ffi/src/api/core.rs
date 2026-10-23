@@ -153,6 +153,16 @@ pub fn play_work(id: i64, index: u32) -> Result<(), String> {
     api()?.play_work(id, index)
 }
 
+/// A game pane: the game a score belongs to, its composers and soundtracks.
+pub fn game(id: i64) -> Result<GameDto, String> {
+    api()?.game(id)
+}
+
+/// Replaces the queue with a game's soundtracks from row `index`.
+pub fn play_game(id: i64, index: u32) -> Result<(), String> {
+    api()?.play_game(id, index)
+}
+
 /// Plays a release's tracklist from row `index`, replacing the queue.
 /// `from_stop` is the pane it was played from; that stop is marked played.
 pub fn play_release(id: i64, index: u32, from_stop: Option<u32>) -> Result<(), String> {

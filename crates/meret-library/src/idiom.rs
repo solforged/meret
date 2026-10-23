@@ -21,6 +21,8 @@ pub mod source {
     pub const STRUCTURE: &str = "structure";
     /// Nothing said otherwise, so Album. Any signal replaces it.
     pub const DEFAULT: &str = "default";
+    /// Placed in a game by a lookup: a score. Replaces only the default.
+    pub const GAME: &str = "game";
 }
 
 const CHIPTUNE: &[&str] = &[

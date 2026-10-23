@@ -10,6 +10,7 @@ import '../now/history_sheet.dart';
 import '../now/now_pane.dart';
 import '../now/now_stage.dart';
 import '../panes/front_pane.dart';
+import '../panes/game_pane.dart';
 import '../panes/pane.dart';
 import '../panes/person_pane.dart';
 import '../panes/release_pane.dart';
@@ -290,6 +291,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         libraryVersion: _status?.libraryVersion, lookupsVersion: _status?.lookupsVersion),
       TargetDto_Work(:final id) => WorkPane(core: widget.core, id: id, onFollow: follow,
         libraryVersion: _status?.libraryVersion, lookupsVersion: _status?.lookupsVersion),
+      TargetDto_Game(:final id) => GamePane(core: widget.core, id: id, onFollow: follow,
+        libraryVersion: _status?.libraryVersion, lookupsVersion: _status?.lookupsVersion),
     };
     return Pane(
       key: ValueKey('stop-${stop.index}-${stop.target}'),
@@ -298,12 +301,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         TargetDto_Release() => 'Release',
         TargetDto_Person() => 'Person',
         TargetDto_Work() => 'Work',
+        TargetDto_Game() => 'Game',
       },
       title: stop.title,
       via: stop.via,
       source: stop.viaSource,
       body: body,
-      showTitle: stop.target is! TargetDto_Release && stop.target is! TargetDto_Work,
+      showTitle: stop.target is! TargetDto_Release && stop.target is! TargetDto_Work && stop.target is! TargetDto_Game,
       compact: stop.target is TargetDto_Search,
       onSpineTap: () => _report(_navigate(() => widget.core.trailGo(stop.index), direction: -1)),
     );

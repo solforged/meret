@@ -134,6 +134,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FrontLineDto dco_decode_front_line_dto(dynamic raw);
 
   @protected
+  GameDto dco_decode_game_dto(dynamic raw);
+
+  @protected
   GroupDto dco_decode_group_dto(dynamic raw);
 
   @protected
@@ -537,6 +540,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FrontLineDto sse_decode_front_line_dto(SseDeserializer deserializer);
+
+  @protected
+  GameDto sse_decode_game_dto(SseDeserializer deserializer);
 
   @protected
   GroupDto sse_decode_group_dto(SseDeserializer deserializer);
@@ -1010,6 +1016,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_front_line_dto(FrontLineDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_game_dto(GameDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_group_dto(GroupDto self, SseSerializer serializer);

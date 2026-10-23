@@ -20,6 +20,9 @@ use crate::{Core, status};
 
 pub(crate) const PROVIDER: &str = "musicbrainz";
 
+/// The job kind every provider's lookups share; the key names the provider.
+pub(crate) const QUEUE: &str = "lookups";
+
 /// Cached responses are good for a month; MusicBrainz changes slowly.
 pub(crate) const CACHE_TTL_MS: i64 = 30 * 24 * 3_600_000;
 
@@ -68,7 +71,7 @@ fn run(core: &Core, wakes: &Receiver<()>) {
             continue;
         }
         let now = Context::now_ms();
-        match core.store.next_job(PROVIDER, now) {
+        match core.store.next_job(QUEUE, now) {
             Ok(Some(job)) => {
                 one(core, job);
                 core.lookup_state.lock().batch_done += 1;
@@ -76,7 +79,7 @@ fn run(core: &Core, wakes: &Receiver<()>) {
             Ok(None) => {
                 core.lookup_state.lock().batch_done = 0;
                 publish(core);
-                let next = core.store.job_counts(PROVIDER).ok().and_then(|c| c.next_run_after);
+                let next = core.store.job_counts(QUEUE).ok().and_then(|c| c.next_run_after);
                 let wait = next.map(|at| Duration::from_millis((at - now).max(0) as u64));
                 let woke = match wait {
                     Some(wait) => wakes.recv_timeout(wait),
@@ -95,11 +98,12 @@ fn run(core: &Core, wakes: &Receiver<()>) {
 /// Runs one job and records how it went.
 fn one(core: &Core, job: QueuedJob) {
     let ctx = Context { http: core.http.clone(), kv: Arc::new(MemoryKv::default()), provider: PROVIDER };
-    let result = match (crate::matching::release_of(&job.key), subject(&job.key)) {
-        (Some(release), _) => crate::matching::run(core, &ctx, release),
-        (None, Some(subject)) => core.runtime.block_on(provider_musicbrainz::MusicBrainz.lookup(&ctx, &subject))
+    let result = match (crate::matching::release_of(&job.key), crate::games::release_of(&job.key), subject(&job.key)) {
+        (Some(release), _, _) => crate::matching::run(core, &ctx, release),
+        (None, Some(release), _) => crate::games::run(core, &ctx, release),
+        (None, None, Some(subject)) => core.runtime.block_on(provider_musicbrainz::MusicBrainz.lookup(&ctx, &subject))
             .map(|lookup| apply(&core.store, &subject, lookup, Context::now_ms())),
-        (None, None) => {
+        (None, None, None) => {
             let _ = core.store.fail_job(job.id, "not a lookup", None, Context::now_ms());
             return;
         }
@@ -140,7 +144,7 @@ fn retry_at(attempts: u32, now: i64) -> Option<i64> {
 /// Shows consent, progress and trouble on MusicBrainz's status line item.
 pub(crate) fn publish(core: &Core) {
     let lookups = core.settings().lookups;
-    let counts = core.store.job_counts(PROVIDER).unwrap_or_default();
+    let counts = core.store.job_counts(QUEUE).unwrap_or_default();
     let state = core.lookup_state.lock();
     let pending = counts.queued + counts.running;
     let (detail, ok) = match lookups {
@@ -193,7 +197,7 @@ fn kind_name(kind: RefKind) -> &'static str {
 }
 
 fn job(kind: RefKind, value: &str, priority: i32) -> NewJob {
-    NewJob { key: key(kind, value), kind: PROVIDER.into(), payload: None, priority }
+    NewJob { key: key(kind, value), kind: QUEUE.into(), payload: None, priority }
 }
 
 /// Releases first: one release lookup names the IDs of its tracks and people.
@@ -203,6 +207,8 @@ const ARTIST: i32 = 10;
 const WORK: i32 = 5;
 /// Matching by name comes after every ID the tags carry.
 const MATCH: i32 = 3;
+/// Placing scores in their games comes last.
+const GAME: i32 = 2;
 /// A pane you opened goes ahead of everything.
 const OPENED: i32 = 50;
 
@@ -236,9 +242,15 @@ pub(crate) fn seed(core: &Core) {
     };
     match crate::matching::unidentified(&core.store) {
         Ok(releases) => jobs.extend(releases.into_iter().map(|id| NewJob {
-            key: crate::matching::key(id), kind: PROVIDER.into(), payload: None, priority: MATCH,
+            key: crate::matching::key(id), kind: QUEUE.into(), payload: None, priority: MATCH,
         })),
         Err(e) => return tracing::error!(error = %e, "could not list releases to match"),
+    }
+    match crate::games::unplaced(&core.store) {
+        Ok(releases) => jobs.extend(releases.into_iter().map(|id| NewJob {
+            key: crate::games::key(id), kind: QUEUE.into(), payload: None, priority: GAME,
+        })),
+        Err(e) => return tracing::error!(error = %e, "could not list scores to place"),
     }
     match core.store.enqueue_jobs(jobs) {
         Ok(0) => {}
@@ -291,7 +303,7 @@ pub(crate) fn summary(core: &Core) -> meret_store::Result<LookupSummary> {
         [], |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64, r.get::<_, i64>(3)? as u64)),
     ))?;
     let unidentified = crate::matching::unidentified(&core.store)?.len() as u64;
-    Ok(LookupSummary { releases, recordings, people, unidentified, matched, jobs: core.store.job_counts(PROVIDER)? })
+    Ok(LookupSummary { releases, recordings, people, unidentified, matched, jobs: core.store.job_counts(QUEUE)? })
 }
 
 /// Records a match by name: the release gets the match's ID, with the

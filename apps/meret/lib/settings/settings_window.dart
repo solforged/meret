@@ -483,7 +483,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
 
   Widget _lookups() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     _heading('Lookups'),
-    _settingRow('MusicBrainz',
+    _settingRow('MusicBrainz, Wikidata',
       _lookupStatus == null ? const Text('Reading lookups…', style: Tok.label) : Wrap(spacing: 8, children: [
         for (final (setting, label) in [(LookupsDto.allowed, 'Allow'), (LookupsDto.off, 'Off')])
           Semantics(
@@ -491,7 +491,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
             child: _button(label, _savingLookups ? null : () => _setLookups(setting), primary: _lookupStatus!.setting == setting),
           ),
       ]),
-      note: 'sends IDs, album titles and album artists from tags'),
+      note: 'sends IDs, album titles and album artists to MusicBrainz, album titles to Wikidata'),
     if (_lookupStatus case final lookups?)
       if (lookups.lookedUp > BigInt.zero || lookups.waiting > BigInt.zero || lookups.failed > BigInt.zero)
         Padding(

@@ -132,6 +132,14 @@ Future<WorkDto> work({required PlatformInt64 id}) =>
 Future<void> playWork({required PlatformInt64 id, required int index}) =>
     RustLib.instance.api.crateApiCorePlayWork(id: id, index: index);
 
+/// A game pane: the game a score belongs to, its composers and soundtracks.
+Future<GameDto> game({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiCoreGame(id: id);
+
+/// Replaces the queue with a game's soundtracks from row `index`.
+Future<void> playGame({required PlatformInt64 id, required int index}) =>
+    RustLib.instance.api.crateApiCorePlayGame(id: id, index: index);
+
 /// Plays a release's tracklist from row `index`, replacing the queue.
 /// `from_stop` is the pane it was played from; that stop is marked played.
 Future<void> playRelease({

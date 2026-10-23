@@ -365,6 +365,7 @@ impl Store {
                 Term::Person { role, name } => self.tracks_by_person(name, *role)?,
                 Term::Named { field: NameField::Release, value } => self.tracks_on_release_named(value)?,
                 Term::Named { field: NameField::Work, value } => self.tracks_in_work_named(value)?,
+                Term::Named { field: NameField::Game, value } => self.tracks_in_game_named(value)?,
                 _ => vec![],
             };
             and(&mut rows, clause.negated, tracks);

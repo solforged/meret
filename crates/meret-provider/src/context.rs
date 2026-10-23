@@ -74,6 +74,7 @@ impl Http {
             .expect("http client");
         let limits = HashMap::from([
             ("musicbrainz.org", (1, 1_000)),
+            ("query.wikidata.org", (1, 1_000)),
             ("api.acoustid.org", (3, 1_000)),
             ("api.discogs.com", (60, 60_000)),
             ("api.listenbrainz.org", (10, 1_000)),

@@ -221,6 +221,13 @@ class _ReleasePaneState extends State<ReleasePane> {
             onPressed: () => setState(() => _allCredits = true),
             child: Text('${release.credits.length - _credits} more', style: Tok.label.copyWith(color: Tok.gold)),
           ))),
+        if (release.games.isNotEmpty) ...[
+          SliverToBoxAdapter(child: _heading('Game')),
+          SliverList(delegate: SliverChildBuilderDelegate(
+            (_, i) => ThreadLine(thread: release.games[i], onFollow: () => _follow(release.games[i])),
+            childCount: release.games.length,
+          )),
+        ],
         SliverToBoxAdapter(child: _heading('Tracklist')),
         SliverList(
           delegate: SliverChildBuilderDelegate(

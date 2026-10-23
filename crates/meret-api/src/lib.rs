@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use meret_core::Core;
 use meret_core::{PageItem, View};
-use meret_model::{AgentId, EntityRef, ReleaseId, WorkId};
+use meret_model::{AgentId, EntityRef, GameId, ReleaseId, WorkId};
 use meret_query::{Input, parse};
 use meret_store::{ColumnId, plan};
 
@@ -286,6 +286,7 @@ impl Api {
             (ThreadKind::Matched, _) => return Err("a search's hits are followed from the library".into()),
             (_, LOCAL_TAGS) => LOCAL_TAGS,
             (_, MUSICBRAINZ) => MUSICBRAINZ,
+            (_, WIKIDATA) => WIKIDATA,
             (kind, other) => return Err(format!("\"{}\" threads from {other} aren't built yet", kind.label())),
         };
         if matches!(to, TargetDto::Search { .. }) {
@@ -361,6 +362,7 @@ impl Api {
                 TargetDto::Release { id } => self.core.store.release_title(ReleaseId(*id)),
                 TargetDto::Person { id } => self.core.store.agent_name(AgentId(*id)),
                 TargetDto::Work { id } => self.core.store.work_title(WorkId(*id)),
+                TargetDto::Game { id } => self.core.store.game_title(GameId(*id)),
             };
             name.ok().flatten().unwrap_or_else(|| "gone".into())
         })
@@ -398,6 +400,20 @@ impl Api {
         self.core.play_work(WorkId(id), index as usize).map_err(|e| e.to_string())
     }
 
+    /// A game pane.
+    pub fn game(&self, id: i64) -> Result<GameDto, String> {
+        match self.core.game(GameId(id)) {
+            Ok(Some(page)) => Ok(page.into()),
+            Ok(None) => Err("that game is gone".into()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// Plays a game's soundtracks from row `index`, replacing the queue.
+    pub fn play_game(&self, id: i64, index: u32) -> Result<(), String> {
+        self.core.play_game(GameId(id), index as usize).map_err(|e| e.to_string())
+    }
+
     /// Plays a release's tracklist from row `index`, replacing the queue.
     /// Playing it from its pane, stop `from_stop`, marks that stop played,
     /// so its branch is kept.
@@ -431,6 +447,7 @@ impl Api {
                     EntityRef::Release(id) => self.core.store.release_title(id),
                     EntityRef::Agent(id) => self.core.store.agent_name(id),
                     EntityRef::Work(id) => self.core.store.work_title(id),
+                    EntityRef::Game(id) => self.core.store.game_title(id),
                     _ => return Ok("gone".into()),
                 };
                 Ok(name.map_err(|e| e.to_string())?.unwrap_or_else(|| "gone".into()))

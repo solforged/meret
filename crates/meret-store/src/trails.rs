@@ -144,6 +144,7 @@ fn entity_id(entity: EntityRef) -> String {
         EntityRef::Context(id) => id.0.to_string(), EntityRef::Feed(id) => id.0.to_string(),
         EntityRef::Episode(id) => id.0.to_string(), EntityRef::Crate(id) => id.to_string(),
         EntityRef::Trail(id) => id.to_string(), EntityRef::Search => String::new(),
+        EntityRef::Game(id) => id.0.to_string(),
     }
 }
 
@@ -156,6 +157,7 @@ fn entity(row: &Row<'_>, kind: usize, id: usize) -> rusqlite::Result<EntityRef> 
         7 => EntityRef::Context(ContextId(parse(&value)?)), 8 => EntityRef::Feed(FeedId(parse(&value)?)),
         9 => EntityRef::Episode(EpisodeId(parse(&value)?)), 10 => EntityRef::Crate(CrateUid(parse(&value)?)),
         11 => EntityRef::Trail(TrailUid(parse(&value)?)), 12 => EntityRef::Search,
+        13 => EntityRef::Game(GameId(parse(&value)?)),
         _ => return Err(invalid("unknown trail entity kind")),
     })
 }

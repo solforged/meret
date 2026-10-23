@@ -82,7 +82,7 @@ Check every service's terms again before building against it. They changed twice
 ## SongDNA and Roon's depth, from open data
 
 - **Lineage:** MusicBrainz relationships (samples, covers, "performance of" a work, arrangements, instruments, producers), Discogs credits and Wikidata. Meret draws these as one graph per work or recording.
-- **Game and film music:** VGMdb has the catalog numbers, track lists and arrangers. It has no official API; a community JSON mirror exists.
+- **Game and film music:** VGMdb has the catalog numbers, track lists and arrangers. It has no official API, its community JSON mirror (vgmdb.info) is gone, and vgmdb.net answers scripts with a Cloudflare challenge (checked 2026-10-22). Wikidata has the games themselves: names, years, developers, platforms, series and composers.
 - **Audio features Spotify stopped giving out:** analyse locally. Essentia covers tempo, key, loudness and trained mood and genre classifiers. An audio-embedding model gives "sounds like" by nearest neighbour.
 - **Obscure tastes:** this is the main argument for local embeddings. Collaborative filtering only knows what many people played; audio similarity works for a rip nobody else has. The crawl (YouTube, Bandcamp, SoundCloud) collects candidates; embeddings rank them against what you actually play.
 

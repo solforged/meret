@@ -45,6 +45,8 @@ macro_rules! uid {
 row_id! {
     /// A composition: a song, a movement, a cue, a standard.
     WorkId,
+    /// A video game a score belongs to.
+    GameId,
     /// One captured performance of a work.
     RecordingId,
     /// A published set as people name it (MusicBrainz's release group).

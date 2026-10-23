@@ -76,7 +76,7 @@ pub(crate) fn fold(text: &str) -> String {
 }
 
 /// A person's name without initials: "Justin E. Bell" is Justin Bell.
-fn person(name: &str) -> String {
+pub(crate) fn person(name: &str) -> String {
     let folded = fold(name);
     let full: Vec<&str> = folded.split(' ').filter(|w| w.chars().count() > 1).collect();
     if full.is_empty() { folded } else { full.join(" ") }

@@ -16,6 +16,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0012_works.sql"),
     include_str!("../migrations/0013_lookups.sql"),
     include_str!("../migrations/0014_matched_ids.sql"),
+    include_str!("../migrations/0015_games.sql"),
 ];
 
 pub fn run(conn: &mut Connection) -> rusqlite::Result<()> {
@@ -39,6 +40,33 @@ pub fn run(conn: &mut Connection) -> rusqlite::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn games_migration_keeps_lookup_jobs_and_other_job_kinds() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        crate::search::register(&conn).unwrap();
+        for sql in MIGRATIONS.iter().take(14) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", 14).unwrap();
+        conn.execute_batch(
+            "INSERT INTO job(id,kind,dedupe_key,state,attempts,payload,created_at,updated_at) VALUES
+                (1,'musicbrainz','fetch:musicbrainz:release:1','queued',2,'kept',10,20),
+                (2,'analyse','analyse:1','paused',1,NULL,10,20);"
+        ).unwrap();
+        run(&mut conn).unwrap();
+        let jobs = conn.prepare("SELECT kind, dedupe_key, state, attempts, payload FROM job ORDER BY id").unwrap()
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i64>(3)?, r.get::<_, Option<String>>(4)?)))
+            .unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+        assert_eq!(jobs, [
+            ("lookups".into(), "fetch:musicbrainz:release:1".into(), "queued".into(), 2, Some("kept".into())),
+            ("analyse".into(), "analyse:1".into(), "paused".into(), 1, None),
+        ]);
+        assert_eq!(conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0)).unwrap(), 15);
+        conn.execute("INSERT INTO game(title,rev) VALUES('Lantern Glass',1)", []).unwrap();
+        run(&mut conn).unwrap();
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM game", [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+    }
 
     #[test]
     fn copies_migration_preserves_ids_claims_history_and_references() {

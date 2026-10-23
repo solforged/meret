@@ -16,6 +16,7 @@ import 'package:meret/now/now_stage.dart';
 import 'package:meret/now/picks.dart';
 import 'package:meret/now/zones.dart';
 import 'package:meret/panes/front_pane.dart';
+import 'package:meret/panes/game_pane.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/search_pane.dart';
 import 'package:meret/panes/person_pane.dart';
@@ -1207,6 +1208,58 @@ void main() {
     expect((await core.trail())!.current, 1);
   });
 
+  testWidgets('release game threads open soundtracks and playable rows, then return along the trail', (tester) async {
+    final core = _RecordingCore();
+    final release = await core.release(PlatformInt64Util.from(1));
+    final gameThread = release.games.single;
+    final gameId = (gameThread.to as TargetDto_Game).id;
+    final game = await core.game(gameId);
+    await core.startTrail(TargetDto.release(id: release.id));
+    await _surface(tester, core);
+    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(release.id);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.descendant(of: find.byType(ReleasePane), matching: find.text('Game')), findsOneWidget);
+    await tester.tap(find.descendant(of: find.byType(ReleasePane),
+      matching: find.byKey(ValueKey('thread-${gameThread.kind.name}-${gameThread.to}'))));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.widget<GamePane>(find.byType(GamePane)).id, gameId);
+    expect(find.descendant(of: find.byType(GamePane), matching: find.text(game.title)), findsOneWidget);
+    expect(find.descendant(of: find.byType(GamePane), matching: find.text('Soundtracks')), findsOneWidget);
+    final soundtrack = game.soundtracks.single;
+    final soundtrackLink = find.descendant(of: find.byType(GamePane),
+      matching: find.byKey(ValueKey('thread-${soundtrack.kind.name}-${soundtrack.to}')));
+    expect(soundtrackLink, findsOneWidget);
+    expect(find.byKey(const ValueKey('game-row-0')), findsOneWidget);
+    final trail = (await core.trail())!;
+    expect(trail.stops.firstWhere((stop) => stop.index == trail.current).viaSource, 'Wikidata');
+
+    await tester.tap(find.byKey(const ValueKey('game-row-1')));
+    await tester.pump();
+    expect(core.gamesPlayed, [(gameId, 1)]);
+    expect((await core.now().first).trackId, game.rows[1].trackId);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(core.gamesPlayed.last, (gameId, 1));
+    expect(core.gamesPlayed, hasLength(2));
+    await tester.tap(find.byKey(const ValueKey('game-play')));
+    await tester.pump();
+    expect(core.gamesPlayed.last, (gameId, 0));
+
+    await tester.tap(soundtrackLink);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect((await core.trail())!.current, 0);
+    expect(find.byType(GamePane), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<GamePane>(find.byType(GamePane)).id, gameId);
+  });
+
   testWidgets('tag work links open recordings, play them and connect a composer’s roles and works', (tester) async {
     final core = _RecordingCore();
     final row = await _firstTrack(core);
@@ -1386,6 +1439,7 @@ class _RecordingCore extends FakeCore {
   int frontCalls = 0;
   final releasesPlayed = <(int, int, int?)>[];
   final worksPlayed = <(PlatformInt64, int)>[];
+  final gamesPlayed = <(PlatformInt64, int)>[];
   final seeks = <BigInt>[];
   final transports = <TransportDto>[];
   final started = <TargetDto>[];
@@ -1448,6 +1502,12 @@ class _RecordingCore extends FakeCore {
     return super.playWork(id, index);
   }
 
+  @override
+  Future<void> playGame(PlatformInt64 id, int index) {
+    gamesPlayed.add((id, index));
+    return super.playGame(id, index);
+  }
+
 }
 
 class _InvalidCore extends FakeCore {
@@ -1493,6 +1553,7 @@ class _ArtworkCore extends FakeCore {
       rows: release.rows,
       rowWorks: release.rowWorks,
       credits: release.credits,
+      games: release.games,
       plays: release.plays,
       lastPlayedMs: release.lastPlayedMs,
     );

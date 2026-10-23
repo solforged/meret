@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use meret_model::{AgentId, Idiom, RecordingId, ReleaseId, TrackId, WorkId};
+use meret_model::{AgentId, GameId, Idiom, RecordingId, ReleaseId, TrackId, WorkId};
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::library::{PREFERRED_SOURCE, TrackRow};
@@ -33,6 +33,8 @@ pub struct ReleasePage {
     pub roles: Vec<RoleCredit>,
     /// The work each track is a recording of, for tracks that say.
     pub works: Vec<(TrackId, WorkId, String)>,
+    /// Games this release is a soundtrack of.
+    pub games: Vec<GameLink>,
     /// Counted plays of this release, and the newest one.
     pub plays: u64,
     pub last_played: Option<i64>,
@@ -82,6 +84,8 @@ pub struct PersonPage {
     pub roles: Vec<(String, Vec<PersonRelease>)>,
     /// Works they wrote, by title, with how many of your tracks record each.
     pub works: Vec<PersonWork>,
+    /// Games crediting them, by year.
+    pub games: Vec<GameLink>,
     /// People who share releases with them, most shared first.
     pub worked_with: Vec<Colleague>,
     pub member_of: Vec<PersonLink>,
@@ -126,6 +130,35 @@ pub struct WorkPage {
     pub recordings_known: Option<u64>,
     pub plays: u64,
     pub last_played: Option<i64>,
+}
+
+/// A game pane: the game a score belongs to, and its soundtracks you have.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GamePage {
+    pub game: GameId,
+    pub title: String,
+    pub year: Option<u16>,
+    pub developers: Option<String>,
+    pub platforms: Option<String>,
+    pub series: Option<String>,
+    /// Releases linked by `soundtrack_of`, by year then title; tracks = present tracks.
+    pub soundtracks: Vec<PersonRelease>,
+    /// Composers in credit sort order; tracks = their present tracks in any role.
+    pub composers: Vec<PersonLink>,
+    /// Other games in the same series with a soundtrack you have, by year.
+    pub same_series: Vec<GameLink>,
+    /// Present soundtrack tracks, in release order then disc and track order.
+    pub tracks: Vec<TrackRow>,
+    pub plays: u64,
+    pub last_played: Option<i64>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GameLink {
+    pub game: GameId,
+    pub title: String,
+    pub year: Option<u16>,
+    pub source: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -204,6 +237,7 @@ impl Store {
         let mut artists: Vec<TrackCredit> = vec![];
         let mut roles: Vec<RoleCredit> = vec![];
         let mut works = vec![];
+        let mut games = vec![];
         self.read(|c| {
             let sql = format!(
                 "SELECT a.id, a.name, m.position, t.position FROM track t
@@ -248,13 +282,19 @@ impl Store {
             );
             works = c.prepare(&sql)?.query_map([release.0], |r| Ok((TrackId(r.get(0)?), WorkId(r.get(1)?), r.get(2)?)))?
                 .collect::<rusqlite::Result<_>>()?;
+            games = c.prepare(
+                "SELECT g.id, g.title, g.year, COALESCE(p.source, 'local_tags')
+                 FROM edge e JOIN game g ON g.id = e.to_id LEFT JOIN provenance p ON p.id = e.provenance_id
+                 WHERE e.from_kind = 3 AND e.from_id = ?1 AND e.to_kind = 13 AND e.kind = 'soundtrack_of'
+                 ORDER BY g.year IS NULL, g.year, g.title COLLATE NOCASE, g.id, e.id"
+            )?.query_map([release.0], game_link)?.collect::<rusqlite::Result<_>>()?;
             Ok(())
         })?;
         // Stable: within a role, people stay in order of first appearance.
         roles.sort_by_key(|c| ROLES.iter().position(|r| *r == c.role).unwrap_or(ROLES.len()));
         let cover = self.release_art(&[release])?.remove(&release);
         let (plays, last_played) = self.release_plays(release)?;
-        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, album_artists, cover, tracks, artists, roles, works, plays, last_played }))
+        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, album_artists, cover, tracks, artists, roles, works, games, plays, last_played }))
     }
 
     /// None when the person doesn't exist.
@@ -329,6 +369,12 @@ impl Store {
             let works = c.prepare(&sql)?
                 .query_map([agent.0], |r| Ok(PersonWork { work: WorkId(r.get(0)?), title: r.get(1)?, tracks: r.get(2)? }))?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
+            let games = c.prepare(
+                "SELECT DISTINCT g.id, g.title, g.year, COALESCE(p.source, 'local_tags')
+                 FROM credit cr JOIN game g ON g.id = cr.subject_id LEFT JOIN provenance p ON p.id = cr.provenance_id
+                 WHERE cr.subject_kind = 13 AND cr.agent_id = ?1
+                 ORDER BY g.year IS NULL, g.year, g.title COLLATE NOCASE, g.id"
+            )?.query_map([agent.0], game_link)?.collect::<rusqlite::Result<_>>()?;
 
             let mut on: Vec<ReleaseId> = releases.iter().chain(&appears_on).chain(roles.iter().flat_map(|(_, l)| l)).map(|r| r.release).collect();
             on.sort_unstable_by_key(|r| r.0);
@@ -355,7 +401,7 @@ impl Store {
             let member_of = person_links(c, agent, "member_of", true)?;
             let members = person_links(c, agent, "member_of", false)?;
             let linked = person_links(c, agent, "worked_with", true)?;
-            Ok(Some(PersonPage { agent, name, tracks: tracks as u32, releases, appears_on, roles, works, worked_with,
+            Ok(Some(PersonPage { agent, name, tracks: tracks as u32, releases, appears_on, roles, works, games, worked_with,
                 member_of, members, linked, plays, last_played }))
         })
     }
@@ -436,6 +482,79 @@ impl Store {
         Ok(Some(WorkPage { work, title, composer, composers, parent, parts, tracks, others, recordings_known, plays, last_played }))
     }
 
+    /// None when the game doesn't exist.
+    pub fn game_page(&self, game: GameId) -> Result<Option<GamePage>> {
+        let found = self.read(|c| {
+            let Some(mut page) = c.query_row(
+                "SELECT title, year, developers, platforms, series FROM game WHERE id = ?1",
+                [game.0],
+                |r| Ok(GamePage {
+                    game, title: r.get(0)?, year: r.get(1)?, developers: r.get(2)?, platforms: r.get(3)?, series: r.get(4)?,
+                    soundtracks: vec![], composers: vec![], same_series: vec![], tracks: vec![], plays: 0, last_played: None,
+                }),
+            ).optional()? else { return Ok(None) };
+            let sql = format!(
+                "SELECT rl.id, rl.title, rl.year,
+                     (SELECT COUNT(*) FROM track t JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
+                      WHERE e.release_id = rl.id AND {PREFERRED_SOURCE} IS NOT NULL) AS n
+                 FROM release rl WHERE n > 0 AND EXISTS (SELECT 1 FROM edge x
+                     WHERE x.from_kind = 3 AND x.from_id = rl.id AND x.to_kind = 13 AND x.to_id = ?1 AND x.kind = 'soundtrack_of')
+                 ORDER BY rl.year IS NULL, rl.year, rl.title COLLATE NOCASE, rl.id"
+            );
+            page.soundtracks = c.prepare(&sql)?.query_map([game.0], |r| {
+                let tracks = r.get(3)?;
+                Ok(PersonRelease { release: ReleaseId(r.get(0)?), title: r.get(1)?, year: r.get(2)?, theirs: tracks, tracks })
+            })?.collect::<rusqlite::Result<_>>()?;
+            page.composers = c.prepare(
+                "SELECT a.id, a.name, cr.detail, COALESCE(p.source, 'local_tags')
+                 FROM credit cr JOIN agent a ON a.id = cr.agent_id LEFT JOIN provenance p ON p.id = cr.provenance_id
+                 WHERE cr.subject_kind = 13 AND cr.subject_id = ?1 AND cr.role = 'composer' ORDER BY cr.sort, cr.id"
+            )?.query_map([game.0], |r| Ok(PersonLink {
+                agent: AgentId(r.get(0)?), name: r.get(1)?, detail: r.get(2)?, source: r.get(3)?, tracks: 0,
+            }))?.collect::<rusqlite::Result<_>>()?;
+            for composer in &mut page.composers {
+                composer.tracks = person_tracks(c, composer.agent)?;
+            }
+            let sql = format!(
+                "SELECT g.id, g.title, g.year, 'wikidata' FROM game g
+                 WHERE g.id <> ?1 AND g.series_ref = (SELECT series_ref FROM game WHERE id = ?1)
+                 AND EXISTS (SELECT 1 FROM edge x JOIN edition e ON e.release_id = x.from_id
+                     JOIN medium m ON m.edition_id = e.id JOIN track t ON t.medium_id = m.id
+                     WHERE x.from_kind = 3 AND x.to_kind = 13 AND x.to_id = g.id AND x.kind = 'soundtrack_of'
+                     AND {PREFERRED_SOURCE} IS NOT NULL)
+                 ORDER BY g.year IS NULL, g.year, g.title COLLATE NOCASE, g.id"
+            );
+            page.same_series = c.prepare(&sql)?.query_map([game.0], game_link)?.collect::<rusqlite::Result<_>>()?;
+            let sql = format!(
+                "SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id
+                 JOIN edition e ON e.id = m.edition_id JOIN release rl ON rl.id = e.release_id
+                 WHERE {PREFERRED_SOURCE} IS NOT NULL AND EXISTS (SELECT 1 FROM edge x
+                     WHERE x.from_kind = 3 AND x.from_id = rl.id AND x.to_kind = 13 AND x.to_id = ?1 AND x.kind = 'soundtrack_of')
+                 ORDER BY rl.year IS NULL, rl.year, rl.title COLLATE NOCASE, rl.id, m.position, t.position, t.id"
+            );
+            let tracks = c.prepare(&sql)?.query_map([game.0], |r| Ok(TrackId(r.get(0)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            (page.plays, page.last_played) = c.query_row(
+                &format!(
+                    "SELECT COUNT(*), MAX(l.started_at) FROM listen l {LISTEN_TRACK}
+                     WHERE {COUNTED} AND EXISTS (SELECT 1 FROM edge x WHERE x.from_kind = 3 AND x.from_id = rl.id
+                         AND x.to_kind = 13 AND x.to_id = ?1 AND x.kind = 'soundtrack_of')",
+                    LISTEN_TRACK = crate::listens::LISTEN_TRACK, COUNTED = crate::listens::COUNTED
+                ),
+                [game.0], |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?)),
+            )?;
+            Ok(Some((page, tracks)))
+        })?;
+        let Some((mut page, tracks)) = found else { return Ok(None) };
+        page.tracks = self.track_rows(&tracks)?;
+        Ok(Some(page))
+    }
+
+    /// A game's title, for naming a trail stop.
+    pub fn game_title(&self, game: GameId) -> Result<Option<String>> {
+        self.read(|c| c.query_row("SELECT title FROM game WHERE id = ?1", [game.0], |r| r.get(0)).optional())
+    }
+
     /// A work's title, for naming a trail stop.
     pub fn work_title(&self, work: WorkId) -> Result<Option<String>> {
         self.read(|c| c.query_row("SELECT title FROM work WHERE id = ?1", [work.0], |r| r.get(0)).optional())
@@ -450,6 +569,10 @@ impl Store {
     pub fn agent_name(&self, agent: AgentId) -> Result<Option<String>> {
         self.read(|c| c.query_row("SELECT name FROM agent WHERE id = ?1", [agent.0], |r| r.get(0)).optional())
     }
+}
+
+fn game_link(row: &rusqlite::Row<'_>) -> rusqlite::Result<GameLink> {
+    Ok(GameLink { game: GameId(row.get(0)?), title: row.get(1)?, year: row.get(2)?, source: row.get(3)? })
 }
 
 /// Title, year and present track count.
@@ -521,6 +644,93 @@ fn person_links(c: &Connection, agent: AgentId, kind: &str, outbound: bool) -> r
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn games_connect_soundtracks_composers_and_exact_name_queries() {
+        let dir = std::env::temp_dir().join(format!("meret-game-pages-{}", ulid::Ulid::generate()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir.join("library.db")).unwrap();
+        store.writer.write(|tx| {
+            tx.execute_batch(
+                "INSERT INTO provenance(id,source,fetched_at) VALUES(1,'wikidata',100),(2,'you',200);
+                 INSERT INTO game(id,title,year,developers,platforms,series,series_ref,rev) VALUES
+                    (1,'Skyglass',2000,'Lantern Studio','Glass Console','Skyglass tales','Q100',1),
+                    (2,'Skyglass Echo',2002,NULL,NULL,'Skyglass tales','Q100',1),
+                    (3,'Hidden Glass',2001,NULL,NULL,'Skyglass tales','Q100',1),
+                    (4,'Elsewhere',2003,NULL,NULL,'Other tales','Q200',1),
+                    (5,'Unlinked',NULL,NULL,NULL,NULL,NULL,1);
+                 INSERT INTO agent(id,kind,name,rev) VALUES(1,0,'Elra Venn',1),(2,0,'Orva Renn',1);
+                 INSERT INTO release(id,title,year,rev) VALUES
+                    (1,'Later score',2001,1),(2,'Earlier score',1999,1),(3,'Echo score',2002,1),
+                    (4,'Absent score',2003,1),(5,'Other score',2004,1);
+                 INSERT INTO edition(id,release_id,rev) VALUES(1,1,1),(2,2,1),(3,3,1),(4,4,1),(5,5,1);
+                 INSERT INTO medium(id,edition_id,position) VALUES(1,1,1),(2,1,2),(3,2,1),(4,3,1),(5,4,1),(6,5,1);
+                 INSERT INTO recording(id,title,length_ms,rev) VALUES
+                    (1,'Second',1000,1),(2,'Third',1000,1),(3,'First',1000,1),
+                    (4,'Echo',1000,1),(5,'Absent',1000,1),(6,'Other',1000,1);
+                 INSERT INTO track(id,medium_id,position,recording_id,rev) VALUES
+                    (1,1,2,1,1),(2,2,1,2,1),(3,3,1,3,1),(4,4,1,4,1),(5,5,1,5,1),(6,6,1,6,1);
+                 INSERT INTO root(id,label,path,kind) VALUES(1,'Music','/music','local');
+                 INSERT INTO file(id,root_id,rel_path,size,mtime_ns,rev) VALUES
+                    (1,1,'one.flac',1,1,1),(2,1,'two.flac',1,1,1),(3,1,'three.flac',1,1,1),
+                    (4,1,'four.flac',1,1,1),(6,1,'six.flac',1,1,1);
+                 INSERT INTO source(id,recording_id,track_id,kind,file_id,rev) VALUES
+                    (1,1,1,'file',1,1),(2,2,2,'file',2,1),(3,3,3,'file',3,1),(4,4,4,'file',4,1),(6,6,6,'file',6,1);
+                 INSERT INTO edge(from_kind,from_id,to_kind,to_id,kind,provenance_id,rev) VALUES
+                    (3,1,13,1,'soundtrack_of',1,1),(3,2,13,1,'soundtrack_of',2,1),
+                    (3,3,13,2,'soundtrack_of',1,1),(3,4,13,1,'soundtrack_of',1,1),
+                    (3,5,13,4,'soundtrack_of',1,1),(2,5,13,1,'soundtrack_of',1,1);
+                 INSERT INTO credit(subject_kind,subject_id,agent_id,role,sort,provenance_id,rev) VALUES
+                    (13,1,1,'composer',1,1,1),(13,1,2,'composer',0,1,1),(13,3,1,'composer',0,1,1),
+                    (2,1,1,'performer',0,2,1),(2,1,1,'composer',0,1,1),(3,2,1,'album_artist',0,2,1);
+                 INSERT INTO listen(uid,recording_id,source_id,started_at,played_ms,device) VALUES
+                    ('one',1,1,100,600,'test'),('two',3,3,200,600,'test'),('short',2,2,300,100,'test'),
+                    ('other',4,4,400,600,'test');"
+            )?;
+            Ok(())
+        }).unwrap();
+
+        let game = store.game_page(GameId(1)).unwrap().unwrap();
+        assert_eq!((game.game, game.title.as_str(), game.year), (GameId(1), "Skyglass", Some(2000)));
+        assert_eq!((game.developers.as_deref(), game.platforms.as_deref(), game.series.as_deref()),
+            (Some("Lantern Studio"), Some("Glass Console"), Some("Skyglass tales")));
+        assert_eq!(game.soundtracks.iter().map(|r| (r.release, r.tracks, r.theirs)).collect::<Vec<_>>(),
+            [(ReleaseId(2), 1, 1), (ReleaseId(1), 2, 2)]);
+        assert_eq!(game.tracks.iter().map(|t| t.track).collect::<Vec<_>>(), [TrackId(3), TrackId(1), TrackId(2)]);
+        assert_eq!(game.composers.iter().map(|p| (p.agent, p.tracks, p.source.as_str())).collect::<Vec<_>>(),
+            [(AgentId(2), 0, "wikidata"), (AgentId(1), 2, "wikidata")]);
+        assert_eq!(game.same_series, [
+            GameLink { game: GameId(2), title: "Skyglass Echo".into(), year: Some(2002), source: "wikidata".into() },
+        ]);
+        assert_eq!((game.plays, game.last_played), (2, Some(200)));
+        assert_eq!(store.game_title(GameId(1)).unwrap().as_deref(), Some("Skyglass"));
+        assert!(store.game_page(GameId(99)).unwrap().is_none());
+        assert!(store.game_title(GameId(99)).unwrap().is_none());
+        let unlinked = store.game_page(GameId(5)).unwrap().unwrap();
+        assert!(unlinked.soundtracks.is_empty() && unlinked.tracks.is_empty() && unlinked.same_series.is_empty());
+        assert_eq!((unlinked.plays, unlinked.last_played), (0, None));
+        assert_eq!(store.release_page(ReleaseId(1)).unwrap().unwrap().games, [
+            GameLink { game: GameId(1), title: "Skyglass".into(), year: Some(2000), source: "wikidata".into() },
+        ]);
+        assert_eq!(store.release_page(ReleaseId(2)).unwrap().unwrap().games[0].source, "you");
+        assert_eq!(store.person_page(AgentId(1)).unwrap().unwrap().games.iter().map(|g| g.game).collect::<Vec<_>>(),
+            [GameId(1), GameId(3)]);
+        let mut exact = store.tracks_in_game_named("SKYGLASS").unwrap();
+        exact.sort_unstable();
+        assert_eq!(exact, [TrackId(1), TrackId(2), TrackId(3), TrackId(5)]);
+        let mut contains = store.tracks_in_game_named("skygl").unwrap();
+        contains.sort_unstable();
+        assert_eq!(contains, [TrackId(1), TrackId(2), TrackId(3), TrackId(4), TrackId(5)]);
+        assert!(store.tracks_in_game_named("Sky%").unwrap().is_empty());
+        let cols = store.load_columns().unwrap();
+        let meret_query::Input::Search(query) = meret_query::parse("game:skyglass").unwrap() else { panic!("query") };
+        let rows = store.answer_residual(crate::plan(&query, &cols, 0), &cols).unwrap().unwrap();
+        let mut planned = rows.iter().map(|i| cols.track[i as usize]).collect::<Vec<_>>();
+        planned.sort_unstable();
+        assert_eq!(planned, [TrackId(1), TrackId(2), TrackId(3)]);
+        drop(store);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn provider_credits_links_and_trackless_recordings_reach_pages() {

@@ -4,7 +4,7 @@ use flutter_rust_bridge::frb;
 pub use meret_api::{
     AnchorDto, ColumnDto, FidelityDto, FrontDto, FrontLineDto, HistogramDto, HitDto, HitKind, IdiomLineDto, JobDto,
     NowDto, PersonDto, QueryDto, QueryKind, RecentDto, ReleaseDto, RootDto, RowsDto, SearchDto, SourceDto, StageDto,
-    StatusDto, StopDto, TargetDto, ThreadDto, ThreadKind, TrackRowDto, TrailDto, TransportDto, CreditSectionDto, WorkDto,
+    StatusDto, StopDto, TargetDto, ThreadDto, ThreadKind, TrackRowDto, TrailDto, TransportDto, CreditSectionDto, WorkDto, GameDto,
 };
 pub use meret_api::LightDto;
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
@@ -423,6 +423,7 @@ pub enum _TargetDto {
     Release { id: i64 },
     Person { id: i64 },
     Work { id: i64 },
+    Game { id: i64 },
 }
 
 #[frb(mirror(ThreadKind))]
@@ -444,6 +445,9 @@ pub enum _ThreadKind {
     Sampled,
     SameSession,
     Scored,
+    SoundtrackOf,
+    Soundtrack,
+    SameSeries,
     Label,
     Cites,
     SoundsLike,
@@ -481,6 +485,7 @@ pub struct _ReleaseDto {
     pub rows: Vec<TrackRowDto>,
     pub row_works: Vec<Option<ThreadDto>>,
     pub credits: Vec<ThreadDto>,
+    pub games: Vec<ThreadDto>,
     pub plays: u64,
     pub last_played_ms: Option<i64>,
 }
@@ -495,6 +500,7 @@ pub struct _PersonDto {
     pub roles: Vec<CreditSectionDto>,
     pub works: Vec<ThreadDto>,
     pub groups: Vec<CreditSectionDto>,
+    pub games: Vec<ThreadDto>,
     pub worked_with: Vec<ThreadDto>,
     pub plays: u64,
     pub last_played_ms: Option<i64>,
@@ -517,6 +523,23 @@ pub struct _WorkDto {
     pub rows: Vec<TrackRowDto>,
     pub others: Vec<ThreadDto>,
     pub recordings_known: Option<u64>,
+    pub length_ms: u64,
+    pub plays: u64,
+    pub last_played_ms: Option<i64>,
+}
+
+#[frb(mirror(GameDto))]
+pub struct _GameDto {
+    pub id: i64,
+    pub title: String,
+    pub year: Option<u16>,
+    pub developers: Option<String>,
+    pub platforms: Option<String>,
+    pub series: Option<String>,
+    pub composers: Vec<ThreadDto>,
+    pub soundtracks: Vec<ThreadDto>,
+    pub same_series: Vec<ThreadDto>,
+    pub rows: Vec<TrackRowDto>,
     pub length_ms: u64,
     pub plays: u64,
     pub last_played_ms: Option<i64>,

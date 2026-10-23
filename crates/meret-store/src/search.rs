@@ -334,6 +334,23 @@ impl Store {
         })
     }
 
+    /// Soundtrack tracks of a game. Exact titles take precedence over contains matches.
+    pub fn tracks_in_game_named(&self, title: &str) -> Result<Vec<TrackId>> {
+        let like = format!("%{}%", escape_like(&fold_str(title)));
+        self.read(|c| {
+            ids(
+                c,
+                "WITH exact AS (SELECT id FROM game WHERE title = ?1 COLLATE NOCASE),
+                 named AS (SELECT id FROM exact
+                     UNION SELECT id FROM game WHERE search_fold(title) LIKE ?2 ESCAPE '\\' AND NOT EXISTS (SELECT 1 FROM exact))
+                 SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
+                 WHERE EXISTS (SELECT 1 FROM edge x WHERE x.from_kind = 3 AND x.from_id = e.release_id
+                     AND x.to_kind = 13 AND x.to_id IN named AND x.kind = 'soundtrack_of')",
+                vec![title.to_owned(), like],
+            )
+        })
+    }
+
     /// People whose name contains every word: how many match, and the best
     /// `limit` with a present track. Names that start with the first word
     /// rank first, then those on the most tracks.

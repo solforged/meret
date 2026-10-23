@@ -20,6 +20,7 @@ default-members = [
     "crates/meret-cli",
     "providers/musicbrainz",
     "providers/music-assistant",
+    "providers/wikidata",
 ]
 
 [workspace.package]
@@ -46,6 +47,7 @@ meret-core = { path = "crates/meret-core" }
 meret-api = { path = "crates/meret-api" }
 provider-musicbrainz = { path = "providers/musicbrainz" }
 provider-music-assistant = { path = "providers/music-assistant" }
+provider-wikidata = { path = "providers/wikidata" }
 
 anyhow = "1.0"
 async-trait = "0.1"

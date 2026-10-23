@@ -297,6 +297,73 @@ class FrontLineDto {
           query == other.query;
 }
 
+class GameDto {
+  final PlatformInt64 id;
+  final String title;
+  final int? year;
+  final String? developers;
+  final String? platforms;
+  final String? series;
+  final List<ThreadDto> composers;
+  final List<ThreadDto> soundtracks;
+  final List<ThreadDto> sameSeries;
+  final List<TrackRowDto> rows;
+  final BigInt lengthMs;
+  final BigInt plays;
+  final PlatformInt64? lastPlayedMs;
+
+  const GameDto({
+    required this.id,
+    required this.title,
+    this.year,
+    this.developers,
+    this.platforms,
+    this.series,
+    required this.composers,
+    required this.soundtracks,
+    required this.sameSeries,
+    required this.rows,
+    required this.lengthMs,
+    required this.plays,
+    this.lastPlayedMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      year.hashCode ^
+      developers.hashCode ^
+      platforms.hashCode ^
+      series.hashCode ^
+      composers.hashCode ^
+      soundtracks.hashCode ^
+      sameSeries.hashCode ^
+      rows.hashCode ^
+      lengthMs.hashCode ^
+      plays.hashCode ^
+      lastPlayedMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GameDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          year == other.year &&
+          developers == other.developers &&
+          platforms == other.platforms &&
+          series == other.series &&
+          composers == other.composers &&
+          soundtracks == other.soundtracks &&
+          sameSeries == other.sameSeries &&
+          rows == other.rows &&
+          lengthMs == other.lengthMs &&
+          plays == other.plays &&
+          lastPlayedMs == other.lastPlayedMs;
+}
+
 class GroupDto {
   final PlatformInt64 releaseId;
   final String title;
@@ -729,6 +796,7 @@ class PersonDto {
   final List<CreditSectionDto> roles;
   final List<ThreadDto> works;
   final List<CreditSectionDto> groups;
+  final List<ThreadDto> games;
   final List<ThreadDto> workedWith;
   final BigInt plays;
   final PlatformInt64? lastPlayedMs;
@@ -742,6 +810,7 @@ class PersonDto {
     required this.roles,
     required this.works,
     required this.groups,
+    required this.games,
     required this.workedWith,
     required this.plays,
     this.lastPlayedMs,
@@ -757,6 +826,7 @@ class PersonDto {
       roles.hashCode ^
       works.hashCode ^
       groups.hashCode ^
+      games.hashCode ^
       workedWith.hashCode ^
       plays.hashCode ^
       lastPlayedMs.hashCode;
@@ -774,6 +844,7 @@ class PersonDto {
           roles == other.roles &&
           works == other.works &&
           groups == other.groups &&
+          games == other.games &&
           workedWith == other.workedWith &&
           plays == other.plays &&
           lastPlayedMs == other.lastPlayedMs;
@@ -957,6 +1028,7 @@ class ReleaseDto {
   final List<TrackRowDto> rows;
   final List<ThreadDto?> rowWorks;
   final List<ThreadDto> credits;
+  final List<ThreadDto> games;
   final BigInt plays;
   final PlatformInt64? lastPlayedMs;
 
@@ -975,6 +1047,7 @@ class ReleaseDto {
     required this.rows,
     required this.rowWorks,
     required this.credits,
+    required this.games,
     required this.plays,
     this.lastPlayedMs,
   });
@@ -995,6 +1068,7 @@ class ReleaseDto {
       rows.hashCode ^
       rowWorks.hashCode ^
       credits.hashCode ^
+      games.hashCode ^
       plays.hashCode ^
       lastPlayedMs.hashCode;
 
@@ -1017,6 +1091,7 @@ class ReleaseDto {
           rows == other.rows &&
           rowWorks == other.rowWorks &&
           credits == other.credits &&
+          games == other.games &&
           plays == other.plays &&
           lastPlayedMs == other.lastPlayedMs;
 }
@@ -1390,6 +1465,7 @@ sealed class TargetDto with _$TargetDto {
   const factory TargetDto.person({required PlatformInt64 id}) =
       TargetDto_Person;
   const factory TargetDto.work({required PlatformInt64 id}) = TargetDto_Work;
+  const factory TargetDto.game({required PlatformInt64 id}) = TargetDto_Game;
 }
 
 class ThreadDto {
@@ -1453,6 +1529,9 @@ enum ThreadKind {
   sampled,
   sameSession,
   scored,
+  soundtrackOf,
+  soundtrack,
+  sameSeries,
   label,
   cites,
   soundsLike,
