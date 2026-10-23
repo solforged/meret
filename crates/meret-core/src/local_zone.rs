@@ -97,6 +97,10 @@ impl Zone for LocalZone {
                 self.engine.set_volume(scalar).map_err(|e| ZoneError::Other(e.to_string()))?;
                 return Ok(());
             }
+            ZoneCommand::Mute { muted } => {
+                self.engine.set_mute(muted).map_err(|e| ZoneError::Other(e.to_string()))?;
+                return Ok(());
+            }
         };
         self.engine.send(control);
         Ok(())

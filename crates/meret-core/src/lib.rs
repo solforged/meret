@@ -421,6 +421,20 @@ impl Core {
         self.volume()
     }
 
+    /// One volume key press: up or down a step of 16, or of 64 when `fine`.
+    pub fn step_volume(&self, up: bool, fine: bool) -> Result<meret_engine::output::DeviceVolume> {
+        let volume = self.volume()?;
+        let Some(scalar) = volume.scalar.filter(|_| volume.settable) else {
+            return Err(meret_engine::output::OutputError::Refused("this device has no settable hardware volume".into()).into());
+        };
+        self.set_volume(meret_engine::output::stepped(scalar, up, fine))
+    }
+
+    pub fn set_mute(&self, muted: bool) -> Result<meret_engine::output::DeviceVolume> {
+        self.local.command(ZoneCommand::Mute { muted })?;
+        self.volume()
+    }
+
     /// Budgeted disk discovery; protected locations are never walked.
     pub fn suggest_folders(&self) -> Vec<FolderSuggestion> {
         let roots = match meret_library::roots(&self.store) {

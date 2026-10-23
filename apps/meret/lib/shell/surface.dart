@@ -493,7 +493,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                           visible: wc.pinnedNow, maintainState: true, maintainAnimation: false, maintainSize: false,
                           child: SizedBox(width: wc.nowWidth ?? 360, child: NowPane(
                             core: widget.core, now: _now, clock: _clock, onToggle: _toggle,
-                            settingsChanges: _settingsChanges,
+                            settingsChanges: _settingsChanges, volumeChanges: _outside.volume,
                             onRelease: (id) => _report(_start(TargetDto.release(id: id))),
                           )),
                         ),
@@ -502,7 +502,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 ),
                 if (_stage != _Stage.now && !wc.pinnedNow) NowBar(
                   core: widget.core, now: _now, clock: _clock, onToggle: _toggle,
-                  settingsChanges: _settingsChanges,
+                  settingsChanges: _settingsChanges, volumeChanges: _outside.volume,
                   onRelease: (id) => _report(_start(TargetDto.release(id: id))),
                 ),
                 if (wc != WidthClass.phone)

@@ -37,6 +37,7 @@ pub enum Control {
     SetOutput { device: Option<String>, exclusive: bool },
     Volume(Sender<Result<DeviceVolume, OutputError>>),
     SetVolume { scalar: f32, reply: Sender<Result<DeviceVolume, OutputError>> },
+    SetMute { muted: bool, reply: Sender<Result<DeviceVolume, OutputError>> },
     /// The device UID this session plays on; the chosen one when idle.
     OutputDevice(Sender<Option<String>>),
     Resume,
@@ -119,6 +120,12 @@ impl Engine {
         }
         let (reply, rx) = crossbeam_channel::bounded(1);
         self.ctl.send(Control::SetVolume { scalar, reply }).map_err(|_| OutputError::Platform("engine stopped".into()))?;
+        rx.recv().map_err(|_| OutputError::Platform("engine stopped".into()))?
+    }
+
+    pub fn set_mute(&self, muted: bool) -> Result<DeviceVolume, OutputError> {
+        let (reply, rx) = crossbeam_channel::bounded(1);
+        self.ctl.send(Control::SetMute { muted, reply }).map_err(|_| OutputError::Platform("engine stopped".into()))?;
         rx.recv().map_err(|_| OutputError::Platform("engine stopped".into()))?
     }
 }
@@ -264,6 +271,9 @@ impl Worker {
             }
             Control::SetVolume { scalar, reply } => {
                 let _ = reply.send(self.backend.set_volume(self.volume_device(), scalar));
+            }
+            Control::SetMute { muted, reply } => {
+                let _ = reply.send(self.backend.set_mute(self.volume_device(), muted));
             }
             Control::OutputDevice(reply) => {
                 let _ = reply.send(self.volume_device().map(str::to_owned));

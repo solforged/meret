@@ -39,7 +39,7 @@ use objc2_core_audio::{
     AudioStreamRangedDescription, AudioConvertHostTimeToNanos, AudioGetCurrentHostTime,
     kAudioDevicePropertyAvailableNominalSampleRates, kAudioDevicePropertyDeviceIsAlive, kAudioDevicePropertyDeviceUID,
     kAudioDevicePropertyHogMode, kAudioDevicePropertyLatency, kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyStreams,
-    kAudioDevicePropertyVolumeScalar,
+    kAudioDevicePropertyMute, kAudioDevicePropertyVolumeScalar,
     kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices, kAudioObjectPropertyElementMain,
     kAudioObjectPropertyName, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyScopeOutput,
     kAudioObjectSystemObject, kAudioStreamPropertyAvailablePhysicalFormats, kAudioStreamPropertyLatency,
@@ -102,6 +102,19 @@ impl OutputBackend for CoreAudioBackend {
         for element in elements {
             set_at(device.0, volume_address(element), &scalar).map_err(platform)?;
         }
+        // Moving the volume unmutes, as the volume keys and Control Centre do.
+        if device.muted() == Some(true) {
+            device.set_muted(false)?;
+        }
+        device.volume()
+    }
+
+    fn set_mute(&self, wanted: Option<&str>, muted: bool) -> Result<DeviceVolume, OutputError> {
+        let device = find_device(wanted)?;
+        if device.muted().is_none() {
+            return Err(OutputError::Refused("this device has no mute".into()));
+        }
+        device.set_muted(muted)?;
         device.volume()
     }
 
@@ -184,14 +197,40 @@ impl Device {
     fn volume(self) -> Result<DeviceVolume, OutputError> {
         let elements = self.volume_elements();
         if elements.is_empty() {
-            return Ok(DeviceVolume::unsupported("No volume control on this output"));
+            return Ok(DeviceVolume { device: self.uid(), ..DeviceVolume::unsupported("No volume control on this output") });
         }
         let mut scalar = 0.0f32;
         for &element in &elements {
             scalar += get_at::<f32>(self.0, volume_address(element)).map_err(platform)?;
         }
-        Ok(DeviceVolume { scalar: Some(scalar / elements.len() as f32), settable: true, reason: None })
+        Ok(DeviceVolume {
+            device: self.uid(),
+            scalar: Some(scalar / elements.len() as f32),
+            settable: true,
+            muted: self.muted(),
+            reason: None,
+        })
     }
+
+    /// The main element's mute, when it can be set.
+    fn muted(self) -> Option<bool> {
+        let address = mute_address();
+        let mut yes = 0u8;
+        let settable = unsafe {
+            AudioObjectHasProperty(self.0, NonNull::from(&address))
+                && AudioObjectIsPropertySettable(self.0, NonNull::from(&address), NonNull::from(&mut yes)) == 0
+                && yes != 0
+        };
+        if !settable {
+            return None;
+        }
+        get_at::<u32>(self.0, address).ok().map(|muted| muted != 0)
+    }
+
+    fn set_muted(self, muted: bool) -> Result<(), OutputError> {
+        set_at(self.0, mute_address(), &u32::from(muted)).map_err(platform)
+    }
+
     fn info(self) -> Option<DeviceInfo> {
         let streams = self.output_streams();
         let first = *streams.first()?;
@@ -777,6 +816,10 @@ fn has(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: Audi
 
 fn volume_address(element: u32) -> AudioObjectPropertyAddress {
     AudioObjectPropertyAddress { mSelector: kAudioDevicePropertyVolumeScalar, mScope: OUTPUT, mElement: element }
+}
+
+fn mute_address() -> AudioObjectPropertyAddress {
+    AudioObjectPropertyAddress { mSelector: kAudioDevicePropertyMute, mScope: OUTPUT, mElement: kAudioObjectPropertyElementMain }
 }
 
 fn get<T: Copy>(object: AudioObjectID, selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> Result<T, i32> {

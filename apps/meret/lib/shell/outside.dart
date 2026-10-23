@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
@@ -19,13 +20,20 @@ class Outside {
   static const _channel = MethodChannel('meret/outside');
   static const pickUpLimit = 3;
 
+  /// The device volume after each volume key, for Now's slider.
+  final volume = ValueNotifier<VolumeDto?>(null);
+
   NowDto? _now;
   int _pickUpGeneration = 0;
+  int _volumeGeneration = 0;
+  Future<void> _keys = Future.value();
 
   /// Each Now goes out as the fields the menu bar, the Now Playing centre
   /// and the panel draw. Swift extrapolates the position from the anchor.
   /// The pick-up rows follow whenever the item or the rate changes (the
-  /// same rule as Now's own list), so the panel never fetches while open.
+  /// same rule as Now's own list), so the panel never fetches while open;
+  /// the device the volume keys would reach follows then and when the
+  /// signal path changes.
   void now(NowDto now) {
     final before = _now;
     _now = now;
@@ -44,10 +52,41 @@ class Outside {
       'warn': now.fidelity != FidelityDto.bitPerfect,
       'error': now.error,
     }).catchError((_) {});
-    if (before == null || before.anchor?.item != anchor?.item || before.anchor?.rate != anchor?.rate) {
-      _sendPickUp();
-    }
+    final moved = before == null || before.anchor?.item != anchor?.item || before.anchor?.rate != anchor?.rate;
+    if (moved) _sendPickUp();
+    if (moved || !listEquals(before.path, now.path)) _sendVolumeTarget();
   }
+
+  /// Swift takes the volume keys only while Meret plays on a device other
+  /// than macOS's default output, and only for what that device can do.
+  Future<void> _sendVolumeTarget() async {
+    final generation = ++_volumeGeneration;
+    final VolumeDto current;
+    try {
+      current = await core.volume();
+    } catch (_) {
+      return;
+    }
+    if (generation != _volumeGeneration) return;
+    _channel.invokeMethod<void>('volumeTarget', {
+      'device': current.settable ? current.device : null,
+      'mute': current.muted != null,
+    }).catchError((_) {});
+  }
+
+  /// Presses run one at a time, so a held key steps from where the last
+  /// press landed.
+  Future<void> _volumeKey(String key, bool fine) => _keys = _keys.then((_) async {
+    final VolumeDto next;
+    if (key == 'mute') {
+      final muted = (await core.volume()).muted;
+      if (muted == null) return;
+      next = await core.setMute(!muted);
+    } else {
+      next = await core.stepVolume(up: key == 'up', fine: fine);
+    }
+    volume.value = next;
+  }).catchError((_) {});
 
   Future<void> _sendPickUp() async {
     final generation = ++_pickUpGeneration;
@@ -120,6 +159,9 @@ class Outside {
         await core.playSomething();
       case 'pickUp':
         await core.pickUp(call.arguments as int);
+      case 'volumeKey':
+        final args = call.arguments as Map;
+        await _volumeKey(args['key'] as String, args['fine'] as bool? ?? false);
       default:
         throw MissingPluginException(call.method);
     }
@@ -128,5 +170,6 @@ class Outside {
 
   void dispose() {
     if (Platform.isMacOS) _channel.setMethodCallHandler(null);
+    volume.dispose();
   }
 }

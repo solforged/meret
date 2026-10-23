@@ -31,8 +31,10 @@ pub use meret_api::{PickDto, ZoneDto};
 
 #[frb(mirror(VolumeDto))]
 pub struct _VolumeDto {
+    pub device: Option<String>,
     pub scalar: Option<f32>,
     pub settable: bool,
+    pub muted: Option<bool>,
     pub reason: Option<String>,
 }
 

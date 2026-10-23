@@ -134,14 +134,18 @@ impl From<meret_engine::output::DeviceInfo> for OutputDeviceDto {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VolumeDto {
+    /// The UID of the device this is the volume of.
+    pub device: Option<String>,
     pub scalar: Option<f32>,
     pub settable: bool,
+    /// None when the device has no mute of its own.
+    pub muted: Option<bool>,
     pub reason: Option<String>,
 }
 
 impl From<meret_engine::output::DeviceVolume> for VolumeDto {
     fn from(volume: meret_engine::output::DeviceVolume) -> Self {
-        Self { scalar: volume.scalar, settable: volume.settable, reason: volume.reason }
+        Self { device: volume.device, scalar: volume.scalar, settable: volume.settable, muted: volume.muted, reason: volume.reason }
     }
 }
 

@@ -140,6 +140,15 @@ impl Api {
         self.core.set_volume(scalar).map(Into::into).map_err(|e| e.to_string())
     }
 
+    /// One volume key press on the device Meret plays on.
+    pub fn step_volume(&self, up: bool, fine: bool) -> Result<VolumeDto, String> {
+        self.core.step_volume(up, fine).map(Into::into).map_err(|e| e.to_string())
+    }
+
+    pub fn set_mute(&self, muted: bool) -> Result<VolumeDto, String> {
+        self.core.set_mute(muted).map(Into::into).map_err(|e| e.to_string())
+    }
+
     pub fn suggest_folders(&self) -> Vec<FolderSuggestionDto> {
         self.core.suggest_folders().into_iter().map(Into::into).collect()
     }
