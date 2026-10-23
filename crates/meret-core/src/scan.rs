@@ -138,10 +138,15 @@ fn reload(core: &Core) {
 }
 
 fn reload_result(core: &Core) -> crate::Result<()> {
+    let analysis_write = core.analysis_write.lock();
     let cols = core.store.load_columns()?;
     let tracks = cols.len() as u64;
     *core.columns.write() = cols;
+    drop(analysis_write);
     core.status.send_modify(|s| status::set_library(s, tracks));
     crate::lookups::seed(core);
+    if let Err(error) = crate::analysis::seed(core) {
+        tracing::error!(%error, "could not seed analysis jobs");
+    }
     Ok(())
 }

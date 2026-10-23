@@ -1926,6 +1926,14 @@ const _: fn() = || {
         let _: f64 = AnchorDto.rate;
     }
     {
+        let BodyDto = None::<crate::api::types::BodyDto>.unwrap();
+        let _: Vec<u8> = BodyDto.loudness;
+        let _: Vec<u8> = BodyDto.low;
+        let _: Vec<u8> = BodyDto.mid;
+        let _: Vec<u8> = BodyDto.high;
+        let _: u64 = BodyDto.length_ms;
+    }
+    {
         let BranchDto = None::<crate::api::types::BranchDto>.unwrap();
         let _: Option<u32> = BranchDto.fork;
         let _: u32 = BranchDto.first;
@@ -2109,6 +2117,9 @@ const _: fn() = || {
         let _: Option<String> = NowDto.why;
         let _: Option<crate::api::types::AnchorDto> = NowDto.anchor;
         let _: Option<u64> = NowDto.length_ms;
+        let _: Option<crate::api::types::BodyDto> = NowDto.body;
+        let _: Option<f64> = NowDto.loudness_lufs;
+        let _: Option<u8> = NowDto.dr;
         let _: Vec<crate::api::types::StageDto> = NowDto.path;
         let _: Option<crate::api::types::FidelityDto> = NowDto.fidelity;
         let _: Option<String> = NowDto.error;
@@ -2188,6 +2199,8 @@ const _: fn() = || {
         let _: u32 = ReleaseDto.tracks;
         let _: u32 = ReleaseDto.discs;
         let _: u64 = ReleaseDto.length_ms;
+        let _: Option<u8> = ReleaseDto.dr;
+        let _: Option<f64> = ReleaseDto.loudness_lufs;
         let _: Vec<String> = ReleaseDto.formats;
         let _: Vec<crate::api::types::TrackRowDto> = ReleaseDto.rows;
         let _: Vec<Option<crate::api::types::ThreadDto>> = ReleaseDto.row_works;
@@ -2244,6 +2257,7 @@ const _: fn() = || {
         let _: Option<String> = SettingsDto.output_device;
         let _: bool = SettingsDto.exclusive;
         let _: crate::api::types::LookupsDto = SettingsDto.lookups;
+        let _: crate::api::types::LevelDto = SettingsDto.level;
     }
     {
         let SourceDto = None::<crate::api::types::SourceDto>.unwrap();
@@ -2324,6 +2338,8 @@ const _: fn() = || {
         let _: u32 = TrackRowDto.number;
         let _: Option<u16> = TrackRowDto.year;
         let _: Option<u64> = TrackRowDto.length_ms;
+        let _: Option<u8> = TrackRowDto.dr;
+        let _: Option<f64> = TrackRowDto.loudness;
         let _: String = TrackRowDto.format;
         let _: Option<String> = TrackRowDto.path;
     }
@@ -2469,6 +2485,24 @@ impl SseDecode for crate::api::types::AnchorDto {
     }
 }
 
+impl SseDecode for crate::api::types::BodyDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_loudness = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_low = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_mid = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_high = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_lengthMs = <u64>::sse_decode(deserializer);
+        return crate::api::types::BodyDto {
+            loudness: var_loudness,
+            low: var_low,
+            mid: var_mid,
+            high: var_high,
+            length_ms: var_lengthMs,
+        };
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2511,6 +2545,7 @@ impl SseDecode for crate::api::types::ColumnDto {
             3 => crate::api::types::ColumnDto::LastPlayed,
             4 => crate::api::types::ColumnDto::Added,
             5 => crate::api::types::ColumnDto::Dr,
+            6 => crate::api::types::ColumnDto::Loudness,
             _ => unreachable!("Invalid variant for ColumnDto: {}", inner),
         };
     }
@@ -2873,6 +2908,19 @@ impl SseDecode for crate::api::types::JobDto {
             verb: var_verb,
             done: var_done,
             total: var_total,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::LevelDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::LevelDto::Off,
+            1 => crate::api::types::LevelDto::Track,
+            2 => crate::api::types::LevelDto::Album,
+            _ => unreachable!("Invalid variant for LevelDto: {}", inner),
         };
     }
 }
@@ -3357,6 +3405,9 @@ impl SseDecode for crate::api::types::NowDto {
         let mut var_why = <Option<String>>::sse_decode(deserializer);
         let mut var_anchor = <Option<crate::api::types::AnchorDto>>::sse_decode(deserializer);
         let mut var_lengthMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_body = <Option<crate::api::types::BodyDto>>::sse_decode(deserializer);
+        let mut var_loudnessLufs = <Option<f64>>::sse_decode(deserializer);
+        let mut var_dr = <Option<u8>>::sse_decode(deserializer);
         let mut var_path = <Vec<crate::api::types::StageDto>>::sse_decode(deserializer);
         let mut var_fidelity = <Option<crate::api::types::FidelityDto>>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
@@ -3370,6 +3421,9 @@ impl SseDecode for crate::api::types::NowDto {
             why: var_why,
             anchor: var_anchor,
             length_ms: var_lengthMs,
+            body: var_body,
+            loudness_lufs: var_loudnessLufs,
+            dr: var_dr,
             path: var_path,
             fidelity: var_fidelity,
             error: var_error,
@@ -3399,6 +3453,17 @@ impl SseDecode for Option<crate::api::types::AnchorDto> {
     }
 }
 
+impl SseDecode for Option<crate::api::types::BodyDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::BodyDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<bool> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3415,6 +3480,17 @@ impl SseDecode for Option<f32> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<f32>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<f64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<f64>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -3527,6 +3603,17 @@ impl SseDecode for Option<u64> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<u64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<u8> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<u8>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -3706,6 +3793,8 @@ impl SseDecode for crate::api::types::ReleaseDto {
         let mut var_tracks = <u32>::sse_decode(deserializer);
         let mut var_discs = <u32>::sse_decode(deserializer);
         let mut var_lengthMs = <u64>::sse_decode(deserializer);
+        let mut var_dr = <Option<u8>>::sse_decode(deserializer);
+        let mut var_loudnessLufs = <Option<f64>>::sse_decode(deserializer);
         let mut var_formats = <Vec<String>>::sse_decode(deserializer);
         let mut var_rows = <Vec<crate::api::types::TrackRowDto>>::sse_decode(deserializer);
         let mut var_rowWorks =
@@ -3725,6 +3814,8 @@ impl SseDecode for crate::api::types::ReleaseDto {
             tracks: var_tracks,
             discs: var_discs,
             length_ms: var_lengthMs,
+            dr: var_dr,
+            loudness_lufs: var_loudnessLufs,
             formats: var_formats,
             rows: var_rows,
             row_works: var_rowWorks,
@@ -3835,11 +3926,13 @@ impl SseDecode for crate::api::types::SettingsDto {
         let mut var_outputDevice = <Option<String>>::sse_decode(deserializer);
         let mut var_exclusive = <bool>::sse_decode(deserializer);
         let mut var_lookups = <crate::api::types::LookupsDto>::sse_decode(deserializer);
+        let mut var_level = <crate::api::types::LevelDto>::sse_decode(deserializer);
         return crate::api::types::SettingsDto {
             light: var_light,
             output_device: var_outputDevice,
             exclusive: var_exclusive,
             lookups: var_lookups,
+            level: var_level,
         };
     }
 }
@@ -4052,6 +4145,8 @@ impl SseDecode for crate::api::types::TrackRowDto {
         let mut var_number = <u32>::sse_decode(deserializer);
         let mut var_year = <Option<u16>>::sse_decode(deserializer);
         let mut var_lengthMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_dr = <Option<u8>>::sse_decode(deserializer);
+        let mut var_loudness = <Option<f64>>::sse_decode(deserializer);
         let mut var_format = <String>::sse_decode(deserializer);
         let mut var_path = <Option<String>>::sse_decode(deserializer);
         return crate::api::types::TrackRowDto {
@@ -4067,6 +4162,8 @@ impl SseDecode for crate::api::types::TrackRowDto {
             number: var_number,
             year: var_year,
             length_ms: var_lengthMs,
+            dr: var_dr,
+            loudness: var_loudness,
             format: var_format,
             path: var_path,
         };
@@ -4414,6 +4511,30 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::AnchorDto>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::BodyDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.loudness.into_into_dart().into_dart(),
+            self.0.low.into_into_dart().into_dart(),
+            self.0.mid.into_into_dart().into_dart(),
+            self.0.high.into_into_dart().into_dart(),
+            self.0.length_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::BodyDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::BodyDto>>
+    for crate::api::types::BodyDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::BodyDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::BranchDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -4450,6 +4571,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ColumnDto> 
             crate::api::types::ColumnDto::LastPlayed => 3.into_dart(),
             crate::api::types::ColumnDto::Added => 4.into_dart(),
             crate::api::types::ColumnDto::Dr => 5.into_dart(),
+            crate::api::types::ColumnDto::Loudness => 6.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -4907,6 +5029,28 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::JobDto>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::LevelDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self.0 {
+            crate::api::types::LevelDto::Off => 0.into_dart(),
+            crate::api::types::LevelDto::Track => 1.into_dart(),
+            crate::api::types::LevelDto::Album => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::LevelDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::LevelDto>>
+    for crate::api::types::LevelDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::LevelDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::LightDto> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -5044,6 +5188,9 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::NowDto> {
             self.0.why.into_into_dart().into_dart(),
             self.0.anchor.into_into_dart().into_dart(),
             self.0.length_ms.into_into_dart().into_dart(),
+            self.0.body.into_into_dart().into_dart(),
+            self.0.loudness_lufs.into_into_dart().into_dart(),
+            self.0.dr.into_into_dart().into_dart(),
             self.0.path.into_into_dart().into_dart(),
             self.0.fidelity.into_into_dart().into_dart(),
             self.0.error.into_into_dart().into_dart(),
@@ -5257,6 +5404,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ReleaseDto>
             self.0.tracks.into_into_dart().into_dart(),
             self.0.discs.into_into_dart().into_dart(),
             self.0.length_ms.into_into_dart().into_dart(),
+            self.0.dr.into_into_dart().into_dart(),
+            self.0.loudness_lufs.into_into_dart().into_dart(),
             self.0.formats.into_into_dart().into_dart(),
             self.0.rows.into_into_dart().into_dart(),
             self.0.row_works.into_into_dart().into_dart(),
@@ -5393,6 +5542,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::SettingsDto
             self.0.output_device.into_into_dart().into_dart(),
             self.0.exclusive.into_into_dart().into_dart(),
             self.0.lookups.into_into_dart().into_dart(),
+            self.0.level.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5661,6 +5811,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::TrackRowDto
             self.0.number.into_into_dart().into_dart(),
             self.0.year.into_into_dart().into_dart(),
             self.0.length_ms.into_into_dart().into_dart(),
+            self.0.dr.into_into_dart().into_dart(),
+            self.0.loudness.into_into_dart().into_dart(),
             self.0.format.into_into_dart().into_dart(),
             self.0.path.into_into_dart().into_dart(),
         ]
@@ -5955,6 +6107,17 @@ impl SseEncode for crate::api::types::AnchorDto {
     }
 }
 
+impl SseEncode for crate::api::types::BodyDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<u8>>::sse_encode(self.loudness, serializer);
+        <Vec<u8>>::sse_encode(self.low, serializer);
+        <Vec<u8>>::sse_encode(self.mid, serializer);
+        <Vec<u8>>::sse_encode(self.high, serializer);
+        <u64>::sse_encode(self.length_ms, serializer);
+    }
+}
+
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5987,6 +6150,7 @@ impl SseEncode for crate::api::types::ColumnDto {
                 crate::api::types::ColumnDto::LastPlayed => 3,
                 crate::api::types::ColumnDto::Added => 4,
                 crate::api::types::ColumnDto::Dr => 5,
+                crate::api::types::ColumnDto::Loudness => 6,
                 _ => {
                     unimplemented!("");
                 }
@@ -6255,6 +6419,23 @@ impl SseEncode for crate::api::types::JobDto {
         <String>::sse_encode(self.verb, serializer);
         <u64>::sse_encode(self.done, serializer);
         <u64>::sse_encode(self.total, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::LevelDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::LevelDto::Off => 0,
+                crate::api::types::LevelDto::Track => 1,
+                crate::api::types::LevelDto::Album => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -6646,6 +6827,9 @@ impl SseEncode for crate::api::types::NowDto {
         <Option<String>>::sse_encode(self.why, serializer);
         <Option<crate::api::types::AnchorDto>>::sse_encode(self.anchor, serializer);
         <Option<u64>>::sse_encode(self.length_ms, serializer);
+        <Option<crate::api::types::BodyDto>>::sse_encode(self.body, serializer);
+        <Option<f64>>::sse_encode(self.loudness_lufs, serializer);
+        <Option<u8>>::sse_encode(self.dr, serializer);
         <Vec<crate::api::types::StageDto>>::sse_encode(self.path, serializer);
         <Option<crate::api::types::FidelityDto>>::sse_encode(self.fidelity, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
@@ -6672,6 +6856,16 @@ impl SseEncode for Option<crate::api::types::AnchorDto> {
     }
 }
 
+impl SseEncode for Option<crate::api::types::BodyDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::BodyDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<bool> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6688,6 +6882,16 @@ impl SseEncode for Option<f32> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <f32>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<f64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <f64>::sse_encode(value, serializer);
         }
     }
 }
@@ -6788,6 +6992,16 @@ impl SseEncode for Option<u64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <u64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<u8> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <u8>::sse_encode(value, serializer);
         }
     }
 }
@@ -6911,6 +7125,8 @@ impl SseEncode for crate::api::types::ReleaseDto {
         <u32>::sse_encode(self.tracks, serializer);
         <u32>::sse_encode(self.discs, serializer);
         <u64>::sse_encode(self.length_ms, serializer);
+        <Option<u8>>::sse_encode(self.dr, serializer);
+        <Option<f64>>::sse_encode(self.loudness_lufs, serializer);
         <Vec<String>>::sse_encode(self.formats, serializer);
         <Vec<crate::api::types::TrackRowDto>>::sse_encode(self.rows, serializer);
         <Vec<Option<crate::api::types::ThreadDto>>>::sse_encode(self.row_works, serializer);
@@ -6982,6 +7198,7 @@ impl SseEncode for crate::api::types::SettingsDto {
         <Option<String>>::sse_encode(self.output_device, serializer);
         <bool>::sse_encode(self.exclusive, serializer);
         <crate::api::types::LookupsDto>::sse_encode(self.lookups, serializer);
+        <crate::api::types::LevelDto>::sse_encode(self.level, serializer);
     }
 }
 
@@ -7157,6 +7374,8 @@ impl SseEncode for crate::api::types::TrackRowDto {
         <u32>::sse_encode(self.number, serializer);
         <Option<u16>>::sse_encode(self.year, serializer);
         <Option<u64>>::sse_encode(self.length_ms, serializer);
+        <Option<u8>>::sse_encode(self.dr, serializer);
+        <Option<f64>>::sse_encode(self.loudness, serializer);
         <String>::sse_encode(self.format, serializer);
         <Option<String>>::sse_encode(self.path, serializer);
     }

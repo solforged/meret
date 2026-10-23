@@ -53,11 +53,11 @@ impl LocalZone {
         }
     }
 
-    fn load(item: u64, uri: &str, start_ms: u64) -> Result<Load, ZoneError> {
+    fn load(item: u64, uri: &str, start_ms: u64, gain_db: f64) -> Result<Load, ZoneError> {
         let path = uri.strip_prefix("file://").ok_or_else(|| ZoneError::CannotPlay(uri.into()))?;
         let decoder = decode::open(Path::new(path)).map_err(|e| ZoneError::CannotPlay(format!("{path}: {e}")))?;
         let start_frame = start_ms * decoder.spec().sample_rate as u64 / 1000;
-        Ok(Load { item, decoder, start_frame, stages: vec![] })
+        Ok(Load { item, decoder, start_frame, gain_db, stages: vec![] })
     }
 }
 
@@ -84,8 +84,8 @@ impl Zone for LocalZone {
 
     fn command(&self, cmd: ZoneCommand) -> Result<(), ZoneError> {
         let control = match cmd {
-            ZoneCommand::Play { item, uri, start_ms } => Control::Play(Self::load(item, &uri, start_ms)?),
-            ZoneCommand::SetNext { item, uri } => Control::SetNext(Some(Self::load(item, &uri, 0)?)),
+            ZoneCommand::Play { item, uri, start_ms, gain_db } => Control::Play(Self::load(item, &uri, start_ms, gain_db)?),
+            ZoneCommand::SetNext { item, uri, gain_db } => Control::SetNext(Some(Self::load(item, &uri, 0, gain_db)?)),
             ZoneCommand::Pause => Control::Pause,
             ZoneCommand::Resume => Control::Resume,
             ZoneCommand::Seek { ms } => {

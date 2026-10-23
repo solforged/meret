@@ -89,6 +89,8 @@ pub enum NumField {
     /// Seconds.
     Length,
     Dr,
+    /// Integrated loudness in LUFS.
+    Loudness,
     Bpm,
 }
 
@@ -295,6 +297,7 @@ names!(NumField {
     Plays => "plays",
     Length => "length",
     Dr => "dr",
+    Loudness => "lufs",
     Bpm => "bpm",
 });
 

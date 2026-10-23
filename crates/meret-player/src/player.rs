@@ -31,6 +31,15 @@ impl Player {
         &self.zone
     }
 
+    /// Updates queued gains and the preloaded successor. Already buffered
+    /// audio keeps its gain until the next item, without interrupting playback.
+    pub fn refresh_gains(&mut self, mut gain: impl FnMut(&QueueItem) -> f64) {
+        for item in &mut self.queue.items {
+            item.gain_db = gain(item);
+        }
+        self.preload();
+    }
+
     /// Replaces the queue once a Play succeeds, skipping anything the zone
     /// can't open. An empty replacement stops playback.
     pub fn play(&mut self, items: Vec<QueueItem>, start: usize, start_ms: u64) -> Result<Option<&QueueItem>, ZoneError> {
@@ -44,7 +53,9 @@ impl Player {
         loop {
             let item = replacement.current().expect("cursor is in range");
             let position = if replacement.cursor == start { start_ms } else { 0 };
-            match self.zone.command(ZoneCommand::Play { item: item.token, uri: item.uri.clone(), start_ms: position }) {
+            match self.zone.command(ZoneCommand::Play {
+                item: item.token, uri: item.uri.clone(), start_ms: position, gain_db: item.gain_db,
+            }) {
                 Ok(()) => break,
                 Err(e @ ZoneError::CannotPlay(_)) => {
                     self.last_error = Some(e.to_string());
@@ -87,7 +98,7 @@ impl Player {
     pub fn idle(&mut self) {
         let Some(token) = self.awaiting_start.take() else { return };
         let Some(item) = self.queue.current().filter(|c| c.token == token) else { return };
-        match self.zone.command(ZoneCommand::Play { item: token, uri: item.uri.clone(), start_ms: 0 }) {
+        match self.zone.command(ZoneCommand::Play { item: token, uri: item.uri.clone(), start_ms: 0, gain_db: item.gain_db }) {
             Ok(()) => self.preload(),
             Err(e) => self.last_error = Some(e.to_string()),
         }
@@ -119,7 +130,9 @@ impl Player {
                 self.stop()?;
                 return Ok(None);
             };
-            match self.zone.command(ZoneCommand::Play { item: item.token, uri: item.uri.clone(), start_ms: 0 }) {
+            match self.zone.command(ZoneCommand::Play {
+                item: item.token, uri: item.uri.clone(), start_ms: 0, gain_db: item.gain_db,
+            }) {
                 Ok(()) => break,
                 Err(e @ ZoneError::CannotPlay(_)) => {
                     self.last_error = Some(e.to_string());
@@ -154,7 +167,7 @@ impl Player {
     fn preload(&mut self) {
         self.next = None;
         for item in self.queue.up_next() {
-            match self.zone.command(ZoneCommand::SetNext { item: item.token, uri: item.uri.clone() }) {
+            match self.zone.command(ZoneCommand::SetNext { item: item.token, uri: item.uri.clone(), gain_db: item.gain_db }) {
                 Ok(()) => {
                     self.next = Some(item.token);
                     return;
@@ -173,7 +186,7 @@ mod tests {
     use parking_lot::Mutex;
 
     #[derive(Default)]
-    struct Recorder(Mutex<Vec<String>>);
+    struct Recorder(Mutex<Vec<String>>, Mutex<Vec<ZoneCommand>>);
 
     impl Zone for Recorder {
         fn info(&self) -> ZoneInfo {
@@ -190,7 +203,7 @@ mod tests {
         fn command(&self, cmd: ZoneCommand) -> Result<(), ZoneError> {
             let (verb, item, uri) = match &cmd {
                 ZoneCommand::Play { item, uri, .. } => ("play", *item, uri.as_str()),
-                ZoneCommand::SetNext { item, uri } => ("next", *item, uri.as_str()),
+                ZoneCommand::SetNext { item, uri, .. } => ("next", *item, uri.as_str()),
                 ZoneCommand::Stop => {
                     self.0.lock().push("stop".into());
                     return Ok(());
@@ -201,6 +214,7 @@ mod tests {
                 return Err(ZoneError::CannotPlay(uri.into()));
             }
             self.0.lock().push(format!("{verb} {item}"));
+            self.1.lock().push(cmd);
             Ok(())
         }
 
@@ -214,6 +228,7 @@ mod tests {
             .map(|u| QueueItem {
                 token: 0,
                 uri: (*u).into(),
+                gain_db: 0.0,
                 track: None,
                 recording: None,
                 release: None,
@@ -243,6 +258,42 @@ mod tests {
         assert!(log(&z).is_empty(), "nothing after the last item");
         assert_eq!(p.ended(3), None);
         assert_eq!(p.queue().cursor, 2);
+    }
+
+    #[test]
+    fn each_play_and_preload_carries_its_own_gain() {
+        let (mut p, z) = player();
+        let mut queue = items(&["a", "b", "c"]);
+        for (item, gain) in queue.iter_mut().zip([-3.0, 2.0, 0.0]) {
+            item.gain_db = gain;
+        }
+        p.play(queue, 0, 0).unwrap();
+        p.started(1);
+        p.ended(1);
+        p.idle();
+        p.skip_previous().unwrap();
+        let gains: Vec<_> = z.1.lock().iter().filter_map(|cmd| match cmd {
+            ZoneCommand::Play { item, gain_db, .. } => Some((*item, *gain_db, false)),
+            ZoneCommand::SetNext { item, gain_db, .. } => Some((*item, *gain_db, true)),
+            _ => None,
+        }).collect();
+        assert_eq!(gains, [
+            (1, -3.0, false), (2, 2.0, true), (3, 0.0, true),
+            (2, 2.0, false), (3, 0.0, true), (1, -3.0, false), (2, 2.0, true),
+        ]);
+    }
+
+    #[test]
+    fn refreshing_gains_reloads_only_the_successor() {
+        let (mut p, z) = player();
+        p.play(items(&["a", "b", "c"]), 0, 0).unwrap();
+        z.1.lock().clear();
+        p.refresh_gains(|item| -(item.token as f64));
+        let gains: Vec<_> = p.queue().items.iter().map(|item| item.gain_db).collect();
+        assert_eq!(gains, [-1.0, -2.0, -3.0]);
+        assert_eq!(*z.1.lock(), [
+            ZoneCommand::SetNext { item: 2, uri: "b".into(), gain_db: -2.0 },
+        ]);
     }
 
     #[test]

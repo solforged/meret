@@ -54,7 +54,7 @@ pub(crate) fn wake(core: &Core) {
 
 pub(crate) fn spawn_runner(core: Arc<Core>) {
     let Some(wakes) = core.lookups_wakes.lock().take() else { return };
-    if let Err(e) = core.store.requeue_running() {
+    if let Err(e) = core.store.requeue_running(QUEUE) {
         tracing::error!(error = %e, "could not requeue running lookups");
     }
     std::thread::Builder::new()

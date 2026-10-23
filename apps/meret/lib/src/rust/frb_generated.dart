@@ -1905,6 +1905,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BodyDto dco_decode_body_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return BodyDto(
+      loudness: dco_decode_list_prim_u_8_strict(arr[0]),
+      low: dco_decode_list_prim_u_8_strict(arr[1]),
+      mid: dco_decode_list_prim_u_8_strict(arr[2]),
+      high: dco_decode_list_prim_u_8_strict(arr[3]),
+      lengthMs: dco_decode_u_64(arr[4]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -1917,6 +1932,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BodyDto dco_decode_box_autoadd_body_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_body_dto(raw);
+  }
+
+  @protected
   bool dco_decode_box_autoadd_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -1924,6 +1945,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   double dco_decode_box_autoadd_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
   }
@@ -2016,6 +2043,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_u_64(raw);
+  }
+
+  @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -2325,6 +2358,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  LevelDto dco_decode_level_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return LevelDto.values[raw as int];
+  }
+
+  @protected
   LightDto dco_decode_light_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2578,8 +2617,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NowDto dco_decode_now_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return NowDto(
       trackId: dco_decode_opt_box_autoadd_i_64(arr[0]),
       releaseId: dco_decode_opt_box_autoadd_i_64(arr[1]),
@@ -2590,9 +2629,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       why: dco_decode_opt_String(arr[6]),
       anchor: dco_decode_opt_box_autoadd_anchor_dto(arr[7]),
       lengthMs: dco_decode_opt_box_autoadd_u_64(arr[8]),
-      path: dco_decode_list_stage_dto(arr[9]),
-      fidelity: dco_decode_opt_box_autoadd_fidelity_dto(arr[10]),
-      error: dco_decode_opt_String(arr[11]),
+      body: dco_decode_opt_box_autoadd_body_dto(arr[9]),
+      loudnessLufs: dco_decode_opt_box_autoadd_f_64(arr[10]),
+      dr: dco_decode_opt_box_autoadd_u_8(arr[11]),
+      path: dco_decode_list_stage_dto(arr[12]),
+      fidelity: dco_decode_opt_box_autoadd_fidelity_dto(arr[13]),
+      error: dco_decode_opt_String(arr[14]),
     );
   }
 
@@ -2609,6 +2651,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BodyDto? dco_decode_opt_box_autoadd_body_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_body_dto(raw);
+  }
+
+  @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_bool(raw);
@@ -2618,6 +2666,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double? dco_decode_opt_box_autoadd_f_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_f_32(raw);
+  }
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
   }
 
   @protected
@@ -2678,6 +2732,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_8(raw);
   }
 
   @protected
@@ -2805,8 +2865,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReleaseDto dco_decode_release_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 17)
-      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
     return ReleaseDto(
       id: dco_decode_i_64(arr[0]),
       title: dco_decode_String(arr[1]),
@@ -2818,13 +2878,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       tracks: dco_decode_u_32(arr[7]),
       discs: dco_decode_u_32(arr[8]),
       lengthMs: dco_decode_u_64(arr[9]),
-      formats: dco_decode_list_String(arr[10]),
-      rows: dco_decode_list_track_row_dto(arr[11]),
-      rowWorks: dco_decode_list_opt_box_autoadd_thread_dto(arr[12]),
-      credits: dco_decode_list_thread_dto(arr[13]),
-      games: dco_decode_list_thread_dto(arr[14]),
-      plays: dco_decode_u_64(arr[15]),
-      lastPlayedMs: dco_decode_opt_box_autoadd_i_64(arr[16]),
+      dr: dco_decode_opt_box_autoadd_u_8(arr[10]),
+      loudnessLufs: dco_decode_opt_box_autoadd_f_64(arr[11]),
+      formats: dco_decode_list_String(arr[12]),
+      rows: dco_decode_list_track_row_dto(arr[13]),
+      rowWorks: dco_decode_list_opt_box_autoadd_thread_dto(arr[14]),
+      credits: dco_decode_list_thread_dto(arr[15]),
+      games: dco_decode_list_thread_dto(arr[16]),
+      plays: dco_decode_u_64(arr[17]),
+      lastPlayedMs: dco_decode_opt_box_autoadd_i_64(arr[18]),
     );
   }
 
@@ -2902,13 +2964,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SettingsDto dco_decode_settings_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return SettingsDto(
       light: dco_decode_light_level_dto(arr[0]),
       outputDevice: dco_decode_opt_String(arr[1]),
       exclusive: dco_decode_bool(arr[2]),
       lookups: dco_decode_lookups_dto(arr[3]),
+      level: dco_decode_level_dto(arr[4]),
     );
   }
 
@@ -3030,8 +3093,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TrackRowDto dco_decode_track_row_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
     return TrackRowDto(
       trackId: dco_decode_i_64(arr[0]),
       title: dco_decode_String(arr[1]),
@@ -3045,8 +3108,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       number: dco_decode_u_32(arr[9]),
       year: dco_decode_opt_box_autoadd_u_16(arr[10]),
       lengthMs: dco_decode_opt_box_autoadd_u_64(arr[11]),
-      format: dco_decode_String(arr[12]),
-      path: dco_decode_opt_String(arr[13]),
+      dr: dco_decode_opt_box_autoadd_u_8(arr[12]),
+      loudness: dco_decode_opt_box_autoadd_f_64(arr[13]),
+      format: dco_decode_String(arr[14]),
+      path: dco_decode_opt_String(arr[15]),
     );
   }
 
@@ -3279,6 +3344,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BodyDto sse_decode_body_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_loudness = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_low = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_mid = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_high = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_lengthMs = sse_decode_u_64(deserializer);
+    return BodyDto(
+      loudness: var_loudness,
+      low: var_low,
+      mid: var_mid,
+      high: var_high,
+      lengthMs: var_lengthMs,
+    );
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
@@ -3291,6 +3373,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BodyDto sse_decode_box_autoadd_body_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_body_dto(deserializer));
+  }
+
+  @protected
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_bool(deserializer));
@@ -3300,6 +3388,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_f_32(deserializer));
+  }
+
+  @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_64(deserializer));
   }
 
   @protected
@@ -3400,6 +3494,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_u_64(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_8(deserializer));
   }
 
   @protected
@@ -3750,6 +3850,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_done = sse_decode_u_64(deserializer);
     var var_total = sse_decode_u_64(deserializer);
     return JobDto(verb: var_verb, done: var_done, total: var_total);
+  }
+
+  @protected
+  LevelDto sse_decode_level_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return LevelDto.values[inner];
   }
 
   @protected
@@ -4213,6 +4320,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_why = sse_decode_opt_String(deserializer);
     var var_anchor = sse_decode_opt_box_autoadd_anchor_dto(deserializer);
     var var_lengthMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_body = sse_decode_opt_box_autoadd_body_dto(deserializer);
+    var var_loudnessLufs = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_dr = sse_decode_opt_box_autoadd_u_8(deserializer);
     var var_path = sse_decode_list_stage_dto(deserializer);
     var var_fidelity = sse_decode_opt_box_autoadd_fidelity_dto(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
@@ -4226,6 +4336,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       why: var_why,
       anchor: var_anchor,
       lengthMs: var_lengthMs,
+      body: var_body,
+      loudnessLufs: var_loudnessLufs,
+      dr: var_dr,
       path: var_path,
       fidelity: var_fidelity,
       error: var_error,
@@ -4257,6 +4370,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BodyDto? sse_decode_opt_box_autoadd_body_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_body_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -4273,6 +4397,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_f_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_64(deserializer));
     } else {
       return null;
     }
@@ -4389,6 +4524,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_8(deserializer));
     } else {
       return null;
     }
@@ -4550,6 +4696,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_tracks = sse_decode_u_32(deserializer);
     var var_discs = sse_decode_u_32(deserializer);
     var var_lengthMs = sse_decode_u_64(deserializer);
+    var var_dr = sse_decode_opt_box_autoadd_u_8(deserializer);
+    var var_loudnessLufs = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_formats = sse_decode_list_String(deserializer);
     var var_rows = sse_decode_list_track_row_dto(deserializer);
     var var_rowWorks = sse_decode_list_opt_box_autoadd_thread_dto(deserializer);
@@ -4568,6 +4716,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       tracks: var_tracks,
       discs: var_discs,
       lengthMs: var_lengthMs,
+      dr: var_dr,
+      loudnessLufs: var_loudnessLufs,
       formats: var_formats,
       rows: var_rows,
       rowWorks: var_rowWorks,
@@ -4673,11 +4823,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_outputDevice = sse_decode_opt_String(deserializer);
     var var_exclusive = sse_decode_bool(deserializer);
     var var_lookups = sse_decode_lookups_dto(deserializer);
+    var var_level = sse_decode_level_dto(deserializer);
     return SettingsDto(
       light: var_light,
       outputDevice: var_outputDevice,
       exclusive: var_exclusive,
       lookups: var_lookups,
+      level: var_level,
     );
   }
 
@@ -4833,6 +4985,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_number = sse_decode_u_32(deserializer);
     var var_year = sse_decode_opt_box_autoadd_u_16(deserializer);
     var var_lengthMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_dr = sse_decode_opt_box_autoadd_u_8(deserializer);
+    var var_loudness = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_format = sse_decode_String(deserializer);
     var var_path = sse_decode_opt_String(deserializer);
     return TrackRowDto(
@@ -4848,6 +5002,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       number: var_number,
       year: var_year,
       lengthMs: var_lengthMs,
+      dr: var_dr,
+      loudness: var_loudness,
       format: var_format,
       path: var_path,
     );
@@ -5122,6 +5278,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_body_dto(BodyDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(self.loudness, serializer);
+    sse_encode_list_prim_u_8_strict(self.low, serializer);
+    sse_encode_list_prim_u_8_strict(self.mid, serializer);
+    sse_encode_list_prim_u_8_strict(self.high, serializer);
+    sse_encode_u_64(self.lengthMs, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
@@ -5137,6 +5303,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_body_dto(BodyDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_body_dto(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self, serializer);
@@ -5146,6 +5318,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self, serializer);
   }
 
   @protected
@@ -5269,6 +5447,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self, serializer);
   }
 
   @protected
@@ -5510,6 +5694,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.verb, serializer);
     sse_encode_u_64(self.done, serializer);
     sse_encode_u_64(self.total, serializer);
+  }
+
+  @protected
+  void sse_encode_level_dto(LevelDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -5913,6 +6103,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.why, serializer);
     sse_encode_opt_box_autoadd_anchor_dto(self.anchor, serializer);
     sse_encode_opt_box_autoadd_u_64(self.lengthMs, serializer);
+    sse_encode_opt_box_autoadd_body_dto(self.body, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.loudnessLufs, serializer);
+    sse_encode_opt_box_autoadd_u_8(self.dr, serializer);
     sse_encode_list_stage_dto(self.path, serializer);
     sse_encode_opt_box_autoadd_fidelity_dto(self.fidelity, serializer);
     sse_encode_opt_String(self.error, serializer);
@@ -5942,6 +6135,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_body_dto(
+    BodyDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_body_dto(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -5958,6 +6164,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_f_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_64(self, serializer);
     }
   }
 
@@ -6083,6 +6299,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_8(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_output_device_dto(
     OutputDeviceDto self,
     SseSerializer serializer,
@@ -6186,6 +6412,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.tracks, serializer);
     sse_encode_u_32(self.discs, serializer);
     sse_encode_u_64(self.lengthMs, serializer);
+    sse_encode_opt_box_autoadd_u_8(self.dr, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.loudnessLufs, serializer);
     sse_encode_list_String(self.formats, serializer);
     sse_encode_list_track_row_dto(self.rows, serializer);
     sse_encode_list_opt_box_autoadd_thread_dto(self.rowWorks, serializer);
@@ -6252,6 +6480,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.outputDevice, serializer);
     sse_encode_bool(self.exclusive, serializer);
     sse_encode_lookups_dto(self.lookups, serializer);
+    sse_encode_level_dto(self.level, serializer);
   }
 
   @protected
@@ -6361,6 +6590,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.number, serializer);
     sse_encode_opt_box_autoadd_u_16(self.year, serializer);
     sse_encode_opt_box_autoadd_u_64(self.lengthMs, serializer);
+    sse_encode_opt_box_autoadd_u_8(self.dr, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.loudness, serializer);
     sse_encode_String(self.format, serializer);
     sse_encode_opt_String(self.path, serializer);
   }

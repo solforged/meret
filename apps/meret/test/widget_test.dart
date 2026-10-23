@@ -77,7 +77,7 @@ void main() {
 
   testWidgets('Play on draws the shared-mode verdict verbatim for both devices', (tester) async {
     final core = FakeCore();
-    await core.setSettings(SettingsDto(light: core.settings().light, exclusive: false, lookups: core.settings().lookups));
+    await core.setSettings(SettingsDto(light: core.settings().light, exclusive: false, lookups: core.settings().lookups, level: core.settings().level));
     await _surface(tester, core);
     await tester.pump();
     final verdicts = find.text('◐ shared with macOS');
@@ -610,7 +610,7 @@ void main() {
 
   testWidgets('the release lights the playing row without inventing a cover', (tester) async {
     final core = FakeCore();
-    await core.setSettings(const SettingsDto(light: LightLevelDto.accentAndWash, exclusive: true, lookups: LookupsDto.unasked));
+    await core.setSettings(const SettingsDto(light: LightLevelDto.accentAndWash, exclusive: true, lookups: LookupsDto.unasked, level: LevelDto.off));
     final releaseId = (await core.now().first).releaseId!;
     await core.playRelease(id: releaseId, index: 2);
     final now = await core.now().first;

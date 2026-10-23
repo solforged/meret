@@ -76,6 +76,14 @@ impl Api {
         self.core.set_settings(settings).map_err(|e| e.to_string())
     }
 
+    pub fn analyse(&self) -> Result<meret_core::JobCounts, String> {
+        self.core.analyse().map_err(|error| error.to_string())
+    }
+
+    pub fn analysis_counts(&self) -> Result<meret_core::JobCounts, String> {
+        self.core.analysis_counts().map_err(|error| error.to_string())
+    }
+
     /// Runs a command from the query line. `play <query>` plays what
     /// matches from the top; the other commands aren't built yet and say so.
     pub fn run_command(&self, input: &str) -> Result<(), String> {
@@ -542,6 +550,7 @@ impl From<ColumnDto> for ColumnId {
             ColumnDto::LastPlayed => ColumnId::LastPlayed,
             ColumnDto::Added => ColumnId::Added,
             ColumnDto::Dr => ColumnId::Dr,
+            ColumnDto::Loudness => ColumnId::Loudness,
         }
     }
 }

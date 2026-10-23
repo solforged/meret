@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
 import '../core/when.dart';
+import '../now/signal_path.dart';
 
 /// Playback outside the window (plate 10): the menu bar item, its panel and
 /// the media keys live in Swift (`Outside.swift`); this feeds them Now and
@@ -103,12 +104,7 @@ class Outside {
   /// One line for the signal path: "● Bit-perfect · FLAC 16/44.1 → Studio
   /// Display XDR Speakers · 44.1". Nothing until the device has been opened.
   static String? verdict(NowDto now) {
-    final fidelity = switch (now.fidelity) {
-      FidelityDto.bitPerfect => '● Bit-perfect',
-      FidelityDto.altered => '◐ Altered',
-      FidelityDto.lossy => '○ Lossy source',
-      null => null,
-    };
+    final fidelity = signalVerdict(now);
     if (fidelity == null) return null;
     if (now.path.isEmpty) return fidelity;
     final ends = now.path.length == 1 ? now.path.first.detail : '${now.path.first.detail} → ${now.path.last.detail}';

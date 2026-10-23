@@ -135,6 +135,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Playback saves each loudness level without changing the other settings', (tester) async {
+    final core = FakeCore();
+    final before = core.settings();
+    await _surface(tester, core);
+    showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.playback);
+    await _settle(tester);
+    for (final (level, label) in [
+      (LevelDto.track, 'Track'), (LevelDto.album, 'Album'), (LevelDto.off, 'Off'),
+    ]) {
+      final control = find.byKey(const ValueKey('settings-level'));
+      await tester.ensureVisible(control);
+      await tester.tap(control);
+      await _settle(tester);
+      await tester.tap(find.text(label).last);
+      await _settle(tester);
+      expect(core.settings().level, level);
+      expect(tester.widget<DropdownButton<LevelDto>>(control).value, level);
+      expect(core.settings().light, before.light);
+      expect(core.settings().exclusive, before.exclusive);
+      expect(core.settings().outputDevice, before.outputDevice);
+      expect(core.settings().lookups, before.lookups);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   for (final form in ['stage', 'pane', 'sheet']) {
     testWidgets('Settings updates the open Now $form output marker and verdicts without a restart', (tester) async {
       final core = FakeCore();

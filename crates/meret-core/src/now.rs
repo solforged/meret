@@ -29,6 +29,9 @@ pub struct NowState {
     pub anchor: Option<Anchor>,
     pub length_ms: Option<u64>,
     pub path: Option<SignalPath>,
+    pub body: Option<meret_analysis::BodySummary>,
+    pub loudness_lufs: Option<f64>,
+    pub dr: Option<u8>,
     pub error: Option<String>,
 }
 
@@ -62,6 +65,9 @@ pub(crate) fn spawn_pump(core: Arc<Core>) -> std::thread::JoinHandle<()> {
                             n.subtitle = described.subtitle;
                             n.why = described.why;
                             n.length_ms = described.length_ms;
+                            n.body = described.body;
+                            n.loudness_lufs = described.loudness_lufs;
+                            n.dr = described.dr;
                         });
                         crate::listens::on_started(&core, *item);
                         crate::memory::on_started(&core, *item);
@@ -129,6 +135,7 @@ pub(crate) fn describe_item(core: &Core, item: &meret_player::QueueItem) -> NowS
     {
         let subtitle = [r.artist.as_deref(), Some(r.album.as_str())].into_iter().flatten().collect::<Vec<_>>().join(" · ");
         let cover = core.store.release_art(&[r.release]).ok().and_then(|mut a| a.remove(&r.release));
+        let analysis = core.store.track_analysis(track).ok().flatten();
         return NowState {
             track: Some(track),
             release: Some(r.release),
@@ -137,6 +144,9 @@ pub(crate) fn describe_item(core: &Core, item: &meret_player::QueueItem) -> NowS
             subtitle,
             why: item.why.clone(),
             length_ms: r.length_ms,
+            body: analysis.as_ref().and_then(|a| meret_analysis::BodySummary::unpack(&a.body)),
+            loudness_lufs: analysis.as_ref().and_then(|a| a.loudness_lufs),
+            dr: r.dr,
             ..Default::default()
         };
     }

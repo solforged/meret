@@ -172,6 +172,8 @@ mod tests {
             r#"sung:"Joanne Hogg" not:owned"#,
             "idiom:session year:1970s plays:0",
             "dr:>12 -format:lossy",
+            "lufs:<-14",
+            "lufs:-20.5..-10.1",
             "by:mitsuda game:Xenogears",
         ] {
             assert_eq!(search(s).to_string(), s);
@@ -183,6 +185,19 @@ mod tests {
         let q = search("length:>10m length:4:33");
         assert_eq!(q.clauses[0].term, Term::Number { field: NumField::Length, cmp: Cmp::Gt(600.0) });
         assert_eq!(q.clauses[1].term, Term::Number { field: NumField::Length, cmp: Cmp::Eq(273.0) });
+    }
+
+    #[test]
+    fn loudness_accepts_negative_decimal_comparisons_and_ranges() {
+        let q = search("lufs:<-14.2 lufs:>-20.5 lufs:-20.5..-10.1 lufs:-18.4");
+        assert_eq!(q.clauses.iter().map(|c| &c.term).collect::<Vec<_>>(), vec![
+            &Term::Number { field: NumField::Loudness, cmp: Cmp::Lt(-14.2) },
+            &Term::Number { field: NumField::Loudness, cmp: Cmp::Gt(-20.5) },
+            &Term::Number { field: NumField::Loudness, cmp: Cmp::Range(-20.5, -10.1) },
+            &Term::Number { field: NumField::Loudness, cmp: Cmp::Eq(-18.4) },
+        ]);
+        assert!(!q.clauses.iter().any(|c| c.negated));
+        assert_eq!(search(&q.to_string()), q);
     }
 
     #[test]

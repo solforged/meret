@@ -8,6 +8,7 @@ pub use meret_api::{
     BranchDto,
 };
 pub use meret_api::LightDto;
+pub use meret_api::{BodyDto, LevelDto};
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
 pub use meret_api::{FolderKindDto, FolderSuggestionDto, LightLevelDto, LookupStatusDto, LookupsDto, OutputDeviceDto, SettingsDto};
 pub use meret_api::{UpNextDto, UpNextItemDto, VolumeDto};
@@ -52,6 +53,13 @@ pub enum _LookupsDto {
     Off,
 }
 
+#[frb(mirror(LevelDto))]
+pub enum _LevelDto {
+    Off,
+    Track,
+    Album,
+}
+
 #[frb(mirror(LookupStatusDto))]
 pub struct _LookupStatusDto {
     pub setting: LookupsDto,
@@ -71,6 +79,7 @@ pub struct _SettingsDto {
     pub output_device: Option<String>,
     pub exclusive: bool,
     pub lookups: LookupsDto,
+    pub level: LevelDto,
 }
 
 #[frb(mirror(OutputDeviceDto))]
@@ -153,6 +162,7 @@ pub enum _ColumnDto {
     LastPlayed,
     Added,
     Dr,
+    Loudness,
 }
 
 #[frb(mirror(SortKeyDto))]
@@ -237,6 +247,15 @@ pub struct _LightDto {
     pub dim: u32,
 }
 
+#[frb(mirror(BodyDto))]
+pub struct _BodyDto {
+    pub loudness: Vec<u8>,
+    pub low: Vec<u8>,
+    pub mid: Vec<u8>,
+    pub high: Vec<u8>,
+    pub length_ms: u64,
+}
+
 #[frb(mirror(NowDto))]
 pub struct _NowDto {
     pub track_id: Option<i64>,
@@ -248,6 +267,9 @@ pub struct _NowDto {
     pub why: Option<String>,
     pub anchor: Option<AnchorDto>,
     pub length_ms: Option<u64>,
+    pub body: Option<BodyDto>,
+    pub loudness_lufs: Option<f64>,
+    pub dr: Option<u8>,
     pub path: Vec<StageDto>,
     pub fidelity: Option<FidelityDto>,
     pub error: Option<String>,
@@ -293,6 +315,8 @@ pub struct _TrackRowDto {
     pub number: u32,
     pub year: Option<u16>,
     pub length_ms: Option<u64>,
+    pub dr: Option<u8>,
+    pub loudness: Option<f64>,
     pub format: String,
     pub path: Option<String>,
 }
@@ -499,6 +523,8 @@ pub struct _ReleaseDto {
     pub tracks: u32,
     pub discs: u32,
     pub length_ms: u64,
+    pub dr: Option<u8>,
+    pub loudness_lufs: Option<f64>,
     pub formats: Vec<String>,
     pub rows: Vec<TrackRowDto>,
     pub row_works: Vec<Option<ThreadDto>>,

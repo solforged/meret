@@ -85,3 +85,9 @@ debug = "line-tables-only"
 opt-level = 2
 [profile.dev.package.symphonia]
 opt-level = 3
+
+# Offline analysis must not spend hours in unoptimized sample loops.
+[profile.dev.package.meret-analysis]
+opt-level = 2
+[profile.dev.package.ebur128]
+opt-level = 3

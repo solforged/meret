@@ -12,6 +12,9 @@ pub struct QueueItem {
     /// What the zone plays: `file:///…` for a local file, a provider's URI
     /// otherwise.
     pub uri: String,
+    /// Decode-side loudness levelling. Older saved queues play unchanged.
+    #[serde(default)]
+    pub gain_db: f64,
     /// None for a file played from outside the library.
     pub track: Option<TrackId>,
     pub recording: Option<RecordingId>,
@@ -121,6 +124,7 @@ mod tests {
         QueueItem {
             token: 0,
             uri: String::new(),
+            gain_db: 0.0,
             track: None,
             recording: Some(RecordingId(rec)),
             release: Some(ReleaseId(release)),
@@ -129,6 +133,17 @@ mod tests {
             from_stop: None,
             why: None,
         }
+    }
+
+    #[test]
+    fn saved_queue_gains_round_trip_and_old_items_default_to_zero() {
+        let mut queued = item(1, 1, None, Idiom::Album);
+        queued.gain_db = -3.25;
+        let json = serde_json::to_string(&queued).unwrap();
+        assert_eq!(serde_json::from_str::<QueueItem>(&json).unwrap(), queued);
+        let mut old = serde_json::to_value(&queued).unwrap();
+        old.as_object_mut().unwrap().remove("gain_db");
+        assert_eq!(serde_json::from_value::<QueueItem>(old).unwrap().gain_db, 0.0);
     }
 
     #[test]

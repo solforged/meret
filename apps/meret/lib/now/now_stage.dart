@@ -36,6 +36,7 @@ class NowStage extends StatelessWidget {
           Text(now.title, style: Tok.title),
           const SizedBox(height: 4),
           Text(now.subtitle, style: Tok.body.copyWith(color: Tok.muted)),
+          NowFacts(now: now),
           if (now.why case final why?) Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(why, key: const ValueKey('now-why'), style: Tok.label.copyWith(color: Tok.gold), maxLines: 1, overflow: TextOverflow.ellipsis),
