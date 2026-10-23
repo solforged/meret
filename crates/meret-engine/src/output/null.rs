@@ -44,7 +44,8 @@ impl OutputBackend for NullBackend {
             sample_rate: req.spec.sample_rate,
             bits: req.spec.bits,
             channels: req.spec.channels,
-            exclusive: req.exclusive,
+            // Nothing else plays into nowhere, so it's never shared.
+            exclusive: true,
             latency_frames: 0,
         };
         let running = Arc::new(AtomicBool::new(false));

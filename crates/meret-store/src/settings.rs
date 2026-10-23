@@ -38,7 +38,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            light: LightLevel::Accent, output_device: None, exclusive: true,
+            light: LightLevel::Accent, output_device: None, exclusive: false,
             level: Level::Off, lookups: Lookups::Unasked,
         }
     }
@@ -60,7 +60,7 @@ impl Store {
                         _ => LightLevel::Accent,
                     },
                     "output_device" => settings.output_device = (!value.is_empty()).then_some(value),
-                    "exclusive" => settings.exclusive = value != "false",
+                    "exclusive" => settings.exclusive = value == "true",
                     "level" => settings.level = match value.as_str() {
                         "track" => Level::Track,
                         "album" => Level::Album,
@@ -145,12 +145,12 @@ mod tests {
         let store = Store::open(&path).unwrap();
         assert_eq!(store.settings().unwrap(), None);
         assert_eq!(Settings::default(), Settings {
-            light: LightLevel::Accent, output_device: None, exclusive: true,
+            light: LightLevel::Accent, output_device: None, exclusive: false,
             level: Level::Off, lookups: Lookups::Unasked,
         });
         let saved = Settings {
             light: LightLevel::AccentAndWash, output_device: Some("test-device".into()),
-            exclusive: false, level: Level::Album, lookups: Lookups::Allowed,
+            exclusive: true, level: Level::Album, lookups: Lookups::Allowed,
         };
         store.set_settings(saved.clone()).unwrap();
         assert_eq!(store.settings().unwrap(), Some(saved.clone()));

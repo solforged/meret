@@ -112,6 +112,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ViewDto dco_decode_box_autoadd_view_dto(dynamic raw);
 
   @protected
+  VolumeDto dco_decode_box_autoadd_volume_dto(dynamic raw);
+
+  @protected
   BranchDto dco_decode_branch_dto(dynamic raw);
 
   @protected
@@ -346,6 +349,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? dco_decode_opt_box_autoadd_u_8(dynamic raw);
 
   @protected
+  VolumeDto? dco_decode_opt_box_autoadd_volume_dto(dynamic raw);
+
+  @protected
   OutputDeviceDto dco_decode_output_device_dto(dynamic raw);
 
   @protected
@@ -552,6 +558,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ViewDto sse_decode_box_autoadd_view_dto(SseDeserializer deserializer);
+
+  @protected
+  VolumeDto sse_decode_box_autoadd_volume_dto(SseDeserializer deserializer);
 
   @protected
   BranchDto sse_decode_branch_dto(SseDeserializer deserializer);
@@ -816,6 +825,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer);
 
   @protected
+  VolumeDto? sse_decode_opt_box_autoadd_volume_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   OutputDeviceDto sse_decode_output_device_dto(SseDeserializer deserializer);
 
   @protected
@@ -1057,6 +1071,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_view_dto(ViewDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_volume_dto(
+    VolumeDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_branch_dto(BranchDto self, SseSerializer serializer);
@@ -1390,6 +1410,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_volume_dto(
+    VolumeDto? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_output_device_dto(

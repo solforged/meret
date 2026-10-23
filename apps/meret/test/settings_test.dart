@@ -130,7 +130,7 @@ void main() {
     if (devices.first.canBeExclusive) {
       await tester.tap(find.byType(Switch));
       await _settle(tester);
-      expect(core.settings().exclusive, isFalse);
+      expect(core.settings().exclusive, isTrue);
     }
     expect(tester.takeException(), isNull);
   });
@@ -199,14 +199,15 @@ void main() {
       expect(_zoneMarkerColour(tester, 'dac'), Light.of(tester.element(find.byType(PlayOn))).accent);
       await tester.tap(find.byType(Switch));
       await _settle(tester);
-      expect(find.text('◐ shared with macOS'), findsNWidgets(2));
+      expect(find.text('● bit-perfect'), findsOneWidget);
+      expect(find.text('◐ refuses above 96 kHz'), findsOneWidget);
       await tester.tap(find.byTooltip('Close Settings'));
       await _settle(tester);
 
       expect(tester.state(find.byType(PlayOn)), same(zones));
       expect((await core.now().first).anchor!.item, item);
       expect(await core.trail(), isNull);
-      expect(core.settings().exclusive, isFalse);
+      expect(core.settings().exclusive, isTrue);
       expect(tester.takeException(), isNull);
     });
   }

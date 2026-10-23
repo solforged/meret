@@ -153,7 +153,7 @@ mod tests {
                     break;
                 }
                 EngineEvent::Error { message, .. } => panic!("engine error: {message}"),
-                EngineEvent::OutputChanged { .. } => {}
+                EngineEvent::OutputChanged { .. } | EngineEvent::VolumeChanged => {}
             }
         }
     }

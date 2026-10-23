@@ -526,6 +526,11 @@ pub fn play(api: &Api, rt: &tokio::runtime::Runtime, query: &str, opts: PlayOpti
                     break;
                 }
                 EngineEvent::Error { item, message } => println!("! {item:?}: {message}"),
+                EngineEvent::VolumeChanged => {
+                    let volume = api.now().volume;
+                    println!("{:>8.2?}  volume {:?} muted {:?}", t.elapsed(),
+                        volume.as_ref().and_then(|v| v.scalar), volume.as_ref().and_then(|v| v.muted));
+                }
                 EngineEvent::OutputChanged { .. } => {}
             }
         }

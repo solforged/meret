@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
+use meret_engine::output::DeviceVolume;
 use meret_engine::{Anchor, EngineEvent};
 use meret_model::signal::SignalPath;
 use meret_model::{ReleaseId, TrackId};
@@ -33,6 +34,9 @@ pub struct NowState {
     pub loudness_lufs: Option<f64>,
     pub dr: Option<u8>,
     pub error: Option<String>,
+    /// The output device's own volume, reread when playback starts, the
+    /// output changes, or the device reports a change.
+    pub volume: Option<DeviceVolume>,
 }
 
 pub(crate) fn spawn_pump(core: Arc<Core>) -> std::thread::JoinHandle<()> {
@@ -54,6 +58,7 @@ pub(crate) fn spawn_pump(core: Arc<Core>) -> std::thread::JoinHandle<()> {
                     EngineEvent::Started { item, path } => {
                         core.player.lock().started(*item);
                         let described = describe(&core, *item);
+                        let volume = core.engine.volume().ok();
                         core.now.send_modify(|n| {
                             n.item = Some(*item);
                             n.path = Some(path.clone());
@@ -68,15 +73,29 @@ pub(crate) fn spawn_pump(core: Arc<Core>) -> std::thread::JoinHandle<()> {
                             n.body = described.body;
                             n.loudness_lufs = described.loudness_lufs;
                             n.dr = described.dr;
+                            n.volume = volume;
                         });
                         crate::listens::on_started(&core, *item);
                         crate::memory::on_started(&core, *item);
                     }
                     // Playing on somewhere new: an error about the old output is over.
-                    EngineEvent::OutputChanged { path } => core.now.send_modify(|n| {
-                        n.path = Some(path.clone());
-                        n.error = None;
-                    }),
+                    EngineEvent::OutputChanged { path } => {
+                        let volume = core.engine.volume().ok();
+                        core.now.send_modify(|n| {
+                            n.path = Some(path.clone());
+                            n.error = None;
+                            n.volume = volume;
+                        });
+                    }
+                    // CoreAudio reports one change several times (each element, scalar and dB).
+                    EngineEvent::VolumeChanged => {
+                        let volume = core.engine.volume().ok();
+                        core.now.send_if_modified(|n| {
+                            let changed = n.volume != volume;
+                            n.volume = volume;
+                            changed
+                        });
+                    }
                     EngineEvent::Anchor(a) => {
                         core.now.send_modify(|n| n.anchor = Some(*a));
                         crate::memory::on_anchor(&core, a);

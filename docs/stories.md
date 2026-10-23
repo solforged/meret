@@ -51,7 +51,7 @@ Decided 2026-10-14.
 | Meret finds my music without my hunting for it: `~/Music`, an Apple Music or iTunes library, mounted volumes and NAS shares | The empty Front, one line each, with counts once a quick look has run | Built |
 | I see the scan working, and can start listening before it ends | Status line progress; the Front and table fill as batches commit | Built (progress) |
 | I bring my history | The empty Front's "Bring your history"; Settings › History | Later |
-| I choose where sound goes and whether Meret takes the device exclusively | Asked on the first play, in Now's signal path; Settings › Playback | Settings › Playback built; the first-play question isn't |
+| I choose where sound goes and whether Meret takes the device exclusively | Asked on the first play, in Now's signal path; Settings › Playback | Settings › Playback built, shared by default so the volume keys work; the first-play question isn't |
 | I decide whether Meret may look my music up online | A line in Needs you before the first lookup, with a status line reminder; Settings › Lookups | Built for MusicBrainz lookups by ID (slice H) |
 | I connect the services I pay for, now or later, without being forced through them | The empty Front's "Connect a service"; Settings › Sources | Doors built; every service says it's coming later |
 | macOS asks for folder access and I understand why | Meret says why just before the system dialog | A suggested folder that macOS protects says so; the moment before the dialog isn't built |
@@ -71,7 +71,7 @@ Decided 2026-10-14.
 | I control playback while working in another app | Menu bar item, media keys | Built |
 | I know whether I'm hearing it bit-perfect | Now, signal path | Built |
 | I skip, go back, seek | Now, under the body; the bar on narrow windows | Built |
-| I set the volume | Now's device-volume slider, and the volume keys while Meret plays on a device that isn't macOS's default output; at the DAC when the device has no settable volume | Built (device volume and mute; samples stay untouched) |
+| I set the volume | Now's device-volume slider, and the volume keys while Meret shares the device; at the DAC when the device has no settable volume | Built (device volume; the slider follows the keys and shows mute; samples stay untouched) |
 
 ## Keeping the collection
 

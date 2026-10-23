@@ -38,7 +38,6 @@ pub enum Control {
     SetOutput { device: Option<String>, exclusive: bool },
     Volume(Sender<Result<DeviceVolume, OutputError>>),
     SetVolume { scalar: f32, reply: Sender<Result<DeviceVolume, OutputError>> },
-    SetMute { muted: bool, reply: Sender<Result<DeviceVolume, OutputError>> },
     /// The device UID this session plays on; the chosen one when idle.
     OutputDevice(Sender<Option<String>>),
     Resume,
@@ -60,6 +59,8 @@ pub enum EngineEvent {
     /// Nothing left to play.
     Idle,
     Error { item: Option<ItemToken>, message: String },
+    /// The open device's volume or mute changed, from Meret or elsewhere.
+    VolumeChanged,
 }
 
 pub struct Engine {
@@ -80,7 +81,7 @@ pub struct EngineConfig {
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        Self { device: None, exclusive: true, ring_ms: 500, anchor_tolerance_ms: 2.0 }
+        Self { device: None, exclusive: false, ring_ms: 500, anchor_tolerance_ms: 2.0 }
     }
 }
 
@@ -121,12 +122,6 @@ impl Engine {
         }
         let (reply, rx) = crossbeam_channel::bounded(1);
         self.ctl.send(Control::SetVolume { scalar, reply }).map_err(|_| OutputError::Platform("engine stopped".into()))?;
-        rx.recv().map_err(|_| OutputError::Platform("engine stopped".into()))?
-    }
-
-    pub fn set_mute(&self, muted: bool) -> Result<DeviceVolume, OutputError> {
-        let (reply, rx) = crossbeam_channel::bounded(1);
-        self.ctl.send(Control::SetMute { muted, reply }).map_err(|_| OutputError::Platform("engine stopped".into()))?;
         rx.recv().map_err(|_| OutputError::Platform("engine stopped".into()))?
     }
 }
@@ -274,9 +269,6 @@ impl Worker {
             Control::SetVolume { scalar, reply } => {
                 let _ = reply.send(self.backend.set_volume(self.volume_device(), scalar));
             }
-            Control::SetMute { muted, reply } => {
-                let _ = reply.send(self.backend.set_mute(self.volume_device(), muted));
-            }
             Control::OutputDevice(reply) => {
                 let _ = reply.send(self.volume_device().map(str::to_owned));
             }
@@ -345,6 +337,9 @@ impl Worker {
     /// otherwise the system default, as a new session would.
     fn watch_output(&mut self) {
         let Some(o) = &mut self.out else { return };
+        if !o.lost && o.stream.volume_changed() {
+            let _ = self.events.send(EngineEvent::VolumeChanged);
+        }
         if o.lost || !o.stream.lost() {
             return;
         }
@@ -799,7 +794,8 @@ mod tests {
     fn recording_worker() -> (Worker, Receiver<OutputAction>, Receiver<EngineEvent>) {
         let (actions_tx, actions) = unbounded();
         let (events_tx, events) = unbounded();
-        let worker = Worker::new(Arc::new(RecordingBackend(actions_tx)), EngineConfig::default(), events_tx);
+        let config = EngineConfig { exclusive: true, ..Default::default() };
+        let worker = Worker::new(Arc::new(RecordingBackend(actions_tx)), config, events_tx);
         (worker, actions, events)
     }
 
@@ -1011,7 +1007,7 @@ mod tests {
         let (actions_tx, actions) = unbounded();
         let (events_tx, _) = unbounded();
         let backend = Arc::new(Defaults { uid: Mutex::new("uid-a".into()), recording: RecordingBackend(actions_tx) });
-        let mut worker = Worker::new(backend.clone(), EngineConfig::default(), events_tx);
+        let mut worker = Worker::new(backend.clone(), EngineConfig { exclusive: true, ..Default::default() }, events_tx);
         worker.handle(Control::Play(load(1, StreamSpec { codec: Codec::Mp3, bits: 24, ..cd() }, 0.01)));
         *backend.uid.lock().unwrap() = "uid-b".into();
         worker.handle(Control::Play(load(2, cd(), 0.01)));
@@ -1062,7 +1058,7 @@ mod tests {
         let (actions_tx, actions) = unbounded();
         let (events_tx, events) = unbounded();
         let backend = Arc::new(Present { uids: Mutex::new(vec!["speakers"]), recording: RecordingBackend(actions_tx) });
-        let config = EngineConfig { device: Some("display".into()), ..Default::default() };
+        let config = EngineConfig { device: Some("display".into()), exclusive: true, ..Default::default() };
         let mut worker = Worker::new(backend.clone(), config, events_tx);
 
         // Away: the session runs on the default; the choice stays.
@@ -1134,7 +1130,7 @@ mod tests {
         let (events_tx, events) = unbounded();
         let backend = Arc::new(Unplug { present: Mutex::new(vec!["speakers", "dac"]),
             gone: Mutex::new(Arc::new(AtomicBool::new(false))), recording: RecordingBackend(actions_tx) });
-        let config = EngineConfig { device: Some("dac".into()), ..Default::default() };
+        let config = EngineConfig { device: Some("dac".into()), exclusive: true, ..Default::default() };
         let mut worker = Worker::new(backend.clone(), config, events_tx);
         worker.handle(Control::Play(load(1, cd(), 1.0)));
         worker.handle(Control::SetNext(Some(load(2, cd(), 1.0))));
