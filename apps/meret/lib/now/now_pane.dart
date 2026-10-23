@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
@@ -15,9 +17,13 @@ import 'picks.dart';
 import 'signal_path.dart';
 
 /// Now: what's playing, the transport, the signal path and the queue.
-/// Pinned at the right from 1400 px; [NowBar] below that.
+/// Pinned at the right from 1400 px; [NowBar] below that. [nothingToPlay]
+/// is the reply when play found nothing: the title slot says so.
 class NowPane extends StatelessWidget {
-  const NowPane({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease, this.settingsChanges});
+  const NowPane({
+    super.key, required this.core, required this.now, required this.clock, required this.onToggle,
+    this.onRelease, this.settingsChanges, this.nothingToPlay = false,
+  });
 
   final CoreBridge core;
   final NowDto? now;
@@ -25,6 +31,7 @@ class NowPane extends StatelessWidget {
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
   final Listenable? settingsChanges;
+  final bool nothingToPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -43,13 +50,10 @@ class NowPane extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 8),
-        Text(n?.title.isNotEmpty == true ? n!.title : 'Nothing playing', style: Tok.title.copyWith(fontSize: 17), maxLines: 2, overflow: TextOverflow.ellipsis),
+        Text(nowTitle(n, nothingToPlay: nothingToPlay), style: Tok.title.copyWith(fontSize: 17), maxLines: 2, overflow: TextOverflow.ellipsis),
         Text(n?.subtitle ?? '', style: Tok.body.copyWith(color: Tok.muted, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
         if (n != null) NowFacts(now: n),
-        if (n?.why case final why?) Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(why, key: const ValueKey('now-why'), style: Tok.label.copyWith(color: Tok.gold), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
+        _WhySlot(n?.why),
         if (n?.error case final error?) Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(error, style: Tok.label.copyWith(color: Tok.warn)),
@@ -67,7 +71,7 @@ class NowPane extends StatelessWidget {
               for (final s in n?.path ?? const <StageDto>[]) _Stage(s),
             ]),
             const SizedBox(height: 8),
-            if (n?.fidelity != null) NowFidelity(now: n!),
+            if (n?.fidelity != null) NowFidelity(now: n!, exclusive: core.settings().exclusive),
             const SizedBox(height: 12),
             PlayOn(core: core, now: n, settingsChanges: settingsChanges),
             if (loaded) ...[
@@ -113,13 +117,86 @@ class NowDial extends StatelessWidget {
   );
 }
 
+/// The title slot's words: the loaded title, "Nothing playing", or the
+/// reply to a play that found nothing.
+String nowTitle(NowDto? now, {required bool nothingToPlay}) {
+  if (now?.anchor == null && nothingToPlay) return 'Nothing to play yet';
+  return now?.title.isNotEmpty == true ? now!.title : 'Nothing playing';
+}
+
+/// A pick's why in gold, in a slot of two lines that is there whether or
+/// not there is a why, so the transport never moves when a pick starts.
+class _WhySlot extends StatelessWidget {
+  const _WhySlot(this.why);
+  final String? why;
+
+  static const _lines = 2;
+  static const _lineHeight = 1.3;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: SizedBox(
+      height: Tok.label.fontSize! * _lineHeight * _lines,
+      child: Text(
+        why ?? '', key: const ValueKey('now-why'),
+        style: Tok.label.copyWith(color: Tok.gold, height: _lineHeight),
+        maxLines: _lines, overflow: TextOverflow.ellipsis,
+      ),
+    ),
+  );
+}
+
+/// A moment in the when voice. "just now" turns into the clock time a
+/// minute after the moment, the one rebuild a paused Now ever asks for.
+class Moment extends StatefulWidget {
+  const Moment({super.key, required this.ms, required this.builder});
+  final int ms;
+  final Widget Function(BuildContext context, String when) builder;
+
+  @override
+  State<Moment> createState() => _MomentState();
+}
+
+class _MomentState extends State<Moment> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _arm();
+  }
+
+  @override
+  void didUpdateWidget(Moment old) {
+    super.didUpdateWidget(old);
+    if (old.ms != widget.ms) _arm();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _arm() {
+    _timer?.cancel();
+    final left = justNow - DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(widget.ms));
+    if (left > Duration.zero) _timer = Timer(left + const Duration(seconds: 1), () => setState(() {}));
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, dayAndTime(widget.ms));
+}
+
 class NowFidelity extends StatelessWidget {
-  const NowFidelity({super.key, required this.now});
+  const NowFidelity({super.key, required this.now, this.exclusive});
   final NowDto now;
+  final bool? exclusive;
 
   @override
   Widget build(BuildContext context) => Text(
-    signalVerdict(now) ?? '',
+    signalVerdict(now, exclusive: exclusive) ?? '',
     style: Tok.monoSmall.copyWith(color: now.fidelity == FidelityDto.bitPerfect ? Tok.ok : Tok.warn),
   );
 }
@@ -201,6 +278,9 @@ class _NowMemoryState extends State<NowMemory> {
     }
   }
 
+  /// Pick up never offers what is loaded; the header above describes it.
+  Iterable<ResumeDto> get _pickUps => _resumes.where((point) => point.releaseId != widget.now?.releaseId);
+
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     if (widget.header != null) widget.header!(_resumes),
@@ -208,9 +288,9 @@ class _NowMemoryState extends State<NowMemory> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
     ),
-    if (_resumes.isNotEmpty) ...[
+    if (_pickUps.isNotEmpty) ...[
       const NowSection(title: 'Pick up'),
-      for (final point in _resumes)
+      for (final point in _pickUps)
         NowDoor(
           key: ValueKey('now-pick-up-${point.releaseId}'),
           onTap: () => _pickUp(point),
@@ -218,7 +298,7 @@ class _NowMemoryState extends State<NowMemory> {
             Text(point.recordingTitle, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis),
             Text([point.title, if (point.credit != null) point.credit!].join(' · '), style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 5),
-            Text(_resumeRule(point.idiom), style: Tok.label),
+            Text(resumeRule(point.idiom), style: Tok.label),
             const SizedBox(height: 7),
             LinearProgressIndicator(
               value: point.lengthMs == null || point.lengthMs! <= BigInt.zero ? 0 :
@@ -227,8 +307,8 @@ class _NowMemoryState extends State<NowMemory> {
             ),
             const SizedBox(height: 5),
             Row(children: [
-              Expanded(child: Text('${clockLength(point.positionMs.toInt())} / ${point.lengthMs == null ? '–:––' : clockLength(point.lengthMs!.toInt())}', style: Tok.monoSmall)),
-              Text(dayWord(point.updatedAt.toInt()), style: Tok.label),
+              Expanded(child: Text(positionOf(point.positionMs.toInt(), point.lengthMs?.toInt()), style: Tok.monoSmall)),
+              Moment(ms: point.updatedAt.toInt(), builder: (_, when) => Text(when, style: Tok.label)),
             ]),
           ]),
         ),
@@ -244,7 +324,7 @@ class _NowMemoryState extends State<NowMemory> {
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: Text(listen.title, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 8),
-              Text(clockTime(listen.startedAtMs.toInt()), style: Tok.monoSmall),
+              Moment(ms: listen.startedAtMs.toInt(), builder: (_, when) => Text(when, style: Tok.monoSmall)),
             ]),
             Text([
               if (listen.credit != null) listen.credit!,
@@ -257,7 +337,13 @@ class _NowMemoryState extends State<NowMemory> {
   ]);
 }
 
-String _resumeRule(String? idiom) {
+/// "m:ss of m:ss"; an unknown length reads "–:––".
+String positionOf(int positionMs, int? lengthMs) =>
+  '${clockLength(positionMs)} of ${lengthMs == null ? '–:––' : clockLength(lengthMs)}';
+
+/// The idiom's resume rule as the Pick up rows and the stage say it:
+/// "Album · from the top of the track", "Score · the cue where it stopped".
+String resumeRule(String? idiom) {
   final rule = switch (idiom) {
     'album' => 'from the top of the track',
     'song' => 'from the top of the song',
@@ -331,15 +417,21 @@ class _NowDoorState extends State<NowDoor> {
 }
 
 /// Now as a bar, below the panes, when the window is too narrow to pin it.
-/// The title opens the full pane as a sheet.
+/// The title opens the full pane as a sheet, where Space still toggles.
+/// [nothingToPlay] is the reply when play found nothing: the title slot
+/// says so until something loads.
 class NowBar extends StatelessWidget {
-  const NowBar({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease, this.settingsChanges});
+  const NowBar({
+    super.key, required this.core, required this.now, required this.clock, required this.onToggle,
+    this.onRelease, this.settingsChanges, this.nothingToPlay = false,
+  });
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
   final Listenable? settingsChanges;
+  final bool nothingToPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -362,14 +454,14 @@ class NowBar extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onTap: loaded ? () => _open(context) : null,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(n?.title.isNotEmpty == true ? n!.title : 'Nothing playing', style: Tok.body, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(nowTitle(n, nothingToPlay: nothingToPlay), style: Tok.body, maxLines: 1, overflow: TextOverflow.ellipsis),
                 Text(n?.subtitle ?? '', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
               ]),
             ),
           ),
           if (seek) ...[
             const SizedBox(width: 12),
-            SizedBox(width: 160, child: SeekBar(core: core, now: n, clock: clock, compact: true)),
+            SizedBox(width: 200, child: SeekBar(core: core, now: n, clock: clock, compact: true)),
           ],
           if (volume) ...[
             const SizedBox(width: 12),
@@ -380,33 +472,47 @@ class NowBar extends StatelessWidget {
     );
   }
 
+  /// The sheet fits the window with 16 px to spare on every side.
   void _open(BuildContext context) {
     showDialog<void>(
       context: context,
       barrierColor: Colors.black54,
-      builder: (sheetContext) => Dialog(
-        alignment: Alignment.bottomRight,
-        insetPadding: const EdgeInsets.fromLTRB(16, 16, 16, 72),
-        backgroundColor: Colors.transparent,
-        child: StreamBuilder<NowDto>(
-          initialData: now,
-          stream: core.now(),
-          builder: (_, snapshot) => SizedBox(width: 380, height: 640, child: NowPane(
-            core: core, now: snapshot.data, clock: clock, onToggle: onToggle,
-            settingsChanges: settingsChanges,
-            onRelease: onRelease == null ? null : (id) async {
-              Navigator.of(sheetContext).pop();
-              await onRelease!(id);
-            },
-          )),
-        ),
-      ),
+      builder: (sheetContext) {
+        final room = MediaQuery.sizeOf(sheetContext);
+        return CallbackShortcuts(
+          bindings: {const SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): onToggle},
+          child: Focus(
+            autofocus: true,
+            child: Dialog(
+              alignment: Alignment.bottomRight,
+              insetPadding: const EdgeInsets.fromLTRB(16, 16, 16, 72),
+              backgroundColor: Colors.transparent,
+              child: StreamBuilder<NowDto>(
+                initialData: now,
+                stream: core.now(),
+                builder: (_, snapshot) => SizedBox(
+                  width: min(380, room.width - 32), height: min(640, room.height - 32),
+                  child: NowPane(
+                    core: core, now: snapshot.data, clock: clock, onToggle: onToggle,
+                    settingsChanges: settingsChanges,
+                    onRelease: onRelease == null ? null : (id) async {
+                      Navigator.of(sheetContext).pop();
+                      await onRelease!(id);
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
-/// Previous, play or pause, next, and the time. Buttons are off until
-/// something has been queued.
+/// Previous, play or pause, next, and the time. Previous and next are off
+/// until something has been queued; play always answers, and with nothing
+/// loaded it plays something.
 class Transport extends StatelessWidget {
   const Transport({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.compact = false});
   final CoreBridge core;
@@ -435,7 +541,7 @@ class Transport extends StatelessWidget {
           tooltip: clock.playing ? 'Pause' : 'Play',
           size: compact ? 22 : 28,
           color: accent,
-          onPressed: loaded ? onToggle : null,
+          onPressed: onToggle,
         ),
       ),
       _TransportButton(
@@ -452,7 +558,7 @@ class Transport extends StatelessWidget {
       ListenableBuilder(
         listenable: clock,
         builder: (_, _) => Text(
-          loaded ? '${clockLength(clock.positionMs.round())} / ${clockLength((length ?? 0).round())}' : '–:–– / –:––',
+          loaded ? positionOf(clock.positionMs.round(), (length ?? 0).round()) : '–:–– of –:––',
           style: Tok.monoSmall,
         ),
       ),
@@ -519,7 +625,7 @@ class _SeekBarState extends State<SeekBar> {
         return Row(children: [
           Expanded(child: slider),
           const SizedBox(width: 6),
-          Text(enabled ? clockLength(position.round()) : '–:––', style: Tok.monoSmall),
+          Text(enabled ? positionOf(position.round(), length.round()) : '–:–– of –:––', style: Tok.monoSmall),
         ]);
       },
     );
@@ -575,16 +681,12 @@ class _UpNextState extends State<UpNext> {
     final remaining = upNext?.remaining.toInt() ?? 0;
     final more = remaining - (upNext?.items.length ?? 0);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        const Expanded(child: Text('UP NEXT', style: Tok.label)),
-        Text(switch (upNext) {
-          null => '',
-          _ when remaining == 0 => 'then stop',
-          _ when more > 0 => '$remaining',
-          _ => '',
-        }, style: Tok.label),
-      ]),
-      const SizedBox(height: 4),
+      NowSection(title: 'Up next', meta: switch (upNext) {
+        null => null,
+        _ when remaining == 0 => 'then stop',
+        _ when more > 0 => '$remaining track${remaining == 1 ? '' : 's'}',
+        _ => null,
+      }),
       for (final item in upNext?.items ?? const <UpNextItemDto>[])
         Container(
           key: ValueKey('up-next-${item.token}'),

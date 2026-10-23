@@ -3,7 +3,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 
 import '../core/bridge.dart';
 import '../core/playhead.dart';
-import '../core/when.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'now_pane.dart';
@@ -25,12 +24,16 @@ class NowStage extends StatelessWidget {
   final VoidCallback onLeave;
   final Listenable? settingsChanges;
 
-  Widget _resume(List<ResumeDto> points) {
-    final updatedAt = points.where((point) => point.releaseId == now.releaseId).firstOrNull?.updatedAt;
+  /// The header over the resume points: the dial, the facts, where it
+  /// stopped, Resume, and the idiom's rule for where Resume really starts.
+  /// [stageWidth] sizes the dial: it never shrinks when a second column
+  /// opens beside it.
+  Widget _resume(List<ResumeDto> points, double stageWidth) {
+    final point = points.where((point) => point.releaseId == now.releaseId).firstOrNull;
     return Padding(
       padding: const EdgeInsets.only(bottom: 26),
       child: LayoutBuilder(builder: (context, box) {
-        final dialSize = box.maxWidth < 580 ? 144.0 : 176.0;
+        final dialSize = stageWidth < 580 ? 144.0 : 176.0;
         final dial = SizedBox(width: dialSize, height: dialSize, child: NowDial(now: now, clock: clock, onToggle: onToggle));
         final details = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text(now.title, style: Tok.title),
@@ -42,10 +45,7 @@ class NowStage extends StatelessWidget {
             child: Text(why, key: const ValueKey('now-why'), style: Tok.label.copyWith(color: Tok.gold), maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(height: 12),
-          ListenableBuilder(listenable: clock, builder: (_, _) => Text(
-            '${clock.playing ? 'Playing ' : updatedAt == null ? '' : 'Paused ${dayAndTime(updatedAt.toInt())} '}at ${clockLength(clock.positionMs.round())}${now.lengthMs == null ? '' : ' of ${clockLength(now.lengthMs!.toInt())}'} · on This Mac',
-            style: Tok.monoSmall,
-          )),
+          _where(point?.updatedAt.toInt()),
           const SizedBox(height: 16),
           ListenableBuilder(listenable: clock, builder: (_, _) => Align(
             alignment: Alignment.centerLeft,
@@ -66,11 +66,15 @@ class NowStage extends StatelessWidget {
               ]),
             ),
           )),
+          if (point != null) ...[
+            const SizedBox(height: 10),
+            Text(resumeRule(point.idiom), key: const ValueKey('now-stage-rule'), style: Tok.label),
+          ],
           const SizedBox(height: 10),
           const Text('or from the start · ⌥Space', style: Tok.label),
           if (now.fidelity != null) ...[
             const SizedBox(height: 12),
-            NowFidelity(now: now),
+            NowFidelity(now: now, exclusive: core.settings().exclusive),
           ],
           if (now.error != null) Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -85,6 +89,16 @@ class NowStage extends StatelessWidget {
             ]);
       }),
     );
+  }
+
+  /// "Paused yesterday 21:57 at 2:42 of 3:27 · on This Mac"; while
+  /// playing, "Playing at 0:14 of 3:27 · on This Mac".
+  Widget _where(int? updatedAt) {
+    Widget line(String? when) => ListenableBuilder(listenable: clock, builder: (_, _) => Text(
+      '${clock.playing ? 'Playing' : when == null ? 'Paused' : 'Paused $when'} at ${positionOf(clock.positionMs.round(), now.lengthMs?.toInt())} · on This Mac',
+      key: const ValueKey('now-stage-where'), style: Tok.monoSmall,
+    ));
+    return updatedAt == null ? line(null) : Moment(ms: updatedAt, builder: (_, when) => line(when));
   }
 
   Widget _queue() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -112,7 +126,7 @@ class NowStage extends StatelessWidget {
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(child: NowMemory(
               core: core, now: now, resumeLimit: 6, historyLimit: 4,
-              onRelease: onRelease, header: _resume, expanded: true,
+              onRelease: onRelease, header: (points) => _resume(points, box.maxWidth), expanded: true,
             )),
             if (twoColumns) ...[
               const SizedBox(width: 36),

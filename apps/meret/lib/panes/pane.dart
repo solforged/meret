@@ -33,6 +33,41 @@ class PaneActions extends StatelessWidget {
   ]);
 }
 
+/// What a pane body shows before its DTO arrives: the stop's title, so the pane
+/// never slides in bare, and one state line beneath.
+Widget paneReading(String? title, String line, {bool error = false}) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  if (title != null) ...[
+    Text(title, style: Tok.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+    const SizedBox(height: 8),
+  ],
+  Text(line, style: Tok.label.copyWith(color: error ? Tok.warn : Tok.faint)),
+]);
+
+/// A row or button that is a door: the pointer tints it `Tok.panel2`, as
+/// FrontDoor and NowDoor do, so every door in the app answers a hover alike.
+class Door extends StatefulWidget {
+  const Door({super.key, required this.builder, this.enabled = true});
+
+  /// Builds the door; `hover` is true only while the pointer is over an enabled door.
+  final Widget Function(BuildContext context, bool hover) builder;
+  final bool enabled;
+
+  @override
+  State<Door> createState() => _DoorState();
+}
+
+class _DoorState extends State<Door> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    cursor: widget.enabled ? SystemMouseCursors.click : MouseCursor.defer,
+    onEnter: (_) => setState(() => _hover = true),
+    onExit: (_) => setState(() => _hover = false),
+    child: widget.builder(context, _hover && widget.enabled),
+  );
+}
+
 class PaneActionButton extends StatelessWidget {
   const PaneActionButton({super.key, required this.label, this.hint = '', this.primary = false, this.onTap, this.later = false});
   final String label;
@@ -46,14 +81,14 @@ class PaneActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onTap != null;
-    final button = MouseRegion(
-      cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
-      child: GestureDetector(
+    final button = Door(
+      enabled: enabled,
+      builder: (context, hover) => GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
           decoration: BoxDecoration(
-            color: primary && enabled ? Tok.gold : Colors.transparent,
+            color: primary && enabled ? Tok.gold : hover ? Tok.panel2 : Colors.transparent,
             border: Border.all(color: primary && enabled ? Tok.gold : Tok.rule),
           ),
           child: Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [

@@ -105,7 +105,7 @@ void main() {
     expect(slide.value, 0);
   });
 
-  testWidgets('ANIM-1 leaving Now crossfades for 200ms without restarting on Now updates', (tester) async {
+  testWidgets('ANIM-1 leaving Now fades through over 200ms without restarting on Now updates', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
     tester.widget<NowStage>(find.byType(NowStage)).onLeave();
@@ -113,21 +113,25 @@ void main() {
     final switcher = find.byWidgetPredicate((widget) => widget is AnimatedSwitcher &&
       widget.child?.key == const ValueKey('stage-trail'));
     expect(switcher, findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 100));
-    final fades = find.descendant(of: switcher, matching: find.byType(FadeTransition));
-    final incoming = tester.widgetList<FadeTransition>(fades).singleWhere((fade) => fade.opacity.status == AnimationStatus.forward).opacity;
-    expect(incoming.value, allOf(greaterThan(0), lessThan(1)));
-    expect(find.byKey(const ValueKey('stage-now')), findsOneWidget);
-    final opacity = incoming.value;
+    expect(_pageOpacity(tester, 'stage-now'), 1);
+    expect(_pageOpacity(tester, 'stage-trail'), 0);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(_pageOpacity(tester, 'stage-now'), closeTo(0.5, 0.01));
+    expect(_pageOpacity(tester, 'stage-trail'), 0);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(_pageOpacity(tester, 'stage-now'), 0, reason: 'the stage is gone before the trail shows');
+    expect(_pageOpacity(tester, 'stage-trail'), 0);
     await core.transport(TransportDto.seek(ms: BigInt.from(227000)));
     await tester.pump();
-    expect(incoming.value, opacity);
-    expect(tester.widgetList<FadeTransition>(fades).any((fade) => identical(fade.opacity, incoming)), isTrue);
-    await tester.pump(const Duration(milliseconds: 200));
+    expect(_pageOpacity(tester, 'stage-trail'), 0, reason: 'a Now update does not restart the fade');
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(_pageOpacity(tester, 'stage-now'), 0);
+    expect(_pageOpacity(tester, 'stage-trail'), closeTo(0.5, 0.01));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(_pageOpacity(tester, 'stage-now'), 0);
+    await tester.pump(const Duration(milliseconds: 1));
     expect(find.byKey(const ValueKey('stage-now')), findsNothing);
-    expect(tester.widgetList<FadeTransition>(fades).every((fade) =>
-      fade.opacity.status != AnimationStatus.forward && fade.opacity.status != AnimationStatus.reverse), isTrue);
-    expect(incoming.value, 1);
+    expect(_pageOpacity(tester, 'stage-trail'), 1);
     expect(tester.getSize(switcher), tester.getSize(find.byKey(const ValueKey('stage-trail'))));
   });
 }
@@ -164,6 +168,11 @@ Future<void> _resize(WidgetTester tester, double width) async {
   tester.view.physicalSize = Size(width, 900);
   await tester.pumpAndSettle();
 }
+
+/// The opacity of the nearest fade over the widget keyed [key].
+double _pageOpacity(WidgetTester tester, String key) => tester.widget<FadeTransition>(
+  find.ancestor(of: find.byKey(ValueKey(key)), matching: find.byType(FadeTransition)).first,
+).opacity.value;
 
 Color? _rowColour(WidgetTester tester, int index) => (tester.widget<Container>(find.descendant(
   of: find.byKey(ValueKey('table-row-$index')), matching: find.byType(Container),

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
-import '../settings/settings_window.dart';
 import '../theme/tokens.dart';
 import 'add_folder.dart';
 import 'front_memory.dart';
@@ -35,6 +34,10 @@ class _FrontPaneState extends State<FrontPane> {
   String? _error;
   bool _adding = false;
   bool _answeringLookups = false;
+
+  /// "Not now" on the Lookups prompt hides it for this run; the setting
+  /// stays unasked, so a fresh State asks again.
+  bool _lookupsDeferred = false;
   int _generation = 0;
 
   @override
@@ -155,19 +158,23 @@ class _FrontPaneState extends State<FrontPane> {
       ])),
   ]);
 
-  Widget _formats(FrontDto front) => _section('By format', [
-    for (final format in front.formats)
-      _door(query: format.query, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(child: Text(format.label, style: Tok.body.copyWith(color: Tok.muted))),
-          const SizedBox(width: 8),
-          Text(_n(format.count), style: Tok.monoSmall),
-        ]),
-        if (format.note.isNotEmpty) Text(format.note, style: Tok.label),
-        const SizedBox(height: 6),
-        LayoutBuilder(builder: (_, box) => _bar(_share(format.count, front.tracks), width: box.maxWidth)),
-      ])),
-  ]);
+  Widget _formats(FrontDto front) {
+    // A track kept in two formats counts in both; shares are of the sum.
+    final total = front.formats.fold(BigInt.zero, (sum, format) => sum + format.count);
+    return _section('By format', [
+      for (final format in front.formats)
+        _door(query: format.query, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Expanded(child: Text(format.label, style: Tok.body.copyWith(color: Tok.muted))),
+            const SizedBox(width: 8),
+            Text(_n(format.count), style: Tok.monoSmall),
+          ]),
+          if (format.note.isNotEmpty) Text(format.note, style: Tok.label),
+          const SizedBox(height: 6),
+          _bar(_share(format.count, total), width: double.infinity),
+        ])),
+    ]);
+  }
 
   Widget _recent(FrontDto front) => _section('Added lately', [
     for (final recent in front.addedLately)
@@ -183,12 +190,17 @@ class _FrontPaneState extends State<FrontPane> {
       ])),
   ]);
 
+  /// The Lookups prompt is a Front question until it is answered or deferred.
+  LookupStatusDto? _lookupsPrompt(FrontDto front) => _lookupsDeferred ? null : front.lookups;
+
+  bool _hasNeeds(FrontDto front) => front.needsYou.isNotEmpty || _lookupsPrompt(front) != null;
+
   Widget _needs(FrontDto front) => _section('Needs you', [
-    if (front.lookups case final lookups?)
+    if (_lookupsPrompt(front) case final lookups?)
       _door(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Text('Lookups', style: Tok.body),
         Text([
-          'sends IDs, album titles and album artists to MusicBrainz, album titles to Wikidata',
+          'Sends IDs, album titles and album artists to MusicBrainz, album titles to Wikidata',
           if (lookups.releases > BigInt.zero) _count(lookups.releases, 'release'),
           if (lookups.recordings > BigInt.zero) _count(lookups.recordings, 'track'),
           if (lookups.people > BigInt.zero) '${_n(lookups.people)} ${lookups.people == BigInt.one ? 'person' : 'people'}',
@@ -197,7 +209,7 @@ class _FrontPaneState extends State<FrontPane> {
         const SizedBox(height: 6),
         PaneActions(
           primary: 'Allow', onPrimary: _answeringLookups ? null : () => _setLookups(LookupsDto.allowed),
-          secondary: 'Not now', onSecondary: _answeringLookups ? null : () => _setLookups(LookupsDto.off),
+          secondary: 'Not now', onSecondary: _answeringLookups ? null : () => setState(() => _lookupsDeferred = true),
         ),
       ])),
     for (final need in front.needsYou)
@@ -272,8 +284,6 @@ class _FrontPaneState extends State<FrontPane> {
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Text('Collection', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600)),
       const SizedBox(height: 12),
-      if (_suggestions == null && _error == null)
-        const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Text('Looking for music folders…', style: Tok.label)),
       for (final suggestion in _suggestions ?? <FolderSuggestionDto>[]) _suggestion(suggestion),
       FrontDoor(
         onTap: _adding ? null : _addFolder,
@@ -281,11 +291,6 @@ class _FrontPaneState extends State<FrontPane> {
           const Expanded(child: Text('Choose a folder…', style: Tok.body)),
           Text('Browse →', style: Tok.label.copyWith(color: _adding ? Tok.faint : Tok.gold)),
         ]),
-      ),
-      const SizedBox(height: 12),
-      FrontDoor(
-        onTap: () => showSettings(context, section: SettingsSection.sources),
-        child: Text('Connect a service', style: Tok.body.copyWith(color: Tok.gold)),
       ),
       const SizedBox(height: 14),
       Container(
@@ -297,6 +302,10 @@ class _FrontPaneState extends State<FrontPane> {
           Text('Bring your history', style: Tok.body.copyWith(color: Tok.muted)),
           const SizedBox(height: 4),
           Text('Apple Music, Last.fm, ListenBrainz', style: Tok.body.copyWith(fontSize: 11, color: Tok.faint)),
+          const SizedBox(height: 10),
+          Text('Connect a service', style: Tok.body.copyWith(color: Tok.muted)),
+          const SizedBox(height: 4),
+          Text('Spotify, Bandcamp, Qobuz, ListenBrainz…', style: Tok.body.copyWith(fontSize: 11, color: Tok.faint)),
         ]),
       ),
     ]),
@@ -363,8 +372,16 @@ class _FrontPaneState extends State<FrontPane> {
     _quietLeadsAndCrates(),
   ]);
 
+  /// The headline waits for the disk look; only places with a counted file
+  /// total are "found", a volume that still needs permission is not.
+  String _welcome() {
+    final suggestions = _suggestions;
+    if (suggestions == null && _error == null) return 'Looking for music folders…';
+    final found = suggestions?.where((suggestion) => suggestion.audioFiles != null).length ?? 0;
+    return found > 0 ? 'Meret found $found ${found == 1 ? 'place' : 'places'} with music' : 'Start with a music folder';
+  }
+
   Widget _emptyFront(double width) {
-    final count = _suggestions?.length ?? 0;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
@@ -372,7 +389,7 @@ class _FrontPaneState extends State<FrontPane> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text('Front', style: Tok.label),
           const SizedBox(height: 10),
-          Text(count > 0 ? 'Meret found $count ${count == 1 ? 'place' : 'places'} with music' : 'Start with a music folder', style: Tok.title),
+          Text(_welcome(), style: Tok.title),
         ]),
       ),
       Padding(
@@ -431,16 +448,17 @@ class _FrontPaneState extends State<FrontPane> {
           _emptyFront(box.maxWidth)
         else
           // Three columns once each gets 400 px; beside a pinned Now that is a 1600 px window.
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: box.maxWidth >= 1200 ? [
+          // Stretched so every column rule runs the page.
+          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: box.maxWidth >= 1200 ? [
             _column([_collection(front), _formats(front)]),
-            _column([_recent(front), if (front.needsYou.isNotEmpty || front.lookups != null) _needs(front), _folders(front)]),
+            _column([_recent(front), if (_hasNeeds(front)) _needs(front), _folders(front)]),
             _column([_memory()], last: true),
           ] : box.maxWidth >= 620 ? [
             _column([_collection(front), _formats(front)]),
-            _column([_recent(front), if (front.needsYou.isNotEmpty || front.lookups != null) _needs(front), _folders(front), _memory()], last: true),
+            _column([_recent(front), if (_hasNeeds(front)) _needs(front), _folders(front), _memory()], last: true),
           ] : [
-            _column([_collection(front), _formats(front), _recent(front), if (front.needsYou.isNotEmpty || front.lookups != null) _needs(front), _folders(front), _memory()], last: true),
-          ]),
+            _column([_collection(front), _formats(front), _recent(front), if (_hasNeeds(front)) _needs(front), _folders(front), _memory()], last: true),
+          ])),
       ])),
     );
   });

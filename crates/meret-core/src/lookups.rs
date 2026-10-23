@@ -43,6 +43,9 @@ impl meret_provider::Cache for StoredResponses {
 pub(crate) struct State {
     /// Jobs finished since the queue was last empty.
     batch_done: u64,
+    /// The most jobs this batch has had, done and pending together, so the
+    /// counter's total never falls while follow-up lookups queue up.
+    batch_total: u64,
     /// The last request couldn't reach MusicBrainz.
     offline: bool,
 }
@@ -77,7 +80,10 @@ fn run(core: &Core, wakes: &Receiver<()>) {
                 core.lookup_state.lock().batch_done += 1;
             }
             Ok(None) => {
-                core.lookup_state.lock().batch_done = 0;
+                let mut state = core.lookup_state.lock();
+                state.batch_done = 0;
+                state.batch_total = 0;
+                drop(state);
                 publish(core);
                 let next = core.store.job_counts(QUEUE).ok().and_then(|c| c.next_run_after);
                 let wait = next.map(|at| Duration::from_millis((at - now).max(0) as u64));
@@ -145,7 +151,7 @@ fn retry_at(attempts: u32, now: i64) -> Option<i64> {
 pub(crate) fn publish(core: &Core) {
     let lookups = core.settings().lookups;
     let counts = core.store.job_counts(QUEUE).unwrap_or_default();
-    let state = core.lookup_state.lock();
+    let mut state = core.lookup_state.lock();
     let pending = counts.queued + counts.running;
     let (detail, ok) = match lookups {
         Lookups::Unasked => ("asks first".to_string(), true),
@@ -155,10 +161,11 @@ pub(crate) fn publish(core: &Core) {
         Lookups::Allowed if counts.done > 0 => (format!("{} looked up", status::thousands(counts.done)), true),
         Lookups::Allowed => ("not used yet".to_string(), true),
     };
+    state.batch_total = state.batch_total.max(state.batch_done + pending);
     let running = (lookups == Lookups::Allowed && pending > 0).then(|| meret_jobs::JobGroupStatus {
         verb: VERB.into(),
         done: state.batch_done,
-        total: state.batch_done + pending,
+        total: state.batch_total,
         paused_because: state.offline.then(|| "offline".into()),
     });
     drop(state);
@@ -826,6 +833,38 @@ mod tests {
         apply(&store, &suite, work_lookup, 8).unwrap();
         assert_eq!(before, (count("SELECT COUNT(*) FROM credit"), count("SELECT COUNT(*) FROM edge"), count("SELECT COUNT(*) FROM recording"), count("SELECT COUNT(*) FROM agent")));
         drop(store);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    /// Finished lookups queue follow-ups; the counter's total keeps the
+    /// most it has seen so done climbs toward a fixed figure.
+    #[test]
+    fn counter_total_holds_the_high_water_mark_while_follow_ups_queue_up() {
+        let dir = std::env::temp_dir().join(format!("meret-lookup-counter-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let (scans, _) = crossbeam_channel::unbounded();
+        let core = Core::new(crate::CoreConfig { data_dir: dir.clone(), output: crate::OutputChoice::Null { speed: 1.0 }, contact: "test".into() }, scans).unwrap();
+        core.set_settings(crate::Settings { lookups: Lookups::Allowed, ..crate::Settings::default() }).unwrap();
+        let counter = |core: &Core| {
+            publish(core);
+            let status = core.status.borrow();
+            status.jobs.iter().find(|j| j.verb == VERB).map(|j| (j.done, j.total))
+        };
+        core.store.enqueue_jobs((0..3).map(|i| job(RefKind::Release, &format!("rel{i}"), RELEASE)).collect()).unwrap();
+        assert_eq!(counter(&core), Some((0, 3)));
+        let first = core.store.next_job(QUEUE, 1).unwrap().unwrap();
+        core.store.finish_job(first.id, 1).unwrap();
+        core.lookup_state.lock().batch_done += 1;
+        core.store.enqueue_jobs(vec![job(RefKind::Recording, "r1", RECORDING), job(RefKind::Recording, "r2", RECORDING)]).unwrap();
+        assert_eq!(counter(&core), Some((1, 5)), "follow-ups raise the total");
+        for _ in 0..2 {
+            let job = core.store.next_job(QUEUE, 2).unwrap().unwrap();
+            core.store.finish_job(job.id, 2).unwrap();
+            core.lookup_state.lock().batch_done += 1;
+        }
+        core.store.writer.write(|tx| { tx.execute("DELETE FROM job WHERE state = 'queued' AND dedupe_key LIKE '%recording:r2'", [])?; Ok(()) }).unwrap();
+        assert_eq!(counter(&core), Some((3, 5)), "a job that vanished never lowers the total");
+        drop(core);
         std::fs::remove_dir_all(dir).ok();
     }
 }

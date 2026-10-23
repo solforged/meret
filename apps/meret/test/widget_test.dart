@@ -258,7 +258,7 @@ void main() {
     await _surface(tester, core);
     expect(find.byType(NowStage), findsNothing);
     expect(find.byType(FrontPane), findsOneWidget);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, isEmpty);
     await core.addRoot('/New music');
     await core.playResults('', _libraryView, 0);
     await tester.pump();
@@ -271,7 +271,7 @@ void main() {
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.byType(NowStage), findsNothing);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, isEmpty);
     await core.playResults('', _libraryView, 0);
     await tester.pump();
     expect(find.byType(NowStage), findsNothing);
@@ -292,8 +292,7 @@ void main() {
     expect(find.byType(FrontPane), findsOneWidget);
     expect(find.byType(TrailStrip), findsNothing);
     expect(await core.trail(), isNull);
-    expect(find.text('⇧␣'), findsOneWidget);
-    expect(find.text('play something'), findsOneWidget);
+    expect(find.textContaining('⇧␣ play something'), findsOneWidget);
 
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.descendant(of: find.byType(NowPane), matching: find.byKey(const ValueKey('now-why'))), findsOneWidget);
@@ -485,7 +484,7 @@ void main() {
 
   testWidgets('a stage Pick up row resumes its release without changing a trail', (tester) async {
     final core = _RecordingCore();
-    final point = (await core.resumePoints(6)).first;
+    final point = await _pickUpPoint(core, 6);
     await _surface(tester, core);
     await tester.pump();
     final row = find.byKey(ValueKey('now-pick-up-${point.releaseId}'));
@@ -517,7 +516,7 @@ void main() {
     await tester.pump();
     expect(volume.hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
-    final point = (await core.resumePoints(3)).first;
+    final point = await _pickUpPoint(core, 3);
     final pickUp = find.byKey(ValueKey('now-pick-up-${point.releaseId}'));
     await tester.ensureVisible(pickUp);
     await tester.tap(pickUp);
@@ -693,7 +692,7 @@ void main() {
 
     expect(find.text('Choose a folder…'), findsOneWidget);
     expect(find.byType(TablePane), findsNothing);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, isEmpty);
     expect((await core.rows('', _libraryView, 0, 20)).total, BigInt.zero);
 
     await core.addRoot('/New music');
@@ -919,10 +918,11 @@ void main() {
 
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.byType(FrontPane), findsOneWidget);
-    expect(find.byType(TablePane), findsNothing);
+    expect(_rowCovered(tester), isTrue, reason: 'the table stays mounted under the Front, out of reach');
     expect(find.textContaining('back to Everything'), findsOneWidget);
     expect(find.byType(TrailStrip), findsOneWidget, reason: 'the trail stays open behind the Front');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(TablePane), findsOneWidget);
     expect(find.byType(FrontPane), findsNothing);
@@ -1378,6 +1378,10 @@ Future<void> _surface(WidgetTester tester, CoreBridge core, {Size size = const S
 
 List<String> _paneTitles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().map((pane) => pane.title).toList();
 
+/// Whether a page (Front or tree) lies over the pane row.
+bool _rowCovered(WidgetTester tester) =>
+    tester.widget<IgnorePointer>(find.ancestor(of: find.byType(PaneRow), matching: find.byType(IgnorePointer)).first).ignoring;
+
 ConstellationPainter _trailPainter(WidgetTester tester) => tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((widget) => widget.painter).whereType<ConstellationPainter>().single;
 
 Future<void> _commandKey(WidgetTester tester, LogicalKeyboardKey key) async {
@@ -1398,6 +1402,12 @@ Future<void> _shiftSpace(WidgetTester tester) async {
 
 Future<TrackRowDto> _firstTrack(CoreBridge core, {int offset = 0}) async =>
     ((await core.rows('', _libraryView, offset, 1)).items.single as ItemDto_Track).row;
+
+/// The first resume point Pick up offers: never the loaded release.
+Future<ResumeDto> _pickUpPoint(CoreBridge core, int limit) async {
+  final loaded = (await core.now().first).releaseId;
+  return (await core.resumePoints(limit)).firstWhere((point) => point.releaseId != loaded);
+}
 
 Widget _table(CoreBridge core, {String query = '', BigInt? libraryVersion, ValueChanged<String>? onQuery, Light light = Light.brass}) => MaterialApp(
   home: Scaffold(body: LightScope(light: light, child: TablePane(core: core, query: query, libraryVersion: libraryVersion, onQuery: onQuery ?? (_) {}))),

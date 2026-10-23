@@ -22,14 +22,14 @@ void main() {
     expect(find.byType(TreePane), findsOneWidget);
     expect(find.byType(TrailStrip), findsOneWidget);
     expect(find.byType(NowPane), findsOneWidget);
-    expect(find.byType(PaneRow), findsNothing);
+    expect(_rowCovered(tester), isTrue, reason: 'the panes stay under the tree, out of reach');
     await _key(tester, LogicalKeyboardKey.keyT);
     expect(find.byType(TreePane), findsNothing);
-    expect(find.byType(PaneRow), findsOneWidget);
+    expect(_rowCovered(tester), isFalse);
     await _key(tester, LogicalKeyboardKey.keyT);
     await _key(tester, LogicalKeyboardKey.escape);
     expect(find.byType(TreePane), findsNothing);
-    expect(find.byType(PaneRow), findsOneWidget);
+    expect(_rowCovered(tester), isFalse);
   });
 
   testWidgets('T ignores modifiers, text editing and the absence of a trail', (tester) async {
@@ -369,6 +369,9 @@ Future<void> _key(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.sendKeyEvent(key);
   await tester.pumpAndSettle();
 }
+
+bool _rowCovered(WidgetTester tester) =>
+    tester.widget<IgnorePointer>(find.ancestor(of: find.byType(PaneRow), matching: find.byType(IgnorePointer)).first).ignoring;
 
 Future<_TreeCore> _surface(WidgetTester tester, {Size size = const Size(1600, 1000)}) async {
   tester.view.physicalSize = size;

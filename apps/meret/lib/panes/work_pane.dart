@@ -9,11 +9,14 @@ import 'pane.dart';
 import 'release_pane.dart';
 
 class WorkPane extends StatefulWidget {
-  const WorkPane({super.key, required this.core, required this.id, required this.onFollow, this.libraryVersion, this.lookupsVersion});
+  const WorkPane({super.key, required this.core, required this.id, required this.onFollow, this.title, this.libraryVersion, this.lookupsVersion});
 
   final CoreBridge core;
   final PlatformInt64 id;
   final Future<void> Function(TargetDto, ThreadKind, String) onFollow;
+
+  /// The stop's title, shown over the placeholder until the work arrives.
+  final String? title;
   final BigInt? libraryVersion;
   final BigInt? lookupsVersion;
 
@@ -37,7 +40,14 @@ class _WorkPaneState extends State<WorkPane> {
   @override
   void didUpdateWidget(WorkPane old) {
     super.didUpdateWidget(old);
-    if (old.id != widget.id || old.core != widget.core || old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) _load();
+    if (old.id != widget.id || old.core != widget.core) {
+      _work = null;
+      _selected = null;
+      _load();
+    } else if (old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) {
+      // Facts filled in: refetch in place, keeping what is shown until the new DTO lands.
+      _load();
+    }
   }
 
   @override
@@ -48,14 +58,13 @@ class _WorkPaneState extends State<WorkPane> {
 
   Future<void> _load() async {
     final generation = ++_generation;
-    _work = null;
-    _selected = null;
     try {
       final work = await widget.core.work(widget.id);
       if (!mounted || generation != _generation) return;
       setState(() {
         _work = work;
         _error = null;
+        if (_selected case final selected? when selected >= work.rows.length) _selected = null;
       });
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _error = error.toString());
@@ -113,15 +122,14 @@ class _WorkPaneState extends State<WorkPane> {
       key: ValueKey('work-row-$index'),
       button: true,
       selected: _selected == index,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
+      child: Door(
+        builder: (context, hover) => GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _play(index),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 6),
             decoration: BoxDecoration(
-              color: lit ? light.wash : _selected == index ? Tok.panel2 : Colors.transparent,
+              color: lit ? light.wash : _selected == index || hover ? Tok.panel2 : Colors.transparent,
               border: Border(
                 bottom: const BorderSide(color: Tok.line),
                 left: BorderSide(color: lit ? light.accent : Colors.transparent, width: 2),
@@ -158,7 +166,7 @@ class _WorkPaneState extends State<WorkPane> {
   @override
   Widget build(BuildContext context) {
     final work = _work;
-    if (work == null) return Text(_error ?? 'Reading work…', style: Tok.label.copyWith(color: _error == null ? Tok.faint : Tok.warn));
+    if (work == null) return paneReading(widget.title, _error ?? 'Reading work…', error: _error != null);
     final facts = [
       '${work.rows.length} ${work.rows.length == 1 ? 'recording' : 'recordings'}',
       _time(work.lengthMs),

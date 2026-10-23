@@ -88,6 +88,9 @@ impl Store {
         ).optional())
     }
 
+    /// Pick-up points, newest first, only where something is partway: a
+    /// point at the top of a release's first track is a fresh start, not a
+    /// pick-up.
     pub fn resume_points(&self, limit: usize) -> Result<Vec<ResumeRow>> {
         let mut rows = self.read(|c| c.prepare(
             "SELECT rl.id,rl.title,COALESCE(rl.album_artist_credit,
@@ -100,7 +103,11 @@ impl Store {
                  JOIN edition e2 ON e2.id=m2.edition_id WHERE e2.release_id=rl.id AND t2.recording_id=r.id
                  ORDER BY m2.position,t2.position,t2.id LIMIT 1)
              LEFT JOIN medium m ON m.id=t.medium_id
-             WHERE p.subject_kind=?1 ORDER BY p.updated_at DESC,rl.id DESC LIMIT ?2"
+             WHERE p.subject_kind=?1 AND (p.position_ms>0 OR EXISTS(SELECT 1 FROM track t3 JOIN medium m3 ON m3.id=t3.medium_id
+                 JOIN edition e3 ON e3.id=m3.edition_id WHERE e3.release_id=rl.id AND t3.id<>t.id
+                 AND (COALESCE(m3.position,0)<COALESCE(m.position,0)
+                     OR COALESCE(m3.position,0)=COALESCE(m.position,0) AND COALESCE(t3.position,0)<COALESCE(t.position,0))))
+             ORDER BY p.updated_at DESC,rl.id DESC LIMIT ?2"
         )?.query_map(params![EntityKind::Release as i64, limit as i64], |r| {
             let idiom: Option<u8> = r.get(9)?;
             Ok(ResumeRow { release: ReleaseId(r.get(0)?), title: r.get(1)?, credit: r.get(2)?, cover: None,
@@ -164,6 +171,36 @@ mod tests {
             ("Release One", "First Cue", 1, 2, 3456, Some(90000), Some(Idiom::Score)));
         store.clear_resume(ReleaseId(1)).unwrap();
         assert!(store.resume_for(ReleaseId(1)).unwrap().is_none());
+        drop(store);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_point_at_the_top_of_the_first_track_is_not_offered() {
+        let dir = std::env::temp_dir().join(format!("meret-memory-top-{}-{}", std::process::id(), now_ms()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir.join("library.db")).unwrap();
+        store.writer.write(|tx| {
+            tx.execute_batch("INSERT INTO release(id,title,idiom,rev) VALUES(1,'Two Discs',5,1),(2,'No Track',5,1);
+                INSERT INTO edition(id,release_id,rev) VALUES(1,1,1);
+                INSERT INTO medium(id,edition_id,position) VALUES(1,1,1),(2,1,2);
+                INSERT INTO recording(id,title,length_ms,rev) VALUES(1,'First',90000,1),(2,'Second',90000,1),(3,'Disc Two',90000,1),(4,'Loose',90000,1);
+                INSERT INTO track(id,medium_id,position,recording_id,title,rev) VALUES(1,1,1,1,'First',1),(2,1,2,2,'Second',1),(3,2,1,3,'Disc Two',1);")?;
+            Ok(())
+        }).unwrap();
+        let device = store.device_id().unwrap();
+        let offered = |store: &Store| store.resume_points(10).unwrap().into_iter().map(|r| (r.release, r.recording, r.position_ms)).collect::<Vec<_>>();
+        store.upsert_resume(ReleaseId(1), RecordingId(1), 0, &device).unwrap();
+        store.upsert_resume(ReleaseId(2), RecordingId(4), 0, &device).unwrap();
+        assert_eq!(offered(&store), [], "the top of the first track, and a trackless recording at zero, are fresh starts");
+        store.upsert_resume(ReleaseId(1), RecordingId(1), 1, &device).unwrap();
+        assert_eq!(offered(&store), [(ReleaseId(1), RecordingId(1), 1)]);
+        store.upsert_resume(ReleaseId(1), RecordingId(2), 0, &device).unwrap();
+        assert_eq!(offered(&store), [(ReleaseId(1), RecordingId(2), 0)], "the top of a later track is partway through the release");
+        store.upsert_resume(ReleaseId(1), RecordingId(3), 0, &device).unwrap();
+        assert_eq!(offered(&store), [(ReleaseId(1), RecordingId(3), 0)], "so is the top of a later disc");
+        store.upsert_resume(ReleaseId(2), RecordingId(4), 5, &device).unwrap();
+        assert_eq!(offered(&store).len(), 2);
         drop(store);
         std::fs::remove_dir_all(dir).unwrap();
     }

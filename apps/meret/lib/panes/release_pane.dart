@@ -11,12 +11,15 @@ import 'pane.dart';
 
 /// A release's local edition, tracklist and sourced credits.
 class ReleasePane extends StatefulWidget {
-  const ReleasePane({super.key, required this.core, required this.id, required this.fromStop, required this.onFollow, this.libraryVersion, this.lookupsVersion});
+  const ReleasePane({super.key, required this.core, required this.id, required this.fromStop, required this.onFollow, this.title, this.libraryVersion, this.lookupsVersion});
 
   final CoreBridge core;
   final PlatformInt64 id;
   final int fromStop;
   final Future<void> Function(TargetDto, ThreadKind, String) onFollow;
+
+  /// The stop's title, shown over the placeholder until the release arrives.
+  final String? title;
   final BigInt? libraryVersion;
   final BigInt? lookupsVersion;
 
@@ -44,7 +47,16 @@ class _ReleasePaneState extends State<ReleasePane> {
   @override
   void didUpdateWidget(ReleasePane old) {
     super.didUpdateWidget(old);
-    if (old.id != widget.id || old.core != widget.core || old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) _load();
+    if (old.id != widget.id || old.core != widget.core) {
+      // Another release: nothing loaded applies, start over.
+      _release = null;
+      _selected = null;
+      _allCredits = false;
+      _load();
+    } else if (old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) {
+      // Facts filled in: refetch in place, keeping what is shown until the new DTO lands.
+      _load();
+    }
   }
 
   @override
@@ -55,15 +67,13 @@ class _ReleasePaneState extends State<ReleasePane> {
 
   Future<void> _load() async {
     final generation = ++_generation;
-    _release = null;
-    _selected = null;
-    _allCredits = false;
     try {
       final release = await widget.core.release(widget.id);
       if (!mounted || generation != _generation) return;
       setState(() {
         _release = release;
         _error = null;
+        if (_selected case final selected? when selected >= release.rows.length) _selected = null;
       });
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _error = error.toString());
@@ -116,15 +126,14 @@ class _ReleasePaneState extends State<ReleasePane> {
       key: ValueKey('release-row-$index'),
       button: true,
       selected: _selected == index,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
+      child: Door(
+        builder: (context, hover) => GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _play(index),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 5),
             decoration: BoxDecoration(
-              color: lit ? light.wash : _selected == index ? Tok.panel2 : Colors.transparent,
+              color: lit ? light.wash : _selected == index || hover ? Tok.panel2 : Colors.transparent,
               border: Border(
                 bottom: const BorderSide(color: Tok.line),
                 left: BorderSide(color: lit ? light.accent : Colors.transparent, width: 2),
@@ -175,7 +184,7 @@ class _ReleasePaneState extends State<ReleasePane> {
   @override
   Widget build(BuildContext context) {
     final release = _release;
-    if (release == null) return Text(_error ?? 'Reading release…', style: Tok.label.copyWith(color: _error == null ? Tok.faint : Tok.warn));
+    if (release == null) return paneReading(widget.title, _error ?? 'Reading release…', error: _error != null);
     final facts = [
       if (release.idiom != null) release.idiom!,
       if (release.year != null) '${release.year}',
@@ -315,14 +324,13 @@ class ThreadLine extends StatelessWidget {
     key: ValueKey('thread-${thread.kind.name}-${thread.to}'),
     button: true,
     label: '${thread.label} · ${thread.title} · ${thread.source}',
-    child: MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
+    child: Door(
+      builder: (context, hover) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onFollow,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
+          decoration: BoxDecoration(color: hover ? Tok.panel2 : Colors.transparent, border: const Border(bottom: BorderSide(color: Tok.line))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SizedBox(width: _label, child: Text(thread.label, style: Tok.body.copyWith(color: Tok.gold2, fontStyle: FontStyle.italic))),
