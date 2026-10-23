@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
@@ -27,6 +28,10 @@ class FrontPane extends StatefulWidget {
 class _FrontPaneState extends State<FrontPane> {
   FrontDto? _front;
   List<FolderSuggestionDto>? _suggestions;
+
+  /// The root paths [_suggestions] were found against; a 2 s disk look, so
+  /// it runs again only when the roots change.
+  List<String>? _suggestedFor;
   String? _error;
   bool _adding = false;
   bool _answeringLookups = false;
@@ -41,7 +46,10 @@ class _FrontPaneState extends State<FrontPane> {
   @override
   void didUpdateWidget(FrontPane old) {
     super.didUpdateWidget(old);
-    if (old.core != widget.core) _suggestions = null;
+    if (old.core != widget.core) {
+      _suggestions = null;
+      _suggestedFor = null;
+    }
     if (old.core != widget.core || old.libraryVersion != widget.libraryVersion) _load();
   }
 
@@ -50,15 +58,15 @@ class _FrontPaneState extends State<FrontPane> {
     try {
       final front = await widget.core.front();
       if (!mounted || generation != _generation) return;
-      final needsSuggestions = front.roots.isEmpty && (_suggestions == null || _front?.roots.isNotEmpty == true);
       setState(() {
         _front = front;
         _error = null;
-        if (needsSuggestions) _suggestions = null;
       });
-      if (needsSuggestions) {
+      final rootPaths = [for (final root in front.roots) root.path];
+      if (_suggestions == null || !listEquals(_suggestedFor, rootPaths)) {
+        _suggestedFor = rootPaths;
         final suggestions = await widget.core.suggestFolders();
-        if (mounted && generation == _generation) setState(() => _suggestions = suggestions);
+        if (mounted) setState(() => _suggestions = suggestions);
       }
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _error = error.toString());
@@ -213,6 +221,10 @@ class _FrontPaneState extends State<FrontPane> {
         const SizedBox(width: 8),
         Expanded(child: Text(root.path, style: Tok.monoSmall)),
       ])),
+    // Found places not yet added; the list may predate the newest root.
+    for (final suggestion in _suggestions ?? const <FolderSuggestionDto>[])
+      if (!front.roots.any((root) => suggestion.path == root.path || suggestion.path.startsWith('${root.path}/')))
+        _suggestion(suggestion),
     Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: _adding ? null : _addFolder, child: const Text('+ Add folder', style: Tok.label))),
   ]);
 
@@ -295,10 +307,15 @@ class _FrontPaneState extends State<FrontPane> {
     child: Text(title, style: Tok.body.copyWith(color: Tok.faint)),
   );
 
+  /// Doors that aren't built yet, so a reader can tell them from empty ones.
   Widget _quietPanel(List<Widget> children) => Container(
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(border: Border.all(color: Tok.line.withValues(alpha: 0.65))),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Text('Coming later', style: Tok.label),
+      const SizedBox(height: 6),
+      ...children,
+    ]),
   );
 
   Widget _emptyLeads() => _quietPanel([
@@ -393,7 +410,7 @@ class _FrontPaneState extends State<FrontPane> {
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
     if (box.maxWidth < 60) return const Pane(kind: 'FRONT', title: 'Front');
     final front = _front;
-    final scans = widget.jobs.where((job) => job.verb == 'scanning' || job.verb == 'reading tags');
+    final scans = widget.jobs.where((job) => job.isScan);
     return Container(
       decoration: const BoxDecoration(color: Tok.sky, border: Border(right: BorderSide(color: Tok.line))),
       child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

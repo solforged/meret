@@ -8,6 +8,12 @@ import '../src/rust/api/types.dart';
 
 export '../src/rust/api/types.dart';
 
+/// The scan's phases, as `meret-core`'s `SCAN_VERBS` names them. Everything
+/// else in the job list is a library job (lookups, analysis).
+extension JobScan on JobDto {
+  bool get isScan => verb == 'scanning' || verb == 'reading tags' || verb == 'reading covers';
+}
+
 /// Everything the UI asks of the core. The Rust implementation is the real
 /// one; the fake one lets widget tests and design work run without the
 /// native library.

@@ -6,8 +6,6 @@ import '../theme/tokens.dart';
 
 String _n(BigInt number) => number.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
 
-bool _isScan(JobDto job) => job.verb == 'scanning' || job.verb == 'reading tags';
-
 /// Always visible on desktop: every source's state, every running job, and
 /// how many identities are guesses.
 class StatusLine extends StatefulWidget {
@@ -30,7 +28,7 @@ class _StatusLineState extends State<StatusLine> {
     future: _front,
     builder: (context, snapshot) {
       final front = snapshot.data;
-      final scans = status.jobs.where(_isScan);
+      final scans = status.jobs.where((job) => job.isScan);
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(
           front == null
@@ -81,7 +79,7 @@ class _StatusLineState extends State<StatusLine> {
 
   Widget _job(JobDto job, int index) => _StatusButton(
     key: ValueKey('status-job-$index'),
-    title: _isScan(job) ? 'Folder scan' : 'Library job',
+    title: job.isScan ? 'Folder scan' : 'Library job',
     section: SettingsSection.folders,
     onSettings: () => showSettings(context, section: SettingsSection.folders),
     content: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
