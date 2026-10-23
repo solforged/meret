@@ -62,7 +62,6 @@ Widget _stacked(Widget? current, List<Widget> previous) => Stack(fit: StackFit.e
 
 class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   late final PlayheadClock _clock = PlayheadClock(this);
-  late final AnimationController _slide = AnimationController(vsync: this, value: 0, lowerBound: -1, duration: kMotion);
   final _queryFocus = FocusNode();
   final _surfaceFocus = FocusNode(debugLabel: 'surface');
   late final Outside _outside = Outside(widget.core);
@@ -72,10 +71,18 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   StatusDto? _status;
   TrailDto? _trail;
 
-  /// Stops that left the path, oldest first; their panes stay mounted off
-  /// the row so they return as they were.
+  /// Stops that left the row, oldest first; their panes stay mounted off
+  /// it so they return as they were.
   final _parked = <_StopKey>[];
   static const _parkedCap = 6;
+
+  /// 1 or -1 while the latest move swapped branches, so the row brings the
+  /// new one up from below or down from above.
+  int _swap = 0;
+
+  /// Counts trees; a new one gets a new row, which arrives whole instead of
+  /// pane by pane.
+  int _tree = 0;
   bool _frontOnly = true;
   bool _treeOnly = false;
   _Stage _stage = _Stage.undecided;
@@ -123,7 +130,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _nowSub?.cancel();
     _statusSub?.cancel();
     _clock.dispose();
-    _slide.dispose();
     _queryFocus.removeListener(_queryFocusChanged);
     _queryFocus.dispose();
     _surfaceFocus.dispose();
@@ -208,11 +214,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     if (_stage != _Stage.front) setState(() => _stage = _Stage.front);
   }
 
-  void _animate(int direction) {
-    _slide.value = direction.toDouble();
-    _slide.animateTo(0, duration: kMotion, curve: Curves.easeOutCubic);
-  }
-
   /// Same tree, or a different one from the history? Stops never change
   /// target inside a trail, so a clash at any index means another trail.
   static bool _sameTrail(TrailDto a, TrailDto b) {
@@ -220,46 +221,46 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     return b.stops.every((stop) => (targets[stop.index] ?? stop.target) == stop.target);
   }
 
-  /// Install [trail]; stops that just left the path join the parked set,
+  /// Install [trail]; stops that just left the row join the parked set,
   /// newest last, capped at [_parkedCap]. Another trail empties it.
   void _setTrail(TrailDto trail) {
     final old = _trail;
     _trail = trail;
+    _swap = 0;
     if (old == null || !_sameTrail(old, trail)) {
       _parked.clear();
+      _tree++;
       return;
     }
-    final onPath = {for (final stop in _path(trail)) stop.index};
+    final onRow = {for (final stop in _row(trail)) stop.index};
     final targets = {for (final stop in trail.stops) stop.index: stop.target};
-    for (final stop in _path(old)) {
-      if (onPath.contains(stop.index)) continue;
+    for (final stop in _row(old)) {
+      if (onRow.contains(stop.index)) continue;
       final key = _StopKey(stop.index, stop.target);
       _parked..remove(key)..add(key);
     }
-    _parked.removeWhere((key) => onPath.contains(key.index) || targets[key.index] != key.target);
+    _parked.removeWhere((key) => onRow.contains(key.index) || targets[key.index] != key.target);
     if (_parked.length > _parkedCap) _parked.removeRange(0, _parked.length - _parkedCap);
   }
 
-  Future<void> _navigate(Future<TrailDto?> Function() call, {bool frontOnNull = false, int direction = 1, bool closeTree = true}) async {
-    // Leaving the Now stage is a page change: the stage fades, nothing slides.
-    final fromNow = _stage == _Stage.now;
+  /// Panes move themselves: the row animates whatever changed in it.
+  Future<void> _navigate(Future<TrailDto?> Function() call, {bool frontOnNull = false, int swap = 0, bool closeTree = true}) async {
     _leaveStage();
     final version = ++_navigationVersion;
     final trail = await call();
     if (!mounted || version != _navigationVersion) return;
-    final moved = trail != null && (trail.current != _trail?.current || trail.stops.length != _trail?.stops.length);
     setState(() {
       _navigationError = null;
       if (closeTree) _treeOnly = false;
       if (trail != null) {
         _memoryVersion++;
         _setTrail(trail);
+        _swap = swap;
         _frontOnly = false;
       } else if (frontOnNull) {
         _frontOnly = true;
       }
     });
-    if (moved && !fromNow) _animate(direction);
     _reclaimFocusAfterFrame();
   }
 
@@ -278,7 +279,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   Future<void> _sibling(int step) async {
     if (_editing) return;
-    await _navigate(() => widget.core.trailSibling(step), direction: step);
+    await _navigate(() => widget.core.trailSibling(step), swap: step);
   }
 
   Future<void> _prune(int leaf) => _navigate(() => widget.core.pruneBranch(leaf), closeTree: false);
@@ -309,7 +310,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       if (_trail != null) _showTrail();
       return;
     }
-    await _navigate(by < 0 ? widget.core.trailBack : widget.core.trailForward, frontOnNull: by < 0, direction: by);
+    await _navigate(by < 0 ? widget.core.trailBack : widget.core.trailForward, frontOnNull: by < 0);
   }
 
   /// `⌘1`: the Front over the trail, and back again. The trail stays open.
@@ -319,8 +320,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       return;
     }
     _navigationVersion++;
-    _slide.stop();
-    _slide.value = 0;
     setState(() {
       _stage = _Stage.front;
       _frontOnly = true;
@@ -343,8 +342,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   void _toggleTree() {
     if (_editing || _trail == null) return;
     _navigationVersion++;
-    _slide.stop();
-    _slide.value = 0;
     setState(() {
       _stage = _Stage.front;
       _frontOnly = false;
@@ -376,7 +373,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   };
 
   Future<void> _search(SearchDto search, HitDto? hit) async {
-    final fromNow = _stage == _Stage.now;
     _leaveStage();
     if (hit?.kind == HitKind.track) {
       final index = hit!.index;
@@ -398,14 +394,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       if (!mounted || version != _navigationVersion) return;
       setState(() => _setTrail(trail));
     }
-    if (!fromNow) _animate(1);
     _reclaimFocusAfterFrame();
   }
 
   Future<void> _follow(int from, TargetDto to, ThreadKind via, String provider) =>
       _navigate(() => widget.core.follow(from, to, via, provider));
 
-  Widget _pane(StopDto stop) {
+  Widget _pane(StopDto stop, {bool ahead = false, Set<int> aheadStops = const {}}) {
     final scanning = _status?.jobs.any((job) => job.isScan) ?? false;
     Future<void> follow(TargetDto to, ThreadKind via, String provider) => _follow(stop.index, to, via, provider);
     final body = switch (stop.target) {
@@ -440,14 +435,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       via: stop.via,
       source: stop.viaSource,
       body: TrailPaneScope(
-        trail: _trail!, stop: stop,
+        trail: _trail!, stop: stop, ahead: aheadStops,
         onGo: (leaf) => _report(_navigate(() => widget.core.trailGo(leaf))),
         onPrune: (leaf) => _report(_prune(leaf)),
         child: body,
       ),
       showTitle: stop.target is! TargetDto_Release && stop.target is! TargetDto_Work && stop.target is! TargetDto_Game,
       compact: stop.target is TargetDto_Search,
-      onSpineTap: () => _report(_navigate(() => widget.core.trailGo(stop.index), direction: -1)),
+      onSpineTap: () => _report(_navigate(() => widget.core.trailGo(stop.index))),
+      ahead: ahead,
     );
   }
 
@@ -532,16 +528,21 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               );
               final trail = _trail;
               final path = trail == null ? const <StopDto>[] : _path(trail);
+              final along = trail == null ? const <StopDto>[] : _row(trail);
               final stops = {for (final stop in trail?.stops ?? const <StopDto>[]) stop.index: stop};
-              // The row holds the trail's path and its parked stops whatever
-              // page lies over it, so nothing is thrown away by a page.
+              final aheadStops = {for (final stop in along.skip(path.length)) stop.index};
+              // The row holds the trail's path, the stops ahead and the parked
+              // stops whatever page lies over it, so nothing is thrown away by a page.
               final row = PaneRow(
-                slide: _slide,
+                key: ValueKey(('row', _tree)),
+                focus: path.length - 1,
+                swap: _swap,
                 maxVisible: wc.panes,
                 minPane: box.maxWidth >= 1000 ? 440 : 300,
-                wide: {for (var i = 0; i < path.length; i++) if (path[i].target is TargetDto_Search) i},
-                parked: [for (final key in _parked) _pane(stops[key.index]!)],
-                children: [for (final stop in path) _pane(stop)],
+                wide: {for (var i = 0; i < along.length; i++) if (along[i].target is TargetDto_Search) i},
+                ghost: const PaneGhost(),
+                parked: [for (final key in _parked) _pane(stops[key.index]!, aheadStops: aheadStops)],
+                children: [for (var i = 0; i < along.length; i++) _pane(along[i], ahead: i >= path.length, aheadStops: aheadStops)],
               );
               // Plate 01: the Front is a page of its own, never a pane beside a trail.
               final Widget? page = trail == null
@@ -649,6 +650,26 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       ),
     ))));
   }
+}
+
+/// The path plus the stops ahead: from the current stop, the chain of most
+/// recently entered children that `]` would walk (Trail::forward).
+List<StopDto> _row(TrailDto trail) {
+  final path = _path(trail);
+  final children = <int, List<StopDto>>{};
+  for (final stop in trail.stops) {
+    if (stop.parent case final parent? when !stop.isPeek) (children[parent] ??= []).add(stop);
+  }
+  final row = [...path];
+  var at = trail.current;
+  while (true) {
+    final next = children[at];
+    if (next == null || next.isEmpty) break;
+    final newest = next.reduce((a, b) => b.openedMs.toInt() >= a.openedMs.toInt() ? b : a);
+    row.add(newest);
+    at = newest.index;
+  }
+  return row;
 }
 
 List<StopDto> _path(TrailDto trail) {

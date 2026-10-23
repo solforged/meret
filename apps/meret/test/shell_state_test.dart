@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -74,35 +75,52 @@ void main() {
     expect(core.nowSubscriptions, 1);
   });
 
-  testWidgets('ANIM-2 reverse navigation starts at minus one and eases to zero', (tester) async {
+  testWidgets('ANIM-2 [ past the window shifts the panes into place over 200 ms', (tester) async {
     final core = FakeCore();
-    await _seedTrail(core, stops: 3);
+    await _seedTrail(core, stops: 4);
     await _surface(tester, core);
     await _showTrail(tester);
-    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
-    await tester.pump();
-    final slide = tester.widget<PaneRow>(find.byType(PaneRow)).slide;
-    expect((await core.trail())!.current, 1);
-    expect(slide.value, -1);
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(slide.value, allOf(greaterThan(-1), lessThan(0)));
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(slide.value, 0);
+    await _resize(tester, 1300);
+    var before = _paneXs(tester);
+    var shifted = false;
+    for (var i = 0; i < 3 && !shifted; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final mid = _paneXs(tester);
+      if (listEquals(mid, before)) {
+        await tester.pumpAndSettle();
+        expect(_paneXs(tester), before, reason: '[ within the window moves nothing');
+        continue;
+      }
+      shifted = true;
+      await tester.pump(const Duration(milliseconds: 100));
+      final after = _paneXs(tester);
+      for (var p = 0; p < mid.length; p++) {
+        final (lo, hi) = before[p] < after[p] ? (before[p], after[p]) : (after[p], before[p]);
+        expect(mid[p], inInclusiveRange(lo, hi), reason: 'pane $p is on its way at 100 ms');
+      }
+      expect(mid, isNot(after), reason: 'still moving halfway');
+      await tester.pumpAndSettle();
+      expect(_paneXs(tester), after, reason: 'in place by 200 ms');
+      before = after;
+    }
+    expect(shifted, isTrue, reason: 'four stops at 1300 do not all fit at full width');
   });
 
-  testWidgets('ANIM-3 forward at the last stop does not start a slide', (tester) async {
+  testWidgets('ANIM-3 ] at the last stop moves nothing', (tester) async {
     final core = _TerminalCore();
     await _seedTrail(core, stops: 3);
     await _surface(tester, core);
     await _showTrail(tester);
-    final slide = tester.widget<PaneRow>(find.byType(PaneRow)).slide;
-    expect(slide.value, 0);
+    final xs = _paneXs(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     expect((await core.trail())!.current, 2);
-    expect(slide.value, 0);
+    expect(_paneXs(tester), xs);
     await tester.pump(const Duration(milliseconds: 100));
-    expect(slide.value, 0);
+    expect(_paneXs(tester), xs);
   });
 
   testWidgets('ANIM-1 leaving Now fades through over 200ms without restarting on Now updates', (tester) async {
@@ -168,6 +186,12 @@ Future<void> _resize(WidgetTester tester, double width) async {
   tester.view.physicalSize = Size(width, 900);
   await tester.pumpAndSettle();
 }
+
+/// Where each pane on the row starts.
+List<double> _paneXs(WidgetTester tester) => [
+  for (final pane in find.descendant(of: find.byType(PaneRow), matching: find.byType(Pane)).evaluate())
+    (pane.findRenderObject()! as RenderBox).localToGlobal(Offset.zero).dx,
+];
 
 /// The opacity of the nearest fade over the widget keyed [key].
 double _pageOpacity(WidgetTester tester, String key) => tester.widget<FadeTransition>(

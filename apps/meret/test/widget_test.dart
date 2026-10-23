@@ -1191,6 +1191,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['Everything']);
+    expect(_aheadTitles(tester), [row.album], reason: '[ dims the stop ahead instead of removing it');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -1200,7 +1201,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     }
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
+    expect(_paneTitles(tester), hasLength(1));
     expect(find.byType(FrontPane), findsOneWidget);
   });
 
@@ -1272,7 +1273,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect((await core.trail())!.current, 0);
-    expect(find.byType(GamePane), findsNothing);
+    expect(_ahead<GamePane>(tester), isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -1307,7 +1308,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect((await core.trail())!.stops.firstWhere((stop) => stop.onPath && stop.index == 0).target,
       TargetDto.release(id: release.id));
-    expect(find.byType(WorkPane), findsNothing);
+    expect(_ahead<WorkPane>(tester), isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -1344,6 +1345,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['Everything']);
+    expect(_aheadTitles(tester), [row.album]);
     expect((await core.trail())!.current, 0);
   });
 
@@ -1376,7 +1378,15 @@ Future<void> _surface(WidgetTester tester, CoreBridge core, {Size size = const S
   await tester.pump();
 }
 
-List<String> _paneTitles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().map((pane) => pane.title).toList();
+/// The path's panes, root first; the stops ahead of it are [_aheadTitles].
+List<String> _paneTitles(WidgetTester tester) =>
+    tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().where((pane) => !pane.ahead).map((pane) => pane.title).toList();
+
+List<String> _aheadTitles(WidgetTester tester) =>
+    tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().where((pane) => pane.ahead).map((pane) => pane.title).toList();
+
+bool _ahead<T extends Widget>(WidgetTester tester) =>
+    tester.widget<Pane>(find.ancestor(of: find.byType(T), matching: find.byType(Pane)).first).ahead;
 
 /// Whether a page (Front or tree) lies over the pane row.
 bool _rowCovered(WidgetTester tester) =>
