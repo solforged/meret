@@ -227,14 +227,14 @@ void main() {
     expect(core.seeks.single.toInt(), closeTo(now.lengthMs!.toInt(), 1));
   });
 
-  testWidgets('Now is pinned from 1400 wide and a bar below', (tester) async {
+  testWidgets('Now is pinned from 1560 wide and a bar below', (tester) async {
     await _surface(tester, FakeCore(), size: const Size(1568, 984));
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.byType(NowPane), findsOneWidget);
     expect(find.byType(NowBar), findsNothing);
     expect(tester.getSize(find.byType(NowPane)).width, 360);
 
-    tester.view.physicalSize = const Size(1380, 900);
+    tester.view.physicalSize = const Size(1540, 900);
     await tester.pump();
     expect(find.byType(NowPane), findsNothing);
     expect(find.byType(NowBar), findsOneWidget);
