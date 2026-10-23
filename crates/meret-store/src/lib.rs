@@ -7,6 +7,7 @@
 //!   brushes in memory, so 120 Hz interaction never touches SQLite.
 //! * Full-text search finds people, releases and recordings by name.
 
+mod analysis;
 mod art;
 mod columns;
 pub mod copies;
@@ -29,6 +30,7 @@ use std::path::Path;
 use parking_lot::Mutex;
 use rusqlite::{Connection, OpenFlags};
 
+pub use analysis::{ANALYSIS_VERSION, AnalysisPatch, AnalysisRow};
 pub use art::{Artwork, COVER_SIZES, cover_file};
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
 pub use http_cache::HttpCache;
@@ -38,7 +40,7 @@ pub use listens::{Dormant, ListenRow, PlayCount};
 pub use pages::{Colleague, GameLink, GamePage, OtherRecording, PersonLink, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
 pub use plan::{Plan, format_code, plan};
 pub use search::{PersonHit, ReleaseHit};
-pub use settings::{LightLevel, Lookups, Settings};
+pub use settings::{Level, LightLevel, Lookups, Settings};
 pub use writer::Writer;
 pub use trails::TrailSummary;
 pub use memory::{ResumeRow, SavedQueue};

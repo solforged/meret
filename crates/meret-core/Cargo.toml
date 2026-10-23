@@ -12,6 +12,7 @@ meret-model.workspace = true
 meret-query.workspace = true
 meret-store.workspace = true
 meret-library.workspace = true
+meret-analysis.workspace = true
 meret-graph.workspace = true
 meret-jobs.workspace = true
 meret-engine.workspace = true

@@ -101,6 +101,40 @@ pub fn rescan(api: &Api, rt: &tokio::runtime::Runtime) -> Result<()> {
     Ok(())
 }
 
+pub fn analyse(api: &Api, rt: &tokio::runtime::Runtime, wait: bool) -> Result<()> {
+    let started = Instant::now();
+    settle(api, rt);
+    let mut counts = api.analyse().map_err(anyhow::Error::msg)?;
+    let mut previous = None;
+    loop {
+        let line = format!("{} analysed, {} queued, {} running, {} failed",
+            counts.done, counts.queued, counts.running, counts.failed);
+        if previous.as_ref() != Some(&line) {
+            println!("{line}  ({:.2?})", started.elapsed());
+            previous = Some(line);
+        }
+        if !wait || counts.queued + counts.running == 0 {
+            println!("analysis {} in {:.2?}; {} analysed, {} failed",
+                if wait { "finished" } else { "queued" }, started.elapsed(), counts.done, counts.failed);
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        counts = api.analysis_counts().map_err(anyhow::Error::msg)?;
+    }
+}
+
+pub fn show_release(api: &Api, rt: &tokio::runtime::Runtime, id: i64) -> Result<()> {
+    settle(api, rt);
+    walk_pane(api, &TargetDto::Release { id })?;
+    Ok(())
+}
+
+fn analysis_columns(dr: Option<u8>, loudness: Option<f64>) -> String {
+    let dr = dr.map(|dr| format!("DR{dr}")).unwrap_or_else(|| "DR?".into());
+    let loudness = loudness.map(|lufs| format!("{lufs:.1} LUFS")).unwrap_or_else(|| "? LUFS".into());
+    format!("{dr} · {loudness}")
+}
+
 pub fn ls(api: &Api, rt: &tokio::runtime::Runtime, query: &str, view: ViewDto, offset: u64, limit: u32) -> Result<()> {
     settle(api, rt);
     let t = Instant::now();
@@ -121,7 +155,7 @@ pub fn ls(api: &Api, rt: &tokio::runtime::Runtime, query: &str, view: ViewDto, o
             ItemDto::Track { ordinal, row: r } => {
                 let len = r.length_ms.map(|ms| format!("{}:{:02}", ms / 60_000, ms / 1000 % 60)).unwrap_or_default();
                 println!(
-                    "{ordinal:>6}  {:>2}-{:<3} {:<40.40} {:<24.24} {:<32.32} {:>4} {:>6}  {}",
+                    "{ordinal:>6}  {:>2}-{:<3} {:<40.40} {:<24.24} {:<32.32} {:>4} {:>6}  {}  {}",
                     r.disc,
                     r.number,
                     r.title,
@@ -129,7 +163,8 @@ pub fn ls(api: &Api, rt: &tokio::runtime::Runtime, query: &str, view: ViewDto, o
                     r.album,
                     r.year.map(|y| y.to_string()).unwrap_or_default(),
                     len,
-                    r.format
+                    r.format,
+                    analysis_columns(r.dr, r.loudness)
                 );
             }
         }
@@ -306,12 +341,13 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<Line>> {
                     .join(" · "),
                 t.elapsed()
             );
+            println!("    {}", analysis_columns(r.dr, r.loudness_lufs));
             if let Some(cover) = &r.cover {
                 println!("    cover {cover}");
             }
             for (row, work) in r.rows.iter().zip(&r.row_works) {
                 let artist = row.artist.as_deref().filter(|a| Some(*a) != r.artist.as_deref()).unwrap_or("");
-                println!("    {}-{:02} {:<44.44} {artist}", row.disc, row.number, row.title);
+                println!("    {}-{:02} {:<44.44} {artist}  {}", row.disc, row.number, row.title, analysis_columns(row.dr, row.loudness));
                 if let Some(work) = work {
                     println!("          recording of {}", work.title);
                 }

@@ -23,12 +23,17 @@ class BodyPainter extends CustomPainter {
   final List<Uint8List> bands;
   final Color light;
 
-  static final _cache = <Object, ui.Picture>{};
+  ui.Picture? _picture;
+  Size? _size;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final key = Object.hash(size, lengthMs, loudness.length, bands.length, loudness.isEmpty ? 0 : loudness[0]);
-    final picture = _cache[key] ??= _record(size);
+    if (_size != size) {
+      _picture?.dispose();
+      _picture = _record(size);
+      _size = size;
+    }
+    final picture = _picture!;
     canvas.drawPicture(picture);
 
     final c = size.center(Offset.zero);
@@ -97,6 +102,14 @@ class BodyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(BodyPainter old) =>
-      old.lengthMs != lengthMs || old.loudness != loudness || old.light != light;
+  bool shouldRepaint(BodyPainter old) {
+    final changed = old.lengthMs != lengthMs || old.loudness != loudness ||
+        old.bands.length != bands.length ||
+        Iterable<int>.generate(bands.length).any((i) => old.bands[i] != bands[i]);
+    if (!changed) {
+      _picture = old._picture;
+      _size = old._size;
+    }
+    return changed || old.light != light;
+  }
 }

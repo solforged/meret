@@ -8,8 +8,12 @@
 //! The store rebuilds this at start-up from SQLite (or from a snapshot file)
 //! and patches it as writes commit.
 
+use std::collections::HashMap;
+
 use meret_model::{Idiom, TrackId};
 use roaring::RoaringBitmap;
+
+use crate::AnalysisPatch;
 
 /// One row as loaded from SQLite.
 #[derive(Clone, Debug, Default)]
@@ -32,6 +36,8 @@ pub struct Row {
     pub added: i64,
     /// 0 for unknown.
     pub dr: u8,
+    /// Integrated loudness in LUFS; absent for unanalysed tracks.
+    pub loudness: Option<f64>,
     /// `Idiom as u8`; 0 for unknown.
     pub idiom: u8,
     /// See `Format` codes in `plan.rs`.
@@ -51,6 +57,7 @@ pub enum ColumnId {
     LastPlayed,
     Added,
     Dr,
+    Loudness,
 }
 
 /// Bin counts plus the range they cover, ready to draw as a column header.
@@ -64,6 +71,7 @@ pub struct Histogram {
 #[derive(Default)]
 pub struct HotColumns {
     pub track: Vec<TrackId>,
+    track_rows: HashMap<TrackId, usize>,
     pub release: Vec<u32>,
     pub artist: Vec<u32>,
     pub album_artist: Vec<u32>,
@@ -78,6 +86,8 @@ pub struct HotColumns {
     pub last_played: Vec<i64>,
     pub added: Vec<i64>,
     pub dr: Vec<u8>,
+    /// LUFS in tenths; `i16::MIN` means unknown.
+    pub loudness: Vec<i16>,
     pub idiom: Vec<u8>,
     pub format: Vec<u8>,
     pub formats: Vec<u8>,
@@ -97,6 +107,7 @@ impl HotColumns {
     pub fn push(&mut self, r: Row) {
         let i = self.track.len() as u32;
         self.track.push(TrackId(r.track));
+        self.track_rows.insert(TrackId(r.track), i as usize);
         self.release.push(r.release);
         self.artist.push(r.artist);
         self.album_artist.push(r.album_artist);
@@ -116,6 +127,7 @@ impl HotColumns {
         self.last_played.push(r.last_played);
         self.added.push(r.added);
         self.dr.push(r.dr);
+        self.loudness.push(loudness_tenths(r.loudness));
         self.idiom.push(r.idiom);
         self.format.push(r.format);
         self.formats.push(if r.formats == 0 { 1 << r.format } else { r.formats });
@@ -125,11 +137,21 @@ impl HotColumns {
         }
     }
 
-    /// One linear lookup per counted play; no extra index alongside the hot columns.
+    /// Patches one counted play without scanning the library.
     pub fn record_play(&mut self, track: TrackId, at_s: i64) {
-        if let Some(row) = self.track.iter().position(|&t| t == track) {
+        if let Some(&row) = self.track_rows.get(&track) {
             self.plays[row] += 1;
             self.last_played[row] = self.last_played[row].max(at_s);
+        }
+    }
+
+    /// Applies committed recording values and completed editions' DR fallbacks.
+    pub fn patch_analysis(&mut self, patches: &[AnalysisPatch]) {
+        for patch in patches {
+            if let Some(&row) = self.track_rows.get(&patch.track) {
+                self.dr[row] = patch.dr.unwrap_or(0);
+                self.loudness[row] = loudness_tenths(patch.loudness_lufs);
+            }
         }
     }
 
@@ -170,7 +192,7 @@ impl HotColumns {
         b
     }
 
-    /// Rows whose value in `col` lies in `lo..=hi`. Unknown values (0) never match.
+    /// Rows whose value in `col` lies in `lo..=hi`. Unknown values never match.
     pub fn range(&self, col: ColumnId, lo: f64, hi: f64) -> RoaringBitmap {
         fn scan<T: Copy + Into<f64> + PartialEq + Default>(v: &[T], lo: f64, hi: f64) -> RoaringBitmap {
             let unknown = T::default();
@@ -193,6 +215,10 @@ impl HotColumns {
             ColumnId::LastPlayed => scan_i64(&self.last_played, lo, hi),
             ColumnId::Added => scan_i64(&self.added, lo, hi),
             ColumnId::Dr => scan(&self.dr, lo, hi),
+            ColumnId::Loudness => RoaringBitmap::from_sorted_iter(self.loudness.iter().enumerate().filter_map(|(i, &v)| {
+                let value = f64::from(v) / 10.0;
+                (v != i16::MIN && value >= lo && value <= hi).then_some(i as u32)
+            })).expect("indices are sorted"),
         }
     }
 
@@ -243,9 +269,16 @@ impl HotColumns {
             ColumnId::LastPlayed => within.iter().filter(|&i| self.last_played[i as usize] != 0).for_each(|i| put(self.last_played[i as usize] as f64)),
             ColumnId::Added => within.iter().for_each(|i| put(self.added[i as usize] as f64)),
             ColumnId::Dr => within.iter().filter(|&i| self.dr[i as usize] != 0).for_each(|i| put(self.dr[i as usize] as f64)),
+            ColumnId::Loudness => within.iter().filter(|&i| self.loudness[i as usize] != i16::MIN).for_each(|i| put(f64::from(self.loudness[i as usize]) / 10.0)),
         }
         Histogram { lo, hi, bins: out }
     }
+}
+
+fn loudness_tenths(value: Option<f64>) -> i16 {
+    value.filter(|v| v.is_finite()).map_or(i16::MIN, |v| {
+        (v * 10.0).round().clamp(f64::from(i16::MIN + 1), f64::from(i16::MAX)) as i16
+    })
 }
 
 fn scan_i64(v: &[i64], lo: f64, hi: f64) -> RoaringBitmap {

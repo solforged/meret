@@ -42,6 +42,8 @@ class _TablePaneState extends State<TablePane> {
   FacetsDto? _facets;
   HistogramDto? _last;
   HistogramDto? _year;
+  HistogramDto? _dr;
+  HistogramDto? _loudness;
   int _generation = 0;
   int? _total;
   int _tracks = 0;
@@ -77,6 +79,8 @@ class _TablePaneState extends State<TablePane> {
     _facets = null;
     _last = null;
     _year = null;
+    _dr = null;
+    _loudness = null;
     if (_scroll.hasClients) _scroll.jumpTo(0);
     _load();
   }
@@ -105,11 +109,15 @@ class _TablePaneState extends State<TablePane> {
           final results = await Future.wait([
             widget.core.histogram(ColumnDto.lastPlayed, widget.query, now - 365 * 86400, now, 52),
             widget.core.histogram(ColumnDto.year, widget.query, 1950, 2026, 76),
+            widget.core.histogram(ColumnDto.dr, widget.query, 0, 30, 30),
+            widget.core.histogram(ColumnDto.loudness, widget.query, -60, 0, 60),
           ]);
           if (!mounted || generation != _generation) return;
           setState(() {
             _last = results[0];
             _year = results[1];
+            _dr = results[2];
+            _loudness = results[3];
           });
         } catch (_) {
           // A missing histogram leaves its header quiet.
@@ -296,6 +304,10 @@ class _TablePaneState extends State<TablePane> {
           Expanded(child: HistogramHeader(label: 'Year', bins: _year?.bins ?? Uint32List(0), onBrush: (r) => _brush('year', r, 1950, 2026))),
           const SizedBox(width: 16),
           Expanded(child: HistogramHeader(label: 'Last played', bins: _last?.bins ?? Uint32List(0), onBrush: _brushRecent)),
+          const SizedBox(width: 16),
+          Expanded(child: HistogramHeader(key: const ValueKey('table-dr-histogram'), label: 'DR', bins: _dr?.bins ?? Uint32List(0), onBrush: (r) => _brush('dr', r, 0, 30))),
+          const SizedBox(width: 16),
+          Expanded(child: HistogramHeader(key: const ValueKey('table-lufs-histogram'), label: 'LUFS', bins: _loudness?.bins ?? Uint32List(0), onBrush: (r) => _brush('lufs', r, -60, 0))),
         ]),
         const Divider(color: Tok.line, height: 16),
         Wrap(spacing: 12, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
@@ -320,7 +332,7 @@ class _TablePaneState extends State<TablePane> {
                       : LayoutBuilder(builder: (context, box) => SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: SizedBox(
-                            width: math.max(720, box.maxWidth), height: box.maxHeight,
+                            width: math.max(840, box.maxWidth), height: box.maxHeight,
                             child: Column(children: [
                               SizedBox(height: _row, child: _headers()),
                               Expanded(child: ListView.builder(
@@ -394,6 +406,8 @@ class _TablePaneState extends State<TablePane> {
       SizedBox(width: 60, child: header('Year', SortKeyDto.year)),
       SizedBox(width: 72, child: header('Length', SortKeyDto.length)),
       SizedBox(width: 120, child: header('Format', SortKeyDto.format)),
+      SizedBox(width: 48, child: _cell('DR', Tok.label)),
+      SizedBox(width: 64, child: _cell('LUFS', Tok.label)),
     ]);
   }
 
@@ -432,6 +446,8 @@ class _TablePaneState extends State<TablePane> {
       SizedBox(width: 60, child: _cell(group != null ? '${group.year ?? ''}' : _view.group ? '' : '${row!.year ?? ''}', Tok.monoSmall)),
       SizedBox(width: 72, child: _cell(_length(group?.lengthMs ?? row?.lengthMs), Tok.monoSmall)),
       SizedBox(width: 120, child: _cell(group?.format ?? row!.format, Tok.monoSmall)),
+      SizedBox(width: 48, child: _cell('${row?.dr ?? ''}', Tok.monoSmall)),
+      SizedBox(width: 64, child: _cell(row?.loudness?.toStringAsFixed(1) ?? '', Tok.monoSmall)),
     ]);
   }
 

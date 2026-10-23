@@ -207,7 +207,7 @@ class FakeCore implements CoreBridge {
   bool _empty = false;
   final _roots = <int, String>{1: '/Music'};
   final _rootIds = <String, int>{'/Music': 1};
-  SettingsDto _settings = const SettingsDto(light: LightLevelDto.accent, exclusive: true, lookups: LookupsDto.unasked);
+  SettingsDto _settings = const SettingsDto(light: LightLevelDto.accent, exclusive: true, lookups: LookupsDto.unasked, level: LevelDto.off);
   BigInt _libraryVersion = BigInt.one;
   TrailDto? _trail;
   final _forward = <int, int>{};
@@ -324,6 +324,13 @@ class FakeCore implements CoreBridge {
   final _statuses = StreamController<StatusDto>.broadcast();
   final _now = StreamController<NowDto>.broadcast();
   static const _sampleLight = LightDto(light: 0xFFDF9672, wash: 0x14DF9672, dim: 0x55DF9672);
+  static BodyDto _body(BigInt lengthMs, int seed) => BodyDto(
+    loudness: Uint8List.fromList(List.generate(240, (i) => 80 + (i * 17 + seed * 13) % 176)),
+    low: Uint8List.fromList(List.generate(240, (i) => 40 + (i * 7 + seed * 3) % 180)),
+    mid: Uint8List.fromList(List.generate(240, (i) => 30 + (i * 11 + seed * 5) % 200)),
+    high: Uint8List.fromList(List.generate(240, (i) => 20 + (i * 19 + seed * 7) % 160)),
+    lengthMs: lengthMs,
+  );
   NowDto _state = NowDto(
     trackId: PlatformInt64Util.from(3),
     releaseId: PlatformInt64Util.from(1),
@@ -332,6 +339,9 @@ class FakeCore implements CoreBridge {
     subtitle: 'Joanne Hogg · Xenogears, disc 2 · ending',
     anchor: AnchorDto(item: BigInt.one, positionMs: 226000, rate: 1),
     lengthMs: BigInt.from(391000),
+    body: _body(BigInt.from(391000), 2),
+    dr: 11,
+    loudnessLufs: -15.2,
     path: const [
       StageDto(name: 'File', detail: 'FLAC 16/44.1', alters: false),
       StageDto(name: 'Decode', detail: 'no DSP', alters: false),
@@ -826,7 +836,7 @@ class FakeCore implements CoreBridge {
       final colon = token.startsWith('"') ? -1 : token.indexOf(':');
       final key = colon < 0 ? '' : token.substring(0, colon).toLowerCase();
       if (!const ['', 'by', 'sung', 'composer', 'composed', 'release', 'album', 'idiom', 'format',
-        'year', 'length', 'plays', 'dr', 'last', 'added', 'not', 'is', 'game', 'film', 'label', 'crate', 'work'].contains(key)) {
+        'year', 'length', 'plays', 'dr', 'lufs', 'last', 'added', 'not', 'is', 'game', 'film', 'label', 'crate', 'work'].contains(key)) {
         throw 'Unknown key `$key:`';
       }
       var value = colon < 0 ? token : token.substring(colon + 1);
@@ -837,6 +847,7 @@ class FakeCore implements CoreBridge {
         'format' => const ['flac', 'hires', 'hi-res', '24bit', 'dsd', 'chiptune', 'native', 'lossy'].contains(value.toLowerCase()),
         'is' || 'not' => const ['owned', 'own', 'lossless', 'streamable', 'stream', 'wanted', 'want', 'guessed', 'unmatched', 'dormant', 'lead'].contains(value.toLowerCase()),
         'year' || 'plays' || 'dr' || 'length' => RegExp(r'^[<>]?\d+(?:\.\d+)?(?:s|m|h|:\d+)?(?:\.\.\d+(?:\.\d+)?(?:s|m|h|:\d+)?)?$').hasMatch(value),
+        'lufs' => RegExp(r'^[<>]?-?\d+(?:\.\d+)?(?:\.\.-?\d+(?:\.\d+)?)?$').hasMatch(value),
         'last' || 'added' => RegExp(r'^\d+[dwmy]$').hasMatch(value),
         _ => true,
       };
@@ -886,7 +897,9 @@ class FakeCore implements CoreBridge {
       'idiom' => word == _idiom(row),
       'format' => word == 'lossy' ? row.format == 'AAC' : word == 'flac' ? row.format.startsWith('FLAC') : false,
       'year' => _number(row.year?.toDouble() ?? 0, value),
-      'plays' || 'dr' => _number(0, value),
+      'plays' => _number(0, value),
+      'dr' => row.dr != null && _number(row.dr!.toDouble(), value),
+      'lufs' => row.loudness != null && _number(row.loudness!, value),
       'length' => _number((row.lengthMs?.toDouble() ?? 0) / 1000, value),
       'is' => word == 'owned' || word == 'own' || (word == 'lossless' && row.format != 'AAC'),
       'not' => !(word == 'owned' || word == 'own' || (word == 'lossless' && row.format != 'AAC')),
@@ -912,6 +925,18 @@ class FakeCore implements CoreBridge {
 
   @override
   Future<HistogramDto> histogram(ColumnDto column, String query, double lo, double hi, int bins) async {
+    if (column == ColumnDto.dr || column == ColumnDto.loudness) {
+      final b = Uint32List(bins);
+      var matched = 0;
+      for (final index in _matching(query)) {
+        final row = _sampleRows[index % _sampleRows.length];
+        final value = column == ColumnDto.dr ? row.dr?.toDouble() : row.loudness;
+        if (value == null || value < lo || value > hi) continue;
+        b[((value - lo) / (hi - lo) * bins).floor().clamp(0, bins - 1)]++;
+        matched++;
+      }
+      return HistogramDto(lo: lo, hi: hi, bins: b, matched: BigInt.from(matched));
+    }
     // A plausible shape: most listening recent, a long tail back.
     final b = Uint32List.fromList(List.generate(bins, (i) => (40 + 400 * (i / bins) * (i / bins) + (i * 37 % 23) * 4).round()));
     return HistogramDto(lo: lo, hi: hi, bins: b, matched: BigInt.from(214));
@@ -962,7 +987,7 @@ class FakeCore implements CoreBridge {
   @override
   Future<void> setLookups(LookupsDto lookups) async {
     _settings = SettingsDto(light: _settings.light, outputDevice: _settings.outputDevice,
-      exclusive: _settings.exclusive, lookups: lookups);
+      exclusive: _settings.exclusive, lookups: lookups, level: _settings.level);
     _statuses.add(_status);
   }
 
@@ -1206,6 +1231,8 @@ class FakeCore implements CoreBridge {
       idiom: first.albumArtist == 'Yasunori Mitsuda' ? 'Score' : first.albumArtist == 'Bill Evans Trio' ? 'Session' : 'Album',
       tracks: rows.length, discs: rows.map((row) => row.disc).toSet().length,
       lengthMs: length, formats: sortedFormats, rows: rows,
+      dr: rows.where((row) => row.dr != null).map((row) => row.dr!).reduce((a, b) => a + b) ~/ rows.where((row) => row.dr != null).length,
+      loudnessLufs: rows.where((row) => row.loudness != null).map((row) => row.loudness!).reduce((a, b) => a + b) / rows.where((row) => row.loudness != null).length,
       rowWorks: [for (final row in rows) row.trackId.toInt() == 1 ? _workThread(ThreadKind.recordingOf) : null],
       games: id.toInt() == 1 ? [_gameThread(ThreadKind.soundtrackOf)] : [],
       plays: BigInt.from(id.toInt() == 1 ? 212 : 0), lastPlayedMs: id.toInt() == 1 ? PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch) : null,
@@ -1456,7 +1483,7 @@ class FakeCore implements CoreBridge {
   Future<void> playOn(String zone) async {
     final id = zone.replaceFirst('local:', '');
     if (!(await outputDevices()).any((device) => device.id == id)) throw 'no zone $zone';
-    _settings = SettingsDto(light: _settings.light, outputDevice: id, exclusive: _settings.exclusive, lookups: _settings.lookups);
+    _settings = SettingsDto(light: _settings.light, outputDevice: id, exclusive: _settings.exclusive, lookups: _settings.lookups, level: _settings.level);
   }
 
   @override
@@ -1497,6 +1524,8 @@ class FakeCore implements CoreBridge {
       year: release.$3,
       lengthMs: BigInt.from(180000 + index * 7919 % 240000),
       format: index % 7 == 0 ? 'AAC' : 'FLAC 16/44.1',
+      dr: index % 11 == 0 ? null : 7 + index % 12,
+      loudness: index % 11 == 0 ? null : -10.0 - index % 160 / 10,
       path: '/Music/${release.$1}/$number.flac',
     );
   }
@@ -1519,6 +1548,9 @@ class FakeCore implements CoreBridge {
       why: _why,
       anchor: AnchorDto(item: token, positionMs: 0, rate: 1),
       lengthMs: row.lengthMs,
+      body: row.dr == null ? null : _body(row.lengthMs!, row.trackId.toInt()),
+      dr: row.dr,
+      loudnessLufs: row.loudness,
       path: [
         StageDto(name: 'File', detail: row.format, alters: false),
         const StageDto(name: 'Decode', detail: 'no DSP', alters: false),
@@ -1569,6 +1601,9 @@ class FakeCore implements CoreBridge {
         why: _state.why,
         anchor: a,
         lengthMs: _state.lengthMs,
+        body: _state.body,
+        loudnessLufs: _state.loudnessLufs,
+        dr: _state.dr,
         path: _state.path,
         fidelity: _state.fidelity,
         error: _state.error,

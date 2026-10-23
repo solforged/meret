@@ -91,6 +91,13 @@ enum LibraryCmd {
     Suggest,
     /// Rescan every root.
     Rescan,
+    /// Queue local audio analysis; wait to print its completed counts.
+    Analyse {
+        #[arg(long)]
+        wait: bool,
+    },
+    /// Print a release and its analysed DR and loudness.
+    ShowRelease { id: i64 },
     /// Print the Front, as the app's first pane shows it.
     Front,
     /// Print every listen, newest first, including uncounted skips.
@@ -270,6 +277,8 @@ fn main() -> Result<()> {
                 LibraryCmd::Rm { id } => library::remove(&api, id),
                 LibraryCmd::Suggest => library::suggest(&api),
                 LibraryCmd::Rescan => library::rescan(&api, &rt),
+                LibraryCmd::Analyse { wait } => library::analyse(&api, &rt, wait),
+                LibraryCmd::ShowRelease { id } => library::show_release(&api, &rt, id),
                 LibraryCmd::Front => library::front(&api, &rt),
                 LibraryCmd::History { limit } => library::history(&api, limit),
                 LibraryCmd::Volume { scalar, step, fine, mute, .. } => {
@@ -366,22 +375,38 @@ fn decode_file(file: PathBuf) -> Result<()> {
     let spec = d.spec();
     let t = Instant::now();
     let mut samples = Vec::new();
-    while d.read(&mut samples)? > 0 {}
+    let mut floats = Vec::new();
+    let mut analyzer = meret_analysis::Analyzer::new(spec.channels as usize, spec.sample_rate);
+    let mut frames = 0u64;
+    loop {
+        samples.clear();
+        let read = d.read(&mut samples)?;
+        if read == 0 { break }
+        frames += read as u64;
+        floats.clear();
+        floats.extend(samples.iter().map(|&sample| sample as f32 / 2_147_483_648.0));
+        analyzer.push(&floats);
+    }
+    let analysis = analyzer.finish();
     let took = t.elapsed();
-    let frames = samples.len() / spec.channels as usize;
     let secs = frames as f64 / spec.sample_rate as f64;
     println!("{}", spec.describe());
-    println!("{frames} frames, {secs:.2} s, decoded in {took:.2?} ({:.0}× real time)", secs / took.as_secs_f64());
+    println!("{frames} frames, {secs:.2} s, decoded and analysed in {took:.2?} ({:.0}× real time)", secs / took.as_secs_f64());
     if let Some(total) = d.total_frames()
-        && total != frames as u64
+        && total != frames
     {
         println!("note: container said {total} frames");
     }
-    let f = meret_analysis::to_f32(&samples);
-    if let Some(dr) = meret_analysis::dynamic_range(&f, spec.channels as usize, spec.sample_rate) {
+    if let Some(dr) = analysis.dr {
         println!("DR{dr}");
     }
-    let body = meret_analysis::BodySummary::from_samples(&f, spec.channels as usize, spec.sample_rate, 48);
+    if let Some(loudness) = analysis.loudness_lufs {
+        println!("{loudness:.1} LUFS");
+    }
+    if let Some(peak) = analysis.peak_db {
+        println!("{peak:.1} dBTP");
+    }
+    let body = analysis.body;
     let bars = " ▁▂▃▄▅▆▇█";
     let line: String =
         body.loudness.iter().map(|&b| bars.chars().nth(b as usize * 8 / 255).unwrap_or(' ')).collect();
@@ -409,7 +434,7 @@ fn devices() -> Result<()> {
 fn play(file: PathBuf, backend: Arc<dyn OutputBackend>, config: EngineConfig) -> Result<()> {
     let decoder = decode::open(&file)?;
     let engine = Engine::spawn(backend, config);
-    engine.send(Control::Play(Load { item: 1, decoder, start_frame: 0, stages: vec![] }));
+    engine.send(Control::Play(Load { item: 1, decoder, start_frame: 0, gain_db: 0.0, stages: vec![] }));
     let t = Instant::now();
     let mut anchors = 0;
     while let Ok(e) = engine.events().recv_timeout(Duration::from_secs(30)) {

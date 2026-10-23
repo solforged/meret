@@ -71,12 +71,13 @@ fn columns_answer(term: &Term, c: &HotColumns, now_s: i64) -> Option<RoaringBitm
                 NumField::Plays => ColumnId::Plays,
                 NumField::Length => ColumnId::Length,
                 NumField::Dr => ColumnId::Dr,
+                NumField::Loudness => ColumnId::Loudness,
                 NumField::Bpm => return None,
             };
             let (lo, hi) = match *cmp {
                 Cmp::Eq(v) => (v, v),
-                Cmp::Lt(v) => (f64::MIN, v - f64::EPSILON),
-                Cmp::Gt(v) => (v + f64::EPSILON, f64::MAX),
+                Cmp::Lt(v) => (f64::MIN, v.next_down()),
+                Cmp::Gt(v) => (v.next_up(), f64::MAX),
                 Cmp::Range(a, b) => (a, b),
             };
             c.range(col, lo, hi)
@@ -130,5 +131,33 @@ mod tests {
         let p = plan(&q, &cols, 0);
         assert_eq!(p.rows.unwrap().iter().collect::<Vec<_>>(), vec![0]);
         assert_eq!(p.residual.len(), 2);
+    }
+
+    #[test]
+    fn loudness_filters_tenths_with_strict_negative_decimal_boundaries() {
+        let cols = HotColumns::from_rows([
+            Row { track: 1, loudness: Some(-20.5), ..Default::default() },
+            Row { track: 2, loudness: Some(-14.3), ..Default::default() },
+            Row { track: 3, loudness: Some(-14.2), ..Default::default() },
+            Row { track: 4, loudness: Some(-14.1), ..Default::default() },
+            Row { track: 5, loudness: Some(0.0), ..Default::default() },
+            Row { track: 6, ..Default::default() },
+        ]);
+        for (query, expected) in [
+            ("lufs:<-14.2", vec![0, 1]),
+            ("lufs:>-14.2", vec![3, 4]),
+            ("lufs:-14.2", vec![2]),
+            ("lufs:-20.5..-14.2", vec![0, 1, 2]),
+            ("lufs:-14.25..-14.15", vec![2]),
+            ("lufs:<-14.25", vec![0, 1]),
+            ("lufs:>-14.25", vec![2, 3, 4]),
+            ("lufs:0", vec![4]),
+        ] {
+            let meret_query::Input::Search(q) = meret_query::parse(query).unwrap() else { unreachable!() };
+            let p = plan(&q, &cols, 0);
+            assert_eq!(p.rows.unwrap().iter().collect::<Vec<_>>(), expected, "{query}");
+            assert!(p.residual.is_empty());
+        }
+        assert_eq!(cols.histogram(ColumnId::Loudness, &cols.all(), -21.0, 0.0, 3).bins, vec![4, 0, 1]);
     }
 }

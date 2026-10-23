@@ -38,6 +38,9 @@ pub struct ReleasePage {
     /// Counted plays of this release, and the newest one.
     pub plays: u64,
     pub last_played: Option<i64>,
+    /// The default edition's album analysis.
+    pub dr: Option<u8>,
+    pub loudness_lufs: Option<f64>,
 }
 
 /// One person in one role across a release's tracks.
@@ -294,7 +297,18 @@ impl Store {
         roles.sort_by_key(|c| ROLES.iter().position(|r| *r == c.role).unwrap_or(ROLES.len()));
         let cover = self.release_art(&[release])?.remove(&release);
         let (plays, last_played) = self.release_plays(release)?;
-        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, album_artists, cover, tracks, artists, roles, works, games, plays, last_played }))
+        let (dr, loudness_lufs) = self.read(|c| {
+            c.query_row(
+                "SELECT e.dr, (SELECT AVG(a.loudness_lufs) FROM medium m
+                    JOIN track t ON t.medium_id = m.id
+                    JOIN analysis a ON a.recording_id = t.recording_id AND a.version = ?2
+                    WHERE m.edition_id = e.id)
+                 FROM edition e WHERE e.release_id = ?1 ORDER BY e.is_default DESC, e.id LIMIT 1",
+                (release.0, crate::ANALYSIS_VERSION),
+                |r| Ok((r.get::<_, Option<u8>>(0)?, r.get::<_, Option<f64>>(1)?)),
+            ).optional().map(|row| row.unwrap_or_default())
+        })?;
+        Ok(Some(ReleasePage { release, title, year, idiom, album_artist, album_artists, cover, tracks, artists, roles, works, games, plays, last_played, dr, loudness_lufs }))
     }
 
     /// None when the person doesn't exist.

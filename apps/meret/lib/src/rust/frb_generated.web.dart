@@ -40,16 +40,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnchorDto dco_decode_anchor_dto(dynamic raw);
 
   @protected
+  BodyDto dco_decode_body_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
   AnchorDto dco_decode_box_autoadd_anchor_dto(dynamic raw);
 
   @protected
+  BodyDto dco_decode_box_autoadd_body_dto(dynamic raw);
+
+  @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
 
   @protected
   double dco_decode_box_autoadd_f_32(dynamic raw);
+
+  @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
   FidelityDto dco_decode_box_autoadd_fidelity_dto(dynamic raw);
@@ -95,6 +104,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw);
 
   @protected
   ViewDto dco_decode_box_autoadd_view_dto(dynamic raw);
@@ -170,6 +182,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   JobDto dco_decode_job_dto(dynamic raw);
+
+  @protected
+  LevelDto dco_decode_level_dto(dynamic raw);
 
   @protected
   LightDto dco_decode_light_dto(dynamic raw);
@@ -286,10 +301,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnchorDto? dco_decode_opt_box_autoadd_anchor_dto(dynamic raw);
 
   @protected
+  BodyDto? dco_decode_opt_box_autoadd_body_dto(dynamic raw);
+
+  @protected
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
 
   @protected
   double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
 
   @protected
   FidelityDto? dco_decode_opt_box_autoadd_fidelity_dto(dynamic raw);
@@ -320,6 +341,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw);
 
   @protected
   OutputDeviceDto dco_decode_output_device_dto(dynamic raw);
@@ -452,16 +476,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnchorDto sse_decode_anchor_dto(SseDeserializer deserializer);
 
   @protected
+  BodyDto sse_decode_body_dto(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
   AnchorDto sse_decode_box_autoadd_anchor_dto(SseDeserializer deserializer);
 
   @protected
+  BodyDto sse_decode_box_autoadd_body_dto(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
   FidelityDto sse_decode_box_autoadd_fidelity_dto(SseDeserializer deserializer);
@@ -513,6 +546,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer);
 
   @protected
   ViewDto sse_decode_box_autoadd_view_dto(SseDeserializer deserializer);
@@ -590,6 +626,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   JobDto sse_decode_job_dto(SseDeserializer deserializer);
+
+  @protected
+  LevelDto sse_decode_level_dto(SseDeserializer deserializer);
 
   @protected
   LightDto sse_decode_light_dto(SseDeserializer deserializer);
@@ -726,10 +765,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  BodyDto? sse_decode_opt_box_autoadd_body_dto(SseDeserializer deserializer);
+
+  @protected
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
   FidelityDto? sse_decode_opt_box_autoadd_fidelity_dto(
@@ -766,6 +811,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer);
 
   @protected
   OutputDeviceDto sse_decode_output_device_dto(SseDeserializer deserializer);
@@ -903,6 +951,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_anchor_dto(AnchorDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_body_dto(BodyDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -912,10 +963,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_body_dto(BodyDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_fidelity_dto(
@@ -994,6 +1051,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_view_dto(ViewDto self, SseSerializer serializer);
@@ -1078,6 +1138,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_job_dto(JobDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_level_dto(LevelDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_light_dto(LightDto self, SseSerializer serializer);
@@ -1260,10 +1323,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_body_dto(
+    BodyDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_fidelity_dto(
@@ -1315,6 +1387,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_output_device_dto(

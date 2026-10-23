@@ -186,13 +186,14 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     }
   }
 
-  Future<void> _save({LightLevelDto? light, String? outputDevice, bool changeDevice = false, bool? exclusive}) async {
+  Future<void> _save({LightLevelDto? light, String? outputDevice, bool changeDevice = false, bool? exclusive, LevelDto? level}) async {
     final current = _settings!;
     final next = SettingsDto(
       light: light ?? current.light,
       outputDevice: changeDevice ? outputDevice : current.outputDevice,
       exclusive: exclusive ?? current.exclusive,
       lookups: current.lookups,
+      level: level ?? current.level,
     );
     setState(() { _saving = true; _error = null; });
     try {
@@ -464,6 +465,19 @@ class _SettingsWindowState extends State<_SettingsWindow> {
         _settingRow('Exclusive mode',
           Switch(value: settings.exclusive && selected?.canBeExclusive != false, onChanged: _saving || selected?.canBeExclusive == false ? null : (value) => _save(exclusive: value)),
           note: selected?.canBeExclusive == false ? 'Not offered by this output' : null),
+        _settingRow('Level loudness', SizedBox(width: 160, child: DropdownButton<LevelDto>(
+          key: const ValueKey('settings-level'),
+          value: settings.level,
+          isExpanded: true,
+          dropdownColor: Tok.panel,
+          style: Tok.body,
+          items: const [
+            DropdownMenuItem(value: LevelDto.off, child: Text('Off')),
+            DropdownMenuItem(value: LevelDto.track, child: Text('Track')),
+            DropdownMenuItem(value: LevelDto.album, child: Text('Album')),
+          ],
+          onChanged: _saving ? null : (value) => _save(level: value),
+        ))),
       ],
       const SizedBox(height: 12),
       _settingRow('Device volume', const Text('On the device', style: Tok.monoSmall)),

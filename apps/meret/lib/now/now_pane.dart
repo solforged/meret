@@ -13,6 +13,7 @@ import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'zones.dart';
 import 'picks.dart';
+import 'signal_path.dart';
 
 /// Now: what's playing, the transport, the signal path and the queue.
 /// Pinned at the right from 1400 px; [NowBar] below that.
@@ -46,6 +47,7 @@ class NowPane extends StatelessWidget {
         const SizedBox(height: 8),
         Text(n?.title.isNotEmpty == true ? n!.title : 'Nothing playing', style: Tok.title.copyWith(fontSize: 17), maxLines: 2, overflow: TextOverflow.ellipsis),
         Text(n?.subtitle ?? '', style: Tok.body.copyWith(color: Tok.muted, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (n != null) NowFacts(now: n),
         if (n?.why case final why?) Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(why, key: const ValueKey('now-why'), style: Tok.label.copyWith(color: Tok.gold), maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -101,8 +103,10 @@ class NowDial extends StatelessWidget {
       CustomPaint(
         size: Size.infinite,
         painter: BodyPainter(
-          clock: clock, lengthMs: now?.lengthMs?.toDouble() ?? 1,
-          loudness: Uint8List(0), bands: const [], light: Light.of(context).accent,
+          clock: clock, lengthMs: (now?.body?.lengthMs ?? now?.lengthMs)?.toDouble() ?? 1,
+          loudness: now?.body?.loudness ?? Uint8List(0),
+          bands: now?.body == null ? const [] : [now!.body!.low, now!.body!.mid, now!.body!.high],
+          light: Light.of(context).accent,
         ),
       ),
       if (now?.cover case final cover?)
@@ -117,14 +121,21 @@ class NowFidelity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-    switch (now.fidelity) {
-      FidelityDto.bitPerfect => '● Bit-perfect',
-      FidelityDto.altered => '◐ Altered',
-      FidelityDto.lossy => '○ Lossy source',
-      null => '',
-    },
+    signalVerdict(now) ?? '',
     style: Tok.monoSmall.copyWith(color: now.fidelity == FidelityDto.bitPerfect ? Tok.ok : Tok.warn),
   );
+}
+
+class NowFacts extends StatelessWidget {
+  const NowFacts({super.key, required this.now});
+  final NowDto now;
+
+  @override
+  Widget build(BuildContext context) => Text([
+    if (now.path.firstOrNull?.name == 'File') now.path.first.detail,
+    if (now.dr != null) 'DR ${now.dr}',
+    if (now.loudnessLufs != null) '${now.loudnessLufs!.toStringAsFixed(1)} LUFS',
+  ].join(' · '), style: Tok.monoSmall.copyWith(color: Tok.muted));
 }
 
 /// Recent listening belongs to Now in both its stage and compact forms.

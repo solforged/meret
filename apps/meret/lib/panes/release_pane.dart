@@ -182,6 +182,8 @@ class _ReleasePaneState extends State<ReleasePane> {
       '${release.tracks} ${release.tracks == 1 ? 'track' : 'tracks'}',
       '${release.discs} ${release.discs == 1 ? 'disc' : 'discs'}',
       _time(release.lengthMs),
+      if (release.dr != null) 'DR ${release.dr}',
+      if (release.loudnessLufs != null) '${release.loudnessLufs!.toStringAsFixed(1)} LUFS',
       playsFact(release.plays, release.lastPlayedMs),
     ];
     return Focus(

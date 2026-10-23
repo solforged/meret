@@ -51,12 +51,41 @@ impl From<LookupsDto> for meret_core::Lookups {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LevelDto {
+    #[default]
+    Off,
+    Track,
+    Album,
+}
+
+impl From<meret_core::Level> for LevelDto {
+    fn from(level: meret_core::Level) -> Self {
+        match level {
+            meret_core::Level::Off => Self::Off,
+            meret_core::Level::Track => Self::Track,
+            meret_core::Level::Album => Self::Album,
+        }
+    }
+}
+
+impl From<LevelDto> for meret_core::Level {
+    fn from(level: LevelDto) -> Self {
+        match level {
+            LevelDto::Off => Self::Off,
+            LevelDto::Track => Self::Track,
+            LevelDto::Album => Self::Album,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SettingsDto {
     pub light: LightLevelDto,
     pub output_device: Option<String>,
     pub exclusive: bool,
     pub lookups: LookupsDto,
+    pub level: LevelDto,
 }
 
 impl From<meret_core::Settings> for SettingsDto {
@@ -66,7 +95,7 @@ impl From<meret_core::Settings> for SettingsDto {
             meret_core::LightLevel::Accent => LightLevelDto::Accent,
             meret_core::LightLevel::AccentAndWash => LightLevelDto::AccentAndWash,
         };
-        Self { light, output_device: s.output_device, exclusive: s.exclusive, lookups: s.lookups.into() }
+        Self { light, output_device: s.output_device, exclusive: s.exclusive, lookups: s.lookups.into(), level: s.level.into() }
     }
 }
 
@@ -77,7 +106,7 @@ impl From<SettingsDto> for meret_core::Settings {
             LightLevelDto::Accent => meret_core::LightLevel::Accent,
             LightLevelDto::AccentAndWash => meret_core::LightLevel::AccentAndWash,
         };
-        Self { light, output_device: s.output_device, exclusive: s.exclusive, lookups: s.lookups.into() }
+        Self { light, output_device: s.output_device, exclusive: s.exclusive, lookups: s.lookups.into(), level: s.level.into() }
     }
 }
 
@@ -203,6 +232,7 @@ pub enum ColumnDto {
     LastPlayed,
     Added,
     Dr,
+    Loudness,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -313,6 +343,15 @@ pub struct LightDto {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct BodyDto {
+    pub loudness: Vec<u8>,
+    pub low: Vec<u8>,
+    pub mid: Vec<u8>,
+    pub high: Vec<u8>,
+    pub length_ms: u64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct NowDto {
     pub track_id: Option<i64>,
     pub release_id: Option<i64>,
@@ -324,6 +363,9 @@ pub struct NowDto {
     pub why: Option<String>,
     pub anchor: Option<AnchorDto>,
     pub length_ms: Option<u64>,
+    pub body: Option<BodyDto>,
+    pub loudness_lufs: Option<f64>,
+    pub dr: Option<u8>,
     pub path: Vec<StageDto>,
     pub fidelity: Option<FidelityDto>,
     pub error: Option<String>,
@@ -343,6 +385,15 @@ impl NowDto {
             // Re-based to "now", so the receiver can treat it as fresh.
             anchor: n.anchor.map(|a| AnchorDto { item: a.item, position_ms: a.seconds_at(now) * 1000.0, rate: a.rate }),
             length_ms: n.length_ms,
+            body: n.body.as_ref().map(|body| BodyDto {
+                loudness: body.loudness.clone(),
+                low: body.low.clone(),
+                mid: body.mid.clone(),
+                high: body.high.clone(),
+                length_ms: body.length_ms,
+            }),
+            loudness_lufs: n.loudness_lufs,
+            dr: n.dr,
             path: n
                 .path
                 .iter()
@@ -417,6 +468,8 @@ pub struct TrackRowDto {
     pub number: u32,
     pub year: Option<u16>,
     pub length_ms: Option<u64>,
+    pub dr: Option<u8>,
+    pub loudness: Option<f64>,
     /// "FLAC 16/44.1", "AAC".
     pub format: String,
     pub path: Option<String>,
@@ -445,6 +498,8 @@ impl From<TrackRow> for TrackRowDto {
             number: r.number,
             year: r.year,
             length_ms: r.length_ms,
+            dr: r.dr,
+            loudness: r.loudness,
             format,
             path: r.path,
         }
@@ -878,6 +933,8 @@ pub struct ReleaseDto {
     pub tracks: u32,
     pub discs: u32,
     pub length_ms: u64,
+    pub dr: Option<u8>,
+    pub loudness_lufs: Option<f64>,
     /// Best-copy formats, then other copies: "FLAC 16/44.1", "also MP3".
     pub formats: Vec<String>,
     /// The tracklist; row i plays with `play_release(id, i)`.
@@ -965,6 +1022,8 @@ impl ReleaseDto {
             tracks: rows.len() as u32,
             discs: discs.len() as u32,
             length_ms: rows.iter().filter_map(|r| r.length_ms).sum(),
+            dr: p.dr,
+            loudness_lufs: p.loudness_lufs,
             formats: formats.into_iter().map(|(f, _)| f)
                 .chain((!other_formats.is_empty()).then(|| format!("also {}", other_formats.join(", ")))).collect(),
             rows,
@@ -1562,9 +1621,12 @@ mod cover_tests {
             games: vec![],
             plays: 0,
             last_played: None,
+            dr: Some(12),
+            loudness_lufs: Some(-20.5),
         };
         let release = ReleaseDto::from_page(page, Path::new("/tmp/meret/art"));
         assert_eq!(release.cover.as_deref(), Some("/tmp/meret/art/abcd-256.jpg"));
+        assert_eq!((release.dr, release.loudness_lufs), (Some(12), Some(-20.5)));
     }
 
     #[test]
@@ -1575,16 +1637,19 @@ mod cover_tests {
             album_artist: None, album_artist_id: None, disc: 1, number: 1, year: None, length_ms: Some(10000),
             codec: Some("FLAC".into()), sample_rate: Some(44100), bits: Some(16),
             other_formats: vec!["MP3".into()], path: Some("/music/1.flac".into()),
+            dr: Some(10), loudness: Some(-19.5),
         };
         let page = ReleasePage {
             release: ReleaseId(9), title: "Tyranny".into(), year: None, idiom: None,
             album_artist: None, album_artists: vec![], cover: None, tracks: vec![track], artists: vec![], roles: vec![], works: vec![], games: vec![],
             plays: 0, last_played: None,
+            dr: Some(10), loudness_lufs: Some(-19.5),
         };
         let dto = ReleaseDto::from_page(page, Path::new("/tmp/art"));
         assert_eq!(dto.formats, ["FLAC 16/44.1", "also MP3"]);
         assert_eq!((dto.tracks, dto.rows.len(), dto.length_ms), (1, 1, 10000));
         assert_eq!(dto.rows[0].format, "FLAC 16/44.1", "table rows describe the copy playback chooses");
+        assert_eq!((dto.rows[0].dr, dto.rows[0].loudness), (Some(10), Some(-19.5)));
     }
 }
 

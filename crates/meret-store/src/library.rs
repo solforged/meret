@@ -30,6 +30,9 @@ pub struct TrackRow {
     pub number: u32,
     pub year: Option<u16>,
     pub length_ms: Option<u64>,
+    pub dr: Option<u8>,
+    /// Integrated loudness in LUFS.
+    pub loudness: Option<f64>,
     /// "FLAC", "ALAC", "AAC", "MP3"…
     pub codec: Option<String>,
     pub sample_rate: Option<u32>,
@@ -73,6 +76,13 @@ pub(crate) const PREFERRED_SOURCE: &str = concat!(
       ORDER BY ", source_quality!()
 );
 
+/// The same quality ranking across every file source of a recording.
+pub(crate) const PREFERRED_RECORDING_SOURCE: &str = concat!(
+    "(SELECT s2.id FROM source s2 JOIN file f2 ON f2.id = s2.file_id JOIN root r2 ON r2.id = f2.root_id
+      WHERE s2.recording_id = ?1 AND s2.kind = 'file' AND f2.state = 'present' AND r2.state = 'online'
+      ORDER BY ", source_quality!()
+);
+
 /// Keep offline roots in the library, but prefer any online copy first.
 const VISIBLE_SOURCE: &str = concat!(
     "(SELECT s2.id FROM source s2 JOIN file f2 ON f2.id = s2.file_id JOIN root r2 ON r2.id = f2.root_id
@@ -89,11 +99,11 @@ impl Store {
             let sql = format!(
                 "SELECT t.id, COALESCE(rl.year, 0), COALESCE(t.length_ms, r.length_ms, 0),
                         COALESCE(l.plays, 0), COALESCE(l.last, 0), COALESCE(f.added_at, 0),
-                        COALESCE(e.dr, 0), COALESCE(rl.idiom, 0),
+                        COALESCE(an.dr, e.dr, 0), COALESCE(rl.idiom, 0),
                         s.codec, s.sample_rate, s.bits, s.lossless, {ALBUM_ARTIST} AS album_artist,
                         rl.id, COALESCE(a.id, 0), COALESCE(aa.id, 0),
                         COALESCE(t.title, r.title), COALESCE(r.artist_credit, a.sort_name, a.name, rl.album_artist_credit, aa.sort_name, aa.name, ''), rl.title,
-                        ro.state
+                        ro.state, an.loudness_lufs
                  FROM track t
                  JOIN recording r ON r.id = t.recording_id
                  JOIN medium m ON m.id = t.medium_id
@@ -102,6 +112,7 @@ impl Store {
                  JOIN source s ON s.id = {VISIBLE_SOURCE}
                  JOIN file f ON f.id = s.file_id
                  JOIN root ro ON ro.id = f.root_id
+                 LEFT JOIN analysis an ON an.recording_id = r.id AND an.version = {version}
                  LEFT JOIN agent a ON a.id = (SELECT c.agent_id FROM credit c
                      WHERE c.subject_kind = 2 AND c.subject_id = r.id AND c.role = 'artist' ORDER BY c.sort LIMIT 1)
                  LEFT JOIN agent aa ON aa.id = (SELECT c.agent_id FROM credit c
@@ -111,7 +122,8 @@ impl Store {
                             JOIN track t ON t.recording_id = r.id
                             WHERE {COUNTED} GROUP BY t.id) l ON l.track_id = t.id
                  ORDER BY album_artist IS NULL, album_artist COLLATE NOCASE, rl.title COLLATE NOCASE, rl.id,
-                          m.position, t.position, f.rel_path"
+                          m.position, t.position, f.rel_path",
+                version = crate::ANALYSIS_VERSION,
             );
             let mut stmt = c.prepare(&sql)?;
             let rows = stmt.query_map([], |r| {
@@ -130,6 +142,7 @@ impl Store {
                     last_played: r.get::<_, i64>(4)? / 1000,
                     added: r.get::<_, i64>(5)? / 1000,
                     dr: r.get(6)?,
+                    loudness: r.get(20)?,
                     idiom: r.get(7)?,
                     format: format_code::classify(codec.as_deref(), rate, bits, lossless),
                     availability: if r.get::<_, String>(19)? != "online" { 3 } else if lossless { 0 } else { 1 },
@@ -406,12 +419,14 @@ fn read_rows(c: &Connection, ids: &[TrackId], out: &mut HashMap<TrackId, TrackRo
         "SELECT t.id, r.id, rl.id, rl.idiom, COALESCE(t.title, r.title),
                 COALESCE(r.artist_credit, a.name), rl.title, COALESCE(rl.album_artist_credit, aa.name),
                 m.position, t.position, rl.year, COALESCE(t.length_ms, r.length_ms),
-                s.codec, s.sample_rate, s.bits, ro.path, f.rel_path, a.id, aa.id
+                s.codec, s.sample_rate, s.bits, ro.path, f.rel_path, a.id, aa.id,
+                COALESCE(an.dr, e.dr), an.loudness_lufs
          FROM track t
          JOIN recording r ON r.id = t.recording_id
          JOIN medium m ON m.id = t.medium_id
          JOIN edition e ON e.id = m.edition_id
          JOIN release rl ON rl.id = e.release_id
+         LEFT JOIN analysis an ON an.recording_id = r.id AND an.version = {version}
          LEFT JOIN agent a ON a.id = (SELECT c.agent_id FROM credit c
              WHERE c.subject_kind = 2 AND c.subject_id = r.id AND c.role = 'artist' ORDER BY c.sort LIMIT 1)
          LEFT JOIN agent aa ON aa.id = (SELECT c.agent_id FROM credit c
@@ -419,7 +434,8 @@ fn read_rows(c: &Connection, ids: &[TrackId], out: &mut HashMap<TrackId, TrackRo
          LEFT JOIN source s ON s.id = {PREFERRED_SOURCE}
          LEFT JOIN file f ON f.id = s.file_id
          LEFT JOIN root ro ON ro.id = f.root_id
-         WHERE t.id IN ({marks})"
+         WHERE t.id IN ({marks})",
+        version = crate::ANALYSIS_VERSION,
     );
     let mut stmt = c.prepare_cached(&sql)?;
     let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter().map(|t| t.0)), |r| {
@@ -441,6 +457,8 @@ fn read_rows(c: &Connection, ids: &[TrackId], out: &mut HashMap<TrackId, TrackRo
             number: r.get(9)?,
             year: r.get(10)?,
             length_ms: r.get::<_, Option<i64>>(11)?.map(|ms| ms as u64),
+            dr: r.get(19)?,
+            loudness: r.get(20)?,
             codec: r.get(12)?,
             sample_rate: r.get(13)?,
             bits: r.get(14)?,
@@ -557,10 +575,14 @@ mod tests {
         }
         assert_eq!(store.track_rows(&[meret_model::TrackId(1)]).unwrap()[0].path.as_deref(), Some("/music/8"),
             "equal-quality copies choose the lowest source id");
+        assert_eq!(store.analysis_file(meret_model::RecordingId(1)).unwrap(),
+            Some(std::path::PathBuf::from("/music/8")));
         store.writer.write(|tx| tx.execute("UPDATE file SET state='missing' WHERE id=10", [])).unwrap();
         for best in (1..=8).rev() {
             let rows = store.track_rows(&[meret_model::TrackId(1)]).unwrap();
             assert_eq!(rows[0].path.as_deref(), Some(format!("/music/{best}").as_str()));
+            assert_eq!(store.analysis_file(meret_model::RecordingId(1)).unwrap(),
+                Some(std::path::PathBuf::from(format!("/music/{best}"))));
             assert_eq!(store.load_columns().unwrap().len(), 1, "copies never multiply rows");
             assert_eq!(store.library_facts(1).unwrap().missing, 0, "one present copy is enough");
             if best == 5 {

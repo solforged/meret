@@ -1018,7 +1018,7 @@ mod tests {
         let engine = Engine::spawn(Arc::new(CoreAudioBackend),
             EngineConfig { device: Some(aggregate_uid.clone()), exclusive: false, ..Default::default() });
         let spec = StreamSpec { sample_rate: rate, channels: 2, bits: 16, codec: Codec::Flac };
-        engine.send(Control::Play(Load { item: 1, decoder: Box::new(Tone::new(spec, 60.0, 0.0)), start_frame: 0, stages: vec![] }));
+        engine.send(Control::Play(Load { item: 1, decoder: Box::new(Tone::new(spec, 60.0, 0.0)), start_frame: 0, gain_db: 0.0, stages: vec![] }));
         let next = |what: &str, wanted: &dyn Fn(&EngineEvent) -> bool| -> EngineEvent {
             let deadline = Instant::now() + Duration::from_secs(5);
             loop {

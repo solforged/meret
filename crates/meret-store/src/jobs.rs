@@ -87,10 +87,11 @@ impl Store {
         })
     }
 
-    /// Recovers requests interrupted by a crash or shutdown.
-    pub fn requeue_running(&self) -> Result<usize> {
-        self.writer.write(|tx| {
-            tx.execute("UPDATE job SET state = 'queued', updated_at = ?1 WHERE state = 'running'", [now_ms()])
+    /// Recovers this runner's jobs interrupted by a crash or shutdown.
+    pub fn requeue_running(&self, kind: &str) -> Result<usize> {
+        let kind = kind.to_owned();
+        self.writer.write(move |tx| {
+            tx.execute("UPDATE job SET state = 'queued', updated_at = ?2 WHERE kind = ?1 AND state = 'running'", (&kind, now_ms()))
         })
     }
 
@@ -147,10 +148,14 @@ mod tests {
         assert_eq!(store.job_counts("musicbrainz").unwrap(), JobCounts {
             queued: 1, running: 1, done: 1, failed: 0, next_run_after: Some(200),
         });
+        let foreign = store.next_job("other", 100).unwrap().unwrap();
         drop(store);
         let store = Store::open(&path).unwrap();
-        assert_eq!(store.requeue_running().unwrap(), 1);
-        assert_eq!(store.requeue_running().unwrap(), 0);
+        assert_eq!(store.requeue_running("musicbrainz").unwrap(), 1);
+        assert_eq!(store.requeue_running("musicbrainz").unwrap(), 0);
+        assert_eq!(store.job_counts("other").unwrap().running, 1);
+        assert!(store.next_job("other", 1000).unwrap().is_none());
+        store.finish_job(foreign.id, 201).unwrap();
         let retry = store.next_job("musicbrainz", 200).unwrap().unwrap();
         assert_eq!((retry.id, retry.attempts), (raised.id, 1));
         store.fail_job(retry.id, "not found", None, 200).unwrap();

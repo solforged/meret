@@ -17,17 +17,30 @@ pub enum Lookups {
     Off,
 }
 
+/// Loudness levelling for local playback.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Level {
+    #[default]
+    Off,
+    Track,
+    Album,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
     pub light: LightLevel,
     pub output_device: Option<String>,
     pub exclusive: bool,
+    pub level: Level,
     pub lookups: Lookups,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { light: LightLevel::Accent, output_device: None, exclusive: true, lookups: Lookups::Unasked }
+        Self {
+            light: LightLevel::Accent, output_device: None, exclusive: true,
+            level: Level::Off, lookups: Lookups::Unasked,
+        }
     }
 }
 
@@ -48,6 +61,11 @@ impl Store {
                     },
                     "output_device" => settings.output_device = (!value.is_empty()).then_some(value),
                     "exclusive" => settings.exclusive = value != "false",
+                    "level" => settings.level = match value.as_str() {
+                        "track" => Level::Track,
+                        "album" => Level::Album,
+                        _ => Level::Off,
+                    },
                     "lookups" => settings.lookups = match value.as_str() {
                         "allowed" => Lookups::Allowed,
                         "off" => Lookups::Off,
@@ -72,6 +90,11 @@ impl Store {
                 ("light", light),
                 ("output_device", settings.output_device.as_deref().unwrap_or("")),
                 ("exclusive", if settings.exclusive { "true" } else { "false" }),
+                ("level", match settings.level {
+                    Level::Off => "off",
+                    Level::Track => "track",
+                    Level::Album => "album",
+                }),
                 ("lookups", match settings.lookups {
                     Lookups::Unasked => "unasked",
                     Lookups::Allowed => "allowed",
@@ -121,8 +144,14 @@ mod tests {
         let path = dir.join("library.db");
         let store = Store::open(&path).unwrap();
         assert_eq!(store.settings().unwrap(), None);
-        assert_eq!(Settings::default(), Settings { light: LightLevel::Accent, output_device: None, exclusive: true, lookups: Lookups::Unasked });
-        let saved = Settings { light: LightLevel::AccentAndWash, output_device: Some("test-device".into()), exclusive: false, lookups: Lookups::Allowed };
+        assert_eq!(Settings::default(), Settings {
+            light: LightLevel::Accent, output_device: None, exclusive: true,
+            level: Level::Off, lookups: Lookups::Unasked,
+        });
+        let saved = Settings {
+            light: LightLevel::AccentAndWash, output_device: Some("test-device".into()),
+            exclusive: false, level: Level::Album, lookups: Lookups::Allowed,
+        };
         store.set_settings(saved.clone()).unwrap();
         assert_eq!(store.settings().unwrap(), Some(saved.clone()));
         drop(store);
@@ -132,6 +161,13 @@ mod tests {
         assert_eq!(store.settings().unwrap(), Some(Settings::default()));
         store.set_settings(Settings { light: LightLevel::Off, ..Settings::default() }).unwrap();
         assert_eq!(store.settings().unwrap().unwrap().light, LightLevel::Off);
+        store.set_settings(Settings { level: Level::Track, ..Settings::default() }).unwrap();
+        assert_eq!(store.settings().unwrap().unwrap().level, Level::Track);
+        store.writer.write(|tx| {
+            tx.execute("DELETE FROM setting WHERE key = 'level'", [])?;
+            Ok(())
+        }).unwrap();
+        assert_eq!(store.settings().unwrap().unwrap().level, Level::Off);
         drop(store);
         std::fs::remove_dir_all(dir).unwrap();
     }

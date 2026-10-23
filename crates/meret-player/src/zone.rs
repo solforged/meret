@@ -45,8 +45,8 @@ pub struct ZoneInfo {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ZoneCommand {
-    Play { item: u64, uri: String, start_ms: u64 },
-    SetNext { item: u64, uri: String },
+    Play { item: u64, uri: String, start_ms: u64, #[serde(default)] gain_db: f64 },
+    SetNext { item: u64, uri: String, #[serde(default)] gain_db: f64 },
     Pause,
     Resume,
     Seek { ms: u64 },

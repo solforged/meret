@@ -13,7 +13,7 @@ use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
 
 use crate::clock::{Anchor, SharedClock, now_ns};
 use crate::decode::Decoder;
-use crate::dsp::Stage;
+use crate::dsp::{Gain, Stage};
 use crate::output::{DeviceVolume, Opened, OutputBackend, OutputError, OutputRequest, OutputStream};
 use crate::ring::{RingWriter, ring};
 use crate::Sample;
@@ -25,6 +25,7 @@ pub struct Load {
     pub item: ItemToken,
     pub decoder: Box<dyn Decoder>,
     pub start_frame: u64,
+    pub gain_db: f64,
     pub stages: Vec<Box<dyn Stage>>,
 }
 
@@ -143,6 +144,7 @@ struct Active {
     item: ItemToken,
     decoder: Box<dyn Decoder>,
     stages: Vec<Box<dyn Stage>>,
+    gain: Gain,
     spec: StreamSpec,
 }
 
@@ -402,13 +404,13 @@ impl Worker {
                 // the switch, including a gapless boundary already in the ring.
                 for boundary in &mut self.boundaries {
                     if let Some(stage) = boundary.path.stages.last_mut() {
-                        let path = signal_path(spec, &[], &actual);
+                        let path = signal_path(spec, &Gain::new(0.0), &[], &actual);
                         *stage = path.stages.last().expect("output stage").clone();
                     }
                 }
                 if let Some(boundary) = &mut self.audible {
                     if let Some(stage) = boundary.path.stages.last_mut() {
-                        let path = signal_path(spec, &[], &actual);
+                        let path = signal_path(spec, &Gain::new(0.0), &[], &actual);
                         *stage = path.stages.last().expect("output stage").clone();
                     }
                     let _ = self.events.send(EngineEvent::OutputChanged { path: boundary.path.clone() });
@@ -450,14 +452,15 @@ impl Worker {
             return;
         }
         let opened = self.out.as_ref().expect("opened above").stream.opened().clone();
-        let path = signal_path(spec, &load.stages, &opened);
+        let gain = Gain::new(load.gain_db);
+        let path = signal_path(spec, &gain, &load.stages, &opened);
         self.boundaries.push_back(Boundary {
             stream_frame: self.written,
             item: load.item,
             item_frame: load.start_frame,
             path,
         });
-        self.current = Some(Active { item: load.item, decoder: load.decoder, stages: load.stages, spec });
+        self.current = Some(Active { item: load.item, decoder: load.decoder, stages: load.stages, gain, spec });
         self.draining = false;
     }
 
@@ -554,6 +557,7 @@ impl Worker {
                     for s in &mut cur.stages {
                         s.process(&mut self.pending, ch);
                     }
+                    cur.gain.process(&mut self.pending, ch);
                 }
                 Err(e) => {
                     let item = cur.item;
@@ -654,8 +658,8 @@ impl Worker {
     }
 }
 
-/// File → Decode → Out, each saying whether it changes the samples.
-pub fn signal_path(src: StreamSpec, stages: &[Box<dyn Stage>], out: &Opened) -> SignalPath {
+/// File → Decode/DSP → Level → Out, each saying whether it changes samples.
+pub fn signal_path(src: StreamSpec, gain: &Gain, stages: &[Box<dyn Stage>], out: &Opened) -> SignalPath {
     let mut path = SignalPath::default();
     path.stages.push(PathStage {
         name: "File".into(),
@@ -663,11 +667,12 @@ pub fn signal_path(src: StreamSpec, stages: &[Box<dyn Stage>], out: &Opened) -> 
         alters: false,
         lossy: !src.codec.is_lossless(),
     });
-    let dsp: Vec<PathStage> = stages.iter().map(|s| s.describe()).filter(|s| s.alters).collect();
-    if dsp.is_empty() {
+    path.stages.extend(stages.iter().map(|s| s.describe()).filter(|s| s.alters));
+    if !gain.is_unity() {
+        path.stages.push(gain.describe());
+    }
+    if path.stages.len() == 1 {
         path.stages.push(PathStage { name: "Decode".into(), detail: "no DSP".into(), alters: false, lossy: false });
-    } else {
-        path.stages.extend(dsp);
     }
     let resampled = out.sample_rate != src.sample_rate;
     let truncated = out.bits < src.bits;
@@ -696,7 +701,7 @@ mod tests {
     }
 
     fn load(item: u64, spec: StreamSpec, secs: f64) -> Load {
-        Load { item, decoder: Box::new(Tone::new(spec, secs, 440.0)), start_frame: 0, stages: vec![] }
+        Load { item, decoder: Box::new(Tone::new(spec, secs, 440.0)), start_frame: 0, gain_db: 0.0, stages: vec![] }
     }
 
     fn collect_until_idle(engine: &Engine) -> Vec<EngineEvent> {
@@ -796,6 +801,74 @@ mod tests {
         let (events_tx, events) = unbounded();
         let worker = Worker::new(Arc::new(RecordingBackend(actions_tx)), EngineConfig::default(), events_tx);
         (worker, actions, events)
+    }
+
+    #[test]
+    fn gapless_items_scale_before_the_ring_and_change_fidelity_when_audible() {
+        let (mut worker, actions, events) = recording_worker();
+        let mut first = load(1, cd(), 0.01);
+        first.gain_db = 20.0 * 0.5f64.log10();
+        worker.handle(Control::Play(first));
+        let first_frames = worker.written;
+        worker.publish();
+        actions.try_iter().for_each(drop);
+
+        let mut second = load(2, cd(), 0.01);
+        second.gain_db = 20.0 * 2.0f64.log10();
+        worker.handle(Control::SetNext(Some(second)));
+        worker.fill();
+        let second_frames = worker.written - first_frames;
+        worker.handle(Control::SetNext(Some(load(3, cd(), 0.01))));
+        worker.fill();
+        assert!(actions.is_empty(), "same-format gains must not reopen the device");
+        assert_eq!(worker.current.as_ref().unwrap().item, 3);
+
+        worker.clock.advance(first_frames, now_ns());
+        worker.publish();
+        worker.clock.advance(second_frames, now_ns());
+        worker.publish();
+        let audible: Vec<_> = events.try_iter().filter_map(|event| match event {
+            EngineEvent::Started { item, path } => Some((item, path.fidelity())),
+            _ => None,
+        }).collect();
+        assert_eq!(audible, [(1, Fidelity::Altered), (2, Fidelity::Altered), (3, Fidelity::BitPerfect)]);
+
+        let mut original = Vec::new();
+        let frames = Tone::new(cd(), 0.01, 440.0).read(&mut original).unwrap();
+        let mut source = worker.out.take().unwrap().stream.into_source();
+        let mut samples = vec![0; original.len() * 3];
+        assert_eq!(source.read(&mut samples), frames * 3);
+        for (chunk, scalar) in samples.chunks_exact(original.len()).zip([0.5, 2.0, 1.0]) {
+            for (&sample, &input) in chunk.iter().zip(&original) {
+                assert_eq!(sample, (input as f64 * scalar).round() as i32);
+            }
+        }
+    }
+
+    #[test]
+    fn output_reopen_preserves_each_items_level_stage() {
+        let (mut worker, actions, _events) = recording_worker();
+        let mut first = load(1, cd(), 0.01);
+        first.gain_db = -4.0;
+        worker.handle(Control::Play(first));
+        let mut second = load(2, cd(), 0.01);
+        second.gain_db = 2.0;
+        worker.handle(Control::SetNext(Some(second)));
+        worker.fill();
+        worker.publish();
+        worker.handle(Control::Pause);
+        let audible_level = worker.audible.as_ref().unwrap().path.stages[1].clone();
+        let next_level = worker.boundaries.front().unwrap().path.stages[1].clone();
+        assert!(audible_level.alters && next_level.alters);
+        assert_ne!(audible_level, next_level);
+
+        worker.handle(Control::SetOutput { device: Some("dac".into()), exclusive: true });
+        worker.handle(Control::Resume);
+        assert_eq!(worker.audible.as_ref().unwrap().path.stages[1], audible_level);
+        assert_eq!(worker.boundaries.front().unwrap().path.stages[1], next_level);
+        assert_eq!(worker.audible.as_ref().unwrap().path.fidelity(), Fidelity::Altered);
+        assert_eq!(worker.boundaries.front().unwrap().path.fidelity(), Fidelity::Altered);
+        assert_eq!(actions.try_iter().filter(|action| matches!(action, OutputAction::Open { .. })).count(), 2);
     }
 
     #[test]

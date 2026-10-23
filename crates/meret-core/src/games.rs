@@ -240,10 +240,12 @@ pub(crate) fn place(store: &Store, release: i64, game: &Game, now: i64) -> meret
 
 /// Reloads the hot columns after a release changed idiom, so tables and facets regroup it.
 fn reload(core: &Core) {
+    let analysis_write = core.analysis_write.lock();
     match core.store.load_columns() {
         Ok(cols) => {
             let tracks = cols.len() as u64;
             *core.columns.write() = cols;
+            drop(analysis_write);
             core.status.send_modify(|s| crate::status::set_library(s, tracks));
         }
         Err(e) => tracing::error!(error = %e, "could not reload the library after placing a score"),

@@ -2,6 +2,8 @@
 //! delegate, Android's MediaSessionService) before any UI exists, so playback
 //! never depends on a window. The UI attaches through `meret-api`.
 
+mod analysis;
+mod level;
 mod facets;
 mod local_zone;
 mod listens;
@@ -47,7 +49,7 @@ pub use local_zone::{LocalZone, file_uri};
 pub use now::NowState;
 pub use picks::{Pick, Why};
 pub use status::{SourceStatus, StatusState};
-pub use meret_store::{JobCounts, LightLevel, Lookups, Settings};
+pub use meret_store::{JobCounts, Level, LightLevel, Lookups, Settings};
 pub use lookups::LookupSummary;
 pub use suggestions::{FolderKind, FolderSuggestion};
 pub use views::{GroupRow, Item, List, PageItem, RowsPage, SortKey, View};
@@ -179,6 +181,10 @@ pub struct Core {
     /// Taken by the runner when the core starts; tests never start one.
     lookups_wakes: Mutex<Option<crossbeam_channel::Receiver<()>>>,
     lookup_state: Mutex<lookups::State>,
+    analysis_wake: parking_lot::Condvar,
+    analysis_state: Mutex<analysis::State>,
+    /// Keeps analysis commits and full column snapshots in publication order.
+    analysis_write: Mutex<()>,
     lists: Mutex<VecDeque<Arc<List>>>,
     settings: Mutex<Settings>,
     open_listen: Mutex<Option<listens::Open>>,
@@ -208,6 +214,7 @@ pub fn start(mut config: CoreConfig) -> Result<Arc<Core>> {
     now::spawn_pump(core.clone());
     scan::spawn_worker(core.clone(), requests);
     lookups::spawn_runner(core.clone());
+    analysis::spawn_runner(core.clone());
     let _ = core.scans.send(ScanRequest::LoadColumns);
     #[cfg(target_os = "macos")]
     fswatch::start(&core);
@@ -295,6 +302,9 @@ impl Core {
             lookups_wake,
             lookups_wakes: Mutex::new(Some(lookups_wakes)),
             lookup_state: Mutex::new(lookups::State::default()),
+            analysis_wake: parking_lot::Condvar::new(),
+            analysis_state: Mutex::new(analysis::State::default()),
+            analysis_write: Mutex::new(()),
             lists: Mutex::new(VecDeque::with_capacity(LISTS)),
             settings: Mutex::new(settings),
             open_listen: Mutex::new(None),
@@ -341,6 +351,11 @@ impl Core {
     /// when paused they take effect on resume, and when idle on the next play.
     pub fn set_settings(&self, settings: Settings) -> Result<()> {
         let mut current = self.settings.lock();
+        let level_changed = current.level != settings.level;
+        let mut player = level_changed.then(|| self.player.lock());
+        let gains = player.as_ref().map(|player| player.queue().items.iter().map(|item| {
+            item.track.map_or(Ok(0.0), |track| level::queue_gain(&self.store, track, settings.level))
+        }).collect::<meret_store::Result<Vec<_>>>()).transpose()?;
         self.store.set_settings(settings.clone())?;
         if current.output_device != settings.output_device || current.exclusive != settings.exclusive {
             self.engine.send(meret_engine::Control::SetOutput {
@@ -349,6 +364,11 @@ impl Core {
         }
         let asked = current.lookups != settings.lookups;
         *current = settings;
+        if let Some(player) = player.as_mut() {
+            let mut gains = gains.expect("level changed").into_iter();
+            player.refresh_gains(|_| gains.next().expect("one gain per queued item"));
+        }
+        drop(player);
         drop(current);
         if asked {
             lookups::seed(self);
@@ -627,6 +647,16 @@ impl Core {
         Ok(lookups::summary(self)?)
     }
 
+    /// Queues recordings without current local analysis and wakes the workers.
+    pub fn analyse(&self) -> Result<JobCounts> {
+        analysis::seed(self)?;
+        analysis::counts(self)
+    }
+
+    pub fn analysis_counts(&self) -> Result<JobCounts> {
+        analysis::counts(self)
+    }
+
     /// Plays a work's recordings from row `index`, replacing the queue.
     pub fn play_work(&self, work: WorkId, index: usize) -> Result<()> {
         let page = self.store.work_page(work)?.ok_or_else(|| CoreError::Query("that work is gone".into()))?;
@@ -656,6 +686,7 @@ impl Core {
             idiom: Idiom::Album,
             from_stop: None,
             why: None,
+            gain_db: 0.0,
         }])
     }
 
@@ -663,7 +694,14 @@ impl Core {
         self.play_at(items, 0, 0)
     }
 
-    fn play_at(&self, items: Vec<QueueItem>, cursor: usize, start_ms: u64) -> Result<()> {
+    fn play_at(&self, mut items: Vec<QueueItem>, cursor: usize, start_ms: u64) -> Result<()> {
+        let level = self.settings().level;
+        for item in &mut items {
+            item.gain_db = match item.track {
+                Some(track) => level::queue_gain(&self.store, track, level)?,
+                None => 0.0,
+            };
+        }
         self.memory_state.lock().stopping = false;
         let mut player = self.player.lock();
         let result = player.play(items, cursor, start_ms).map(|_| ());
@@ -793,6 +831,7 @@ fn queue_items(rows: impl IntoIterator<Item = TrackRow>) -> Vec<QueueItem> {
                 idiom: r.idiom.unwrap_or(Idiom::Album),
                 from_stop: None,
                 why: None,
+                gain_db: 0.0,
             })
         })
         .collect()

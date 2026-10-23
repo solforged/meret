@@ -33,6 +33,41 @@ class AnchorDto {
           rate == other.rate;
 }
 
+class BodyDto {
+  final Uint8List loudness;
+  final Uint8List low;
+  final Uint8List mid;
+  final Uint8List high;
+  final BigInt lengthMs;
+
+  const BodyDto({
+    required this.loudness,
+    required this.low,
+    required this.mid,
+    required this.high,
+    required this.lengthMs,
+  });
+
+  @override
+  int get hashCode =>
+      loudness.hashCode ^
+      low.hashCode ^
+      mid.hashCode ^
+      high.hashCode ^
+      lengthMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BodyDto &&
+          runtimeType == other.runtimeType &&
+          loudness == other.loudness &&
+          low == other.low &&
+          mid == other.mid &&
+          high == other.high &&
+          lengthMs == other.lengthMs;
+}
+
 class BranchDto {
   final int? fork;
   final int first;
@@ -80,7 +115,7 @@ class BranchDto {
           prunable == other.prunable;
 }
 
-enum ColumnDto { year, length, plays, lastPlayed, added, dr }
+enum ColumnDto { year, length, plays, lastPlayed, added, dr, loudness }
 
 class CreditSectionDto {
   final String title;
@@ -594,6 +629,8 @@ class JobDto {
           total == other.total;
 }
 
+enum LevelDto { off, track, album }
+
 class LightDto {
   final int light;
   final int wash;
@@ -742,6 +779,9 @@ class NowDto {
   final String? why;
   final AnchorDto? anchor;
   final BigInt? lengthMs;
+  final BodyDto? body;
+  final double? loudnessLufs;
+  final int? dr;
   final List<StageDto> path;
   final FidelityDto? fidelity;
   final String? error;
@@ -756,6 +796,9 @@ class NowDto {
     this.why,
     this.anchor,
     this.lengthMs,
+    this.body,
+    this.loudnessLufs,
+    this.dr,
     required this.path,
     this.fidelity,
     this.error,
@@ -772,6 +815,9 @@ class NowDto {
       why.hashCode ^
       anchor.hashCode ^
       lengthMs.hashCode ^
+      body.hashCode ^
+      loudnessLufs.hashCode ^
+      dr.hashCode ^
       path.hashCode ^
       fidelity.hashCode ^
       error.hashCode;
@@ -790,6 +836,9 @@ class NowDto {
           why == other.why &&
           anchor == other.anchor &&
           lengthMs == other.lengthMs &&
+          body == other.body &&
+          loudnessLufs == other.loudnessLufs &&
+          dr == other.dr &&
           path == other.path &&
           fidelity == other.fidelity &&
           error == other.error;
@@ -1071,6 +1120,8 @@ class ReleaseDto {
   final int tracks;
   final int discs;
   final BigInt lengthMs;
+  final int? dr;
+  final double? loudnessLufs;
   final List<String> formats;
   final List<TrackRowDto> rows;
   final List<ThreadDto?> rowWorks;
@@ -1090,6 +1141,8 @@ class ReleaseDto {
     required this.tracks,
     required this.discs,
     required this.lengthMs,
+    this.dr,
+    this.loudnessLufs,
     required this.formats,
     required this.rows,
     required this.rowWorks,
@@ -1111,6 +1164,8 @@ class ReleaseDto {
       tracks.hashCode ^
       discs.hashCode ^
       lengthMs.hashCode ^
+      dr.hashCode ^
+      loudnessLufs.hashCode ^
       formats.hashCode ^
       rows.hashCode ^
       rowWorks.hashCode ^
@@ -1134,6 +1189,8 @@ class ReleaseDto {
           tracks == other.tracks &&
           discs == other.discs &&
           lengthMs == other.lengthMs &&
+          dr == other.dr &&
+          loudnessLufs == other.loudnessLufs &&
           formats == other.formats &&
           rows == other.rows &&
           rowWorks == other.rowWorks &&
@@ -1328,12 +1385,14 @@ class SettingsDto {
   final String? outputDevice;
   final bool exclusive;
   final LookupsDto lookups;
+  final LevelDto level;
 
   const SettingsDto({
     required this.light,
     this.outputDevice,
     required this.exclusive,
     required this.lookups,
+    required this.level,
   });
 
   @override
@@ -1341,7 +1400,8 @@ class SettingsDto {
       light.hashCode ^
       outputDevice.hashCode ^
       exclusive.hashCode ^
-      lookups.hashCode;
+      lookups.hashCode ^
+      level.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1351,7 +1411,8 @@ class SettingsDto {
           light == other.light &&
           outputDevice == other.outputDevice &&
           exclusive == other.exclusive &&
-          lookups == other.lookups;
+          lookups == other.lookups &&
+          level == other.level;
 }
 
 enum SortKeyDto { library_, title, artist, album, year, length, format }
@@ -1614,6 +1675,8 @@ class TrackRowDto {
   final int number;
   final int? year;
   final BigInt? lengthMs;
+  final int? dr;
+  final double? loudness;
   final String format;
   final String? path;
 
@@ -1630,6 +1693,8 @@ class TrackRowDto {
     required this.number,
     this.year,
     this.lengthMs,
+    this.dr,
+    this.loudness,
     required this.format,
     this.path,
   });
@@ -1648,6 +1713,8 @@ class TrackRowDto {
       number.hashCode ^
       year.hashCode ^
       lengthMs.hashCode ^
+      dr.hashCode ^
+      loudness.hashCode ^
       format.hashCode ^
       path.hashCode;
 
@@ -1668,6 +1735,8 @@ class TrackRowDto {
           number == other.number &&
           year == other.year &&
           lengthMs == other.lengthMs &&
+          dr == other.dr &&
+          loudness == other.loudness &&
           format == other.format &&
           path == other.path;
 }
