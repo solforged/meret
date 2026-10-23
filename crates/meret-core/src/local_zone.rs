@@ -49,7 +49,7 @@ impl LocalZone {
                 s.sample_rate = Some(a.sample_rate);
             }
             EngineEvent::Idle => s.zone.playing = false,
-            EngineEvent::Ended { .. } | EngineEvent::Error { .. } => {}
+            EngineEvent::Ended { .. } | EngineEvent::Error { .. } | EngineEvent::VolumeChanged => {}
         }
     }
 
@@ -95,10 +95,6 @@ impl Zone for LocalZone {
             ZoneCommand::Stop => Control::Stop,
             ZoneCommand::Volume { scalar } => {
                 self.engine.set_volume(scalar).map_err(|e| ZoneError::Other(e.to_string()))?;
-                return Ok(());
-            }
-            ZoneCommand::Mute { muted } => {
-                self.engine.set_mute(muted).map_err(|e| ZoneError::Other(e.to_string()))?;
                 return Ok(());
             }
         };

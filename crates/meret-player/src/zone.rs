@@ -53,8 +53,6 @@ pub enum ZoneCommand {
     Stop,
     /// Device-native volume scalar, 0 (silent) to 1 (full scale).
     Volume { scalar: f32 },
-    /// The device's own mute.
-    Mute { muted: bool },
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

@@ -46,8 +46,7 @@ struct NowOutside {
 
 /// Plate 10: the menu bar item shows the title and time; its panel has the
 /// controls, the signal path, three things to pick up, and Play something.
-/// Media keys and the system's Now Playing go through `MediaPlayer`; the
-/// volume keys, when they would miss Meret's device, through `VolumeKeys`.
+/// Media keys and the system's Now Playing go through `MediaPlayer`.
 final class Outside: NSObject, NSMenuDelegate {
   private let channel: FlutterMethodChannel
   private let showMain: () -> Void
@@ -59,7 +58,6 @@ final class Outside: NSObject, NSMenuDelegate {
   private var now = NowOutside()
   private var tick: Timer?
   private var artwork: (path: String, image: MPMediaItemArtwork)?
-  private let volumeKeys = VolumeKeys()
 
   init(messenger: FlutterBinaryMessenger, showMain: @escaping () -> Void) {
     channel = FlutterMethodChannel(name: "meret/outside", binaryMessenger: messenger)
@@ -75,10 +73,6 @@ final class Outside: NSObject, NSMenuDelegate {
         result(nil)
       case "pickUp":
         self.panel.showPickUp(call.arguments as? [[String: Any]] ?? [])
-        result(nil)
-      case "volumeTarget":
-        let args = call.arguments as? [String: Any] ?? [:]
-        self.volumeKeys.target(device: args["device"] as? String, mute: args["mute"] as? Bool ?? false)
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
@@ -113,7 +107,6 @@ final class Outside: NSObject, NSMenuDelegate {
     panel.onClose = { [weak self] in self?.menu.cancelTracking() }
 
     registerRemoteCommands()
-    volumeKeys.onKey = { [weak self] key, fine in self?.send("volumeKey", ["key": key.rawValue, "fine": fine]) }
     apply(NowOutside())
   }
 
@@ -123,7 +116,6 @@ final class Outside: NSObject, NSMenuDelegate {
     now = n
     refreshTitle()
     publishNowPlaying()
-    volumeKeys.playing(now.playing)
     if open { panel.show(now) }
     tick?.invalidate()
     tick = nil

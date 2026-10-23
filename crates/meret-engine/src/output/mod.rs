@@ -66,8 +66,6 @@ pub struct Opened {
 /// Hardware volume only. Samples in the ring are never scaled.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeviceVolume {
-    /// The UID of the device this is the volume of.
-    pub device: Option<String>,
     pub scalar: Option<f32>,
     pub settable: bool,
     /// None when the device has no mute of its own.
@@ -77,17 +75,8 @@ pub struct DeviceVolume {
 
 impl DeviceVolume {
     pub fn unsupported(reason: impl Into<String>) -> Self {
-        Self { device: None, scalar: None, settable: false, muted: None, reason: Some(reason.into()) }
+        Self { scalar: None, settable: false, muted: None, reason: Some(reason.into()) }
     }
-}
-
-/// Steps a volume the way macOS's volume keys do: sixteen steps, or 64
-/// when `fine`, snapped to the grid so a device that stores the scalar
-/// coarsely (0.24 reads back as 0.2383) still moves every press.
-pub fn stepped(scalar: f32, up: bool, fine: bool) -> f32 {
-    let steps = if fine { 64.0 } else { 16.0 };
-    let at = (scalar.clamp(0.0, 1.0) * steps).round();
-    ((if up { at + 1.0 } else { at - 1.0 }) / steps).clamp(0.0, 1.0)
 }
 
 /// Device settings contain stable UIDs, never user-visible names.
@@ -110,9 +99,6 @@ pub trait OutputBackend: Send + Sync {
     fn set_volume(&self, _device: Option<&str>, _scalar: f32) -> Result<DeviceVolume, OutputError> {
         Err(OutputError::Refused("device volume is not available on this output".into()))
     }
-    fn set_mute(&self, _device: Option<&str>, _muted: bool) -> Result<DeviceVolume, OutputError> {
-        Err(OutputError::Refused("mute is not available on this output".into()))
-    }
     /// Opens a stream that pulls from `source` and advances `clock`.
     /// The returned stream owns the realtime callback.
     fn open(
@@ -129,6 +115,11 @@ pub trait OutputStream: Send {
     fn pause(&mut self) -> Result<(), OutputError>;
     /// The device went away (unplugged, disconnected) and won't play again.
     fn lost(&self) -> bool {
+        false
+    }
+    /// Whether the device's volume or mute changed (the volume keys,
+    /// Control Centre, another app) since the last call.
+    fn volume_changed(&self) -> bool {
         false
     }
     /// Stops and closes the device, returning its unread ring without copying.
@@ -152,18 +143,5 @@ mod tests {
         assert_eq!(device_uid(&devices, Some("uid-b")).unwrap(), "uid-b");
         assert!(device_uid(&devices, Some("Speakers")).is_err());
         assert!(device_uid(&[], None).is_err());
-    }
-
-    #[test]
-    fn volume_steps_snap_to_the_key_grid_and_stop_at_the_ends() {
-        assert_eq!(stepped(0.5, true, false), 0.5625);
-        assert_eq!(stepped(0.5, false, true), 0.484375);
-        // The Studio Display stores 0.25 as 0.2383; the next press still moves.
-        assert_eq!(stepped(0.2383, true, false), 0.3125);
-        assert_eq!(stepped(0.2383, false, false), 0.1875);
-        assert_eq!(stepped(0.31, true, false), 0.375);
-        assert_eq!(stepped(1.0, true, false), 1.0);
-        assert_eq!(stepped(0.01, false, false), 0.0);
-        assert_eq!(stepped(0.0, false, true), 0.0);
     }
 }

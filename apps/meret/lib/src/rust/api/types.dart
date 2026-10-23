@@ -785,6 +785,7 @@ class NowDto {
   final List<StageDto> path;
   final FidelityDto? fidelity;
   final String? error;
+  final VolumeDto? volume;
 
   const NowDto({
     this.trackId,
@@ -802,6 +803,7 @@ class NowDto {
     required this.path,
     this.fidelity,
     this.error,
+    this.volume,
   });
 
   @override
@@ -820,7 +822,8 @@ class NowDto {
       dr.hashCode ^
       path.hashCode ^
       fidelity.hashCode ^
-      error.hashCode;
+      error.hashCode ^
+      volume.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -841,7 +844,8 @@ class NowDto {
           dr == other.dr &&
           path == other.path &&
           fidelity == other.fidelity &&
-          error == other.error;
+          error == other.error &&
+          volume == other.volume;
 }
 
 class OutputDeviceDto {
@@ -1932,14 +1936,12 @@ class ViewDto {
 }
 
 class VolumeDto {
-  final String? device;
   final double? scalar;
   final bool settable;
   final bool? muted;
   final String? reason;
 
   const VolumeDto({
-    this.device,
     this.scalar,
     required this.settable,
     this.muted,
@@ -1948,18 +1950,13 @@ class VolumeDto {
 
   @override
   int get hashCode =>
-      device.hashCode ^
-      scalar.hashCode ^
-      settable.hashCode ^
-      muted.hashCode ^
-      reason.hashCode;
+      scalar.hashCode ^ settable.hashCode ^ muted.hashCode ^ reason.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is VolumeDto &&
           runtimeType == other.runtimeType &&
-          device == other.device &&
           scalar == other.scalar &&
           settable == other.settable &&
           muted == other.muted &&

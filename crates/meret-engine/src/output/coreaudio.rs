@@ -21,8 +21,10 @@
 //!
 //! A listener on `kAudioDevicePropertyDeviceIsAlive` marks the stream lost
 //! when its device goes away (a DAC unplugged, a display disconnected); the
-//! engine then pauses where the device stopped. Default-device changes aren't
-//! followed while a stream is open.
+//! engine then pauses where the device stopped. Listeners on the device's
+//! volume and mute flag changes made outside Meret (the volume keys in
+//! shared mode, Control Centre). Default-device changes aren't followed
+//! while a stream is open.
 
 use std::ffi::c_void;
 use std::ptr::{self, NonNull};
@@ -109,15 +111,6 @@ impl OutputBackend for CoreAudioBackend {
         device.volume()
     }
 
-    fn set_mute(&self, wanted: Option<&str>, muted: bool) -> Result<DeviceVolume, OutputError> {
-        let device = find_device(wanted)?;
-        if device.muted().is_none() {
-            return Err(OutputError::Refused("this device has no mute".into()));
-        }
-        device.set_muted(muted)?;
-        device.volume()
-    }
-
     fn open(
         &self,
         req: &OutputRequest,
@@ -197,14 +190,13 @@ impl Device {
     fn volume(self) -> Result<DeviceVolume, OutputError> {
         let elements = self.volume_elements();
         if elements.is_empty() {
-            return Ok(DeviceVolume { device: self.uid(), ..DeviceVolume::unsupported("No volume control on this output") });
+            return Ok(DeviceVolume::unsupported("No volume control on this output"));
         }
         let mut scalar = 0.0f32;
         for &element in &elements {
             scalar += get_at::<f32>(self.0, volume_address(element)).map_err(platform)?;
         }
         Ok(DeviceVolume {
-            device: self.uid(),
             scalar: Some(scalar / elements.len() as f32),
             settable: true,
             muted: self.muted(),
@@ -486,6 +478,20 @@ unsafe extern "C-unwind" fn alive_changed(
     0
 }
 
+/// Flags a change to the device's volume or mute. Runs on a HAL
+/// notification thread.
+unsafe extern "C-unwind" fn volume_moved(
+    _device: AudioObjectID,
+    _count: u32,
+    _addresses: NonNull<AudioObjectPropertyAddress>,
+    client: *mut c_void,
+) -> i32 {
+    // SAFETY: `client` is the stream's `volume_moved` flag, which the stream
+    // keeps until after it removes this listener.
+    unsafe { &*(client as *const AtomicBool) }.store(true, Ordering::Release);
+    0
+}
+
 /// What the device was doing before we changed it.
 struct Restore {
     stream: AudioObjectID,
@@ -505,6 +511,10 @@ pub struct CoreAudioStream {
     /// Cleared by `alive_changed` when the device goes away.
     alive: Arc<AtomicBool>,
     listening: bool,
+    /// Set by `volume_moved`; taken by `volume_changed`.
+    volume_moved: Arc<AtomicBool>,
+    /// The volume and mute addresses `volume_moved` listens on.
+    watched: Vec<AudioObjectPropertyAddress>,
 }
 
 // SAFETY: `state` is only dereferenced by the IOProc; the stream just owns it
@@ -571,6 +581,8 @@ impl CoreAudioStream {
             running: false,
             alive: Arc::new(AtomicBool::new(true)),
             listening: false,
+            volume_moved: Arc::new(AtomicBool::new(false)),
+            watched: Vec::new(),
         };
         this.listen();
         this.configure(req)?;
@@ -587,6 +599,17 @@ impl CoreAudioStream {
         self.listening = status == 0;
         if !self.listening {
             tracing::warn!(status = %fourcc(status), "can't watch the output for removal");
+        }
+        let flag = Arc::as_ptr(&self.volume_moved) as *mut c_void;
+        let mute = mute_address();
+        for address in self.device.volume_elements().into_iter().map(volume_address).chain([mute]) {
+            let listened = unsafe {
+                AudioObjectHasProperty(self.device.0, NonNull::from(&address))
+                    && AudioObjectAddPropertyListener(self.device.0, NonNull::from(&address), Some(volume_moved), flag) == 0
+            };
+            if listened {
+                self.watched.push(address);
+            }
         }
     }
 
@@ -756,6 +779,10 @@ impl OutputStream for CoreAudioStream {
         !self.alive.load(Ordering::Acquire)
     }
 
+    fn volume_changed(&self) -> bool {
+        self.volume_moved.swap(false, Ordering::AcqRel)
+    }
+
     fn into_source(mut self: Box<Self>) -> RingReader {
         let _ = self.pause();
         if self.proc_id.is_some() {
@@ -778,6 +805,10 @@ impl Drop for CoreAudioStream {
                 AudioObjectRemovePropertyListener(self.device.0, NonNull::from(&address), Some(alive_changed),
                     Arc::as_ptr(&self.alive) as *mut c_void)
             };
+        }
+        let flag = Arc::as_ptr(&self.volume_moved) as *mut c_void;
+        for address in &self.watched {
+            unsafe { AudioObjectRemovePropertyListener(self.device.0, NonNull::from(address), Some(volume_moved), flag) };
         }
         let _ = self.pause();
         if self.proc_id.is_some() {

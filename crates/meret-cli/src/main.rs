@@ -61,9 +61,9 @@ enum Cmd {
         /// Output device UID. Default: the system's.
         #[arg(long)]
         device: Option<String>,
-        /// Share the device instead of taking it (no hog mode).
+        /// Take the device for Meret alone (hog mode) instead of sharing it.
         #[arg(long)]
-        shared: bool,
+        exclusive: bool,
         /// Play to nowhere instead of a device.
         #[arg(long)]
         null: bool,
@@ -108,15 +108,6 @@ enum LibraryCmd {
     /// Read or set the output device's own volume (0–1), without sample gain.
     Volume {
         scalar: Option<f32>,
-        /// Step it as a volume key does: `up` or `down`.
-        #[arg(long, conflicts_with = "scalar")]
-        step: Option<VolumeStep>,
-        /// With --step: a quarter step, as ⌥⇧ does.
-        #[arg(long, requires = "step")]
-        fine: bool,
-        /// Set the device's own mute.
-        #[arg(long, conflicts_with_all = ["scalar", "step"])]
-        mute: Option<bool>,
         #[command(flatten)]
         out: OutputArgs,
     },
@@ -189,12 +180,6 @@ enum LibraryCmd {
     },
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
-enum VolumeStep {
-    Up,
-    Down,
-}
-
 #[derive(Clone, Copy, ValueEnum)]
 enum Answer {
     Allow,
@@ -231,9 +216,9 @@ struct OutputArgs {
     /// Output device UID. Default: the system's.
     #[arg(long)]
     device: Option<String>,
-    /// Share the device instead of taking it (no hog mode).
+    /// Take the device for Meret alone (hog mode) instead of sharing it.
     #[arg(long)]
-    shared: bool,
+    exclusive: bool,
     /// Play to nowhere instead of a device.
     #[arg(long)]
     null: bool,
@@ -247,7 +232,7 @@ impl OutputArgs {
         if self.null {
             OutputChoice::Null { speed: self.speed }
         } else {
-            OutputChoice::System { device: self.device.clone(), exclusive: !self.shared }
+            OutputChoice::System { device: self.device.clone(), exclusive: self.exclusive }
         }
     }
 }
@@ -259,9 +244,9 @@ fn main() -> Result<()> {
         Cmd::Query { input } => query(&input),
         Cmd::Decode { file } => decode_file(file),
         Cmd::Devices => devices(),
-        Cmd::Play { file, device, shared, null, speed } => {
+        Cmd::Play { file, device, exclusive, null, speed } => {
             let backend = if null { Arc::new(NullBackend { speed }) as Arc<dyn OutputBackend> } else { system_backend() };
-            let config = EngineConfig { device, exclusive: !shared, ..Default::default() };
+            let config = EngineConfig { device, exclusive, ..Default::default() };
             play(file, backend, config)
         }
         Cmd::Library { data, cmd } => {
@@ -281,16 +266,10 @@ fn main() -> Result<()> {
                 LibraryCmd::ShowRelease { id } => library::show_release(&api, &rt, id),
                 LibraryCmd::Front => library::front(&api, &rt),
                 LibraryCmd::History { limit } => library::history(&api, limit),
-                LibraryCmd::Volume { scalar, step, fine, mute, .. } => {
-                    let volume = match (scalar, step, mute) {
-                        (Some(value), _, _) => api.set_volume(value),
-                        (_, Some(step), _) => api.step_volume(step == VolumeStep::Up, fine),
-                        (_, _, Some(muted)) => api.set_mute(muted),
-                        _ => api.volume(),
-                    }
-                    .map_err(anyhow::Error::msg)?;
-                    println!("device={:?} scalar={:?} settable={} muted={:?} reason={:?}",
-                        volume.device, volume.scalar, volume.settable, volume.muted, volume.reason);
+                LibraryCmd::Volume { scalar, .. } => {
+                    let volume = match scalar { Some(value) => api.set_volume(value), None => api.volume() }
+                        .map_err(anyhow::Error::msg)?;
+                    println!("scalar={:?} settable={} muted={:?} reason={:?}", volume.scalar, volume.settable, volume.muted, volume.reason);
                     Ok(())
                 }
                 LibraryCmd::Search { input } => library::search(&api, &rt, &input),
@@ -443,7 +422,7 @@ fn play(file: PathBuf, backend: Arc<dyn OutputBackend>, config: EngineConfig) ->
                 let stages: Vec<String> = path.stages.iter().map(|s| format!("{} [{}]", s.name, s.detail)).collect();
                 println!("started: {} → {:?}", stages.join(" → "), path.fidelity());
             }
-            EngineEvent::OutputChanged { .. } => {}
+            EngineEvent::OutputChanged { .. } | EngineEvent::VolumeChanged => {}
             EngineEvent::Anchor(_) => anchors += 1,
             EngineEvent::Ended { .. } => println!("ended after {:.2?} wall clock", t.elapsed()),
             EngineEvent::Idle => break,

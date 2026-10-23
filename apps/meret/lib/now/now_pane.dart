@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
@@ -18,7 +17,7 @@ import 'signal_path.dart';
 /// Now: what's playing, the transport, the signal path and the queue.
 /// Pinned at the right from 1400 px; [NowBar] below that.
 class NowPane extends StatelessWidget {
-  const NowPane({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease, this.settingsChanges, this.volumeChanges});
+  const NowPane({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease, this.settingsChanges});
 
   final CoreBridge core;
   final NowDto? now;
@@ -26,7 +25,6 @@ class NowPane extends StatelessWidget {
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
   final Listenable? settingsChanges;
-  final ValueListenable<VolumeDto?>? volumeChanges;
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +79,7 @@ class NowPane extends StatelessWidget {
             const SizedBox(height: 12),
             NowMemory(core: core, now: n, resumeLimit: 3, historyLimit: 3, onRelease: onRelease),
             const SizedBox(height: 12),
-            DeviceVolume(core: core, now: now, changes: volumeChanges),
+            DeviceVolume(core: core, now: now),
           ]),
         )),
       ]),
@@ -335,14 +333,13 @@ class _NowDoorState extends State<NowDoor> {
 /// Now as a bar, below the panes, when the window is too narrow to pin it.
 /// The title opens the full pane as a sheet.
 class NowBar extends StatelessWidget {
-  const NowBar({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease, this.settingsChanges, this.volumeChanges});
+  const NowBar({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.onRelease, this.settingsChanges});
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
   final Listenable? settingsChanges;
-  final ValueListenable<VolumeDto?>? volumeChanges;
 
   @override
   Widget build(BuildContext context) {
@@ -376,7 +373,7 @@ class NowBar extends StatelessWidget {
           ],
           if (volume) ...[
             const SizedBox(width: 12),
-            DeviceVolume(core: core, now: now, changes: volumeChanges, compact: true),
+            DeviceVolume(core: core, now: now, compact: true),
           ],
         ]);
       }),
@@ -396,7 +393,7 @@ class NowBar extends StatelessWidget {
           stream: core.now(),
           builder: (_, snapshot) => SizedBox(width: 380, height: 640, child: NowPane(
             core: core, now: snapshot.data, clock: clock, onToggle: onToggle,
-            settingsChanges: settingsChanges, volumeChanges: volumeChanges,
+            settingsChanges: settingsChanges,
             onRelease: onRelease == null ? null : (id) async {
               Navigator.of(sheetContext).pop();
               await onRelease!(id);
@@ -647,13 +644,13 @@ class ThinSlider extends StatelessWidget {
 
 
 /// The output device's own volume; samples stay untouched. [compact] is
-/// the slider alone, for Now as a bar, with the reason as a tooltip.
-/// [changes] carries the volume after each volume key.
+/// the slider alone, for Now as a bar, with the reason as a tooltip. Now
+/// carries the volume while something plays, so the volume keys move the
+/// slider too.
 class DeviceVolume extends StatefulWidget {
-  const DeviceVolume({super.key, required this.core, required this.now, this.changes, this.compact = false});
+  const DeviceVolume({super.key, required this.core, required this.now, this.compact = false});
   final CoreBridge core;
   final NowDto? now;
-  final ValueListenable<VolumeDto?>? changes;
   final bool compact;
 
   @override
@@ -670,31 +667,25 @@ class _DeviceVolumeState extends State<DeviceVolume> {
   @override
   void initState() {
     super.initState();
-    widget.changes?.addListener(_changed);
-    _load();
+    _volume = widget.now?.volume;
+    if (_volume == null) _load();
   }
 
   @override
   void didUpdateWidget(DeviceVolume oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.changes != widget.changes) {
-      oldWidget.changes?.removeListener(_changed);
-      widget.changes?.addListener(_changed);
+    final volume = widget.now?.volume;
+    if (oldWidget.core != widget.core) {
+      _load();
+    } else if (volume != null) {
+      if (volume != oldWidget.now?.volume && !_saving && _dragging == null) {
+        ++_request;
+        _volume = volume;
+        _error = null;
+      }
+    } else if (oldWidget.now != widget.now) {
+      _load();
     }
-    if (oldWidget.core != widget.core || oldWidget.now != widget.now) _load();
-  }
-
-  @override
-  void dispose() {
-    widget.changes?.removeListener(_changed);
-    super.dispose();
-  }
-
-  void _changed() {
-    final volume = widget.changes?.value;
-    if (volume == null || _saving || _dragging != null) return;
-    ++_request;
-    setState(() { _volume = volume; _error = null; });
   }
 
   Future<void> _load() async {
@@ -726,8 +717,7 @@ class _DeviceVolumeState extends State<DeviceVolume> {
     final volume = _volume;
     final enabled = volume?.settable == true && volume?.scalar != null && !_saving && _error == null;
     final scalar = (_dragging ?? volume?.scalar ?? 0).clamp(0.0, 1.0);
-    final muted = volume?.muted == true && _dragging == null;
-    final level = muted ? 'muted' : '${(scalar * 100).round()}%';
+    final level = volume?.muted == true && _dragging == null ? 'muted' : '${(scalar * 100).round()}%';
     final reason = _error ?? volume?.reason ?? (volume == null ? 'Reading device volume…' : null);
     final slider = ThinSlider(
       sliderKey: const ValueKey('now-volume'),

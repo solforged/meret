@@ -33,7 +33,9 @@ const _groupedView = ViewDto(sort: SortKeyDto.library_, descending: false, group
 
 void main() {
   testWidgets('the Now stage lists output devices with current rings and core verdict colours', (tester) async {
-    await _surface(tester, FakeCore());
+    final core = FakeCore();
+    await core.setSettings(const SettingsDto(light: LightLevelDto.accent, exclusive: true, lookups: LookupsDto.unasked, level: LevelDto.off));
+    await _surface(tester, core);
     await tester.pump();
     expect(find.byType(PlayOn), findsOneWidget);
     expect(find.text('MacBook Pro Speakers'), findsOneWidget);
@@ -153,21 +155,20 @@ void main() {
     expect(tester.widget<Slider>(slider).value, closeTo(volume.scalar!, 0.001));
   });
 
-  testWidgets('Now’s volume follows the volume keys and shows mute', (tester) async {
-    await _surface(tester, FakeCore());
-    await _commandKey(tester, LogicalKeyboardKey.digit1);
-    await tester.pump();
-    const channel = MethodChannel('meret/outside');
-    Future<void> key(String key) => tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-      channel.name, channel.codec.encodeMethodCall(MethodCall('volumeKey', {'key': key, 'fine': false})), (_) {},
+  testWidgets('Now’s volume follows a change made outside Meret, and shows mute', (tester) async {
+    NowDto now(double scalar, {bool muted = false}) => NowDto(
+      title: 'Terratus', subtitle: 'Justin E. Bell', path: const [],
+      volume: VolumeDto(scalar: scalar, settable: true, muted: muted),
     );
-    await key('up');
-    await tester.pump();
+    final core = FakeCore();
+    Future<void> show(NowDto n) => tester.pumpWidget(MaterialApp(home: Scaffold(body: DeviceVolume(core: core, now: n))));
     final slider = find.byKey(const ValueKey('now-volume'));
-    expect(tester.widget<Slider>(slider).value, 0.5625);
-    expect(find.text('56%'), findsOneWidget);
-    await key('mute');
-    await tester.pump();
+    await show(now(0.25));
+    expect(tester.widget<Slider>(slider).value, 0.25);
+    await show(now(0.3125));
+    expect(tester.widget<Slider>(slider).value, 0.3125);
+    expect(find.text('31%'), findsOneWidget);
+    await show(now(0.3125, muted: true));
     expect(find.text('muted'), findsOneWidget);
   });
 

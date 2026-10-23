@@ -24,7 +24,7 @@ pub fn start_core(data_dir: String, null_output: bool) -> Result<(), String> {
     let output = if null_output {
         OutputChoice::Null { speed: 1.0 }
     } else {
-        OutputChoice::System { device: None, exclusive: true }
+        OutputChoice::System { device: None, exclusive: false }
     };
     let core = meret_core::start(CoreConfig {
         data_dir: PathBuf::from(data_dir),
@@ -92,15 +92,6 @@ pub fn volume() -> Result<VolumeDto, String> {
 
 pub fn set_volume(scalar: f32) -> Result<VolumeDto, String> {
     api()?.set_volume(scalar)
-}
-
-/// One volume key press on the device Meret plays on.
-pub fn step_volume(up: bool, fine: bool) -> Result<VolumeDto, String> {
-    api()?.step_volume(up, fine)
-}
-
-pub fn set_mute(muted: bool) -> Result<VolumeDto, String> {
-    api()?.set_mute(muted)
 }
 
 /// Budgeted discovery runs off the UI thread; protected folders aren't walked.
