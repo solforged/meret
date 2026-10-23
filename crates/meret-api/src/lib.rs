@@ -658,7 +658,9 @@ mod trail_memory_tests {
         *core.trail.lock() = meret_graph::TrailHistory::restore(reopened.load_trails().unwrap());
         assert!(api.trail().is_none());
         assert!(api.trail_forward().is_none());
-        assert_eq!(api.trail_back(), Some(expected));
+        // Dwell keeps running on the current stop, so compare without it.
+        let still = |mut t: TrailDto| { t.stops.iter_mut().for_each(|s| s.dwell_ms = 0); t };
+        assert_eq!(api.trail_back().map(still), Some(still(expected)));
         assert_eq!(api.trail_history(10).unwrap(), before);
         assert_eq!(api.trail_back().unwrap().current, release.current);
         assert_eq!(reopened.load_trails().unwrap()[1].0.current(), release.current as usize);

@@ -269,6 +269,7 @@ class _QueryLineState extends State<QueryLine> {
                         SingleActivator(LogicalKeyboardKey.bracketRight, alt: true): DoNothingAndStopPropagationTextIntent(),
                         SingleActivator(LogicalKeyboardKey.backspace, meta: true): DoNothingAndStopPropagationTextIntent(),
                         SingleActivator(LogicalKeyboardKey.keyH): DoNothingAndStopPropagationTextIntent(),
+                        SingleActivator(LogicalKeyboardKey.keyT): DoNothingAndStopPropagationTextIntent(),
                         SingleActivator(LogicalKeyboardKey.space): DoNothingAndStopPropagationTextIntent(),
                         SingleActivator(LogicalKeyboardKey.space, shift: true): DoNothingAndStopPropagationTextIntent(),
                         SingleActivator(LogicalKeyboardKey.space, alt: true): DoNothingAndStopPropagationTextIntent(),

@@ -2966,8 +2966,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   StopDto dco_decode_stop_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return StopDto(
       index: dco_decode_u_32(arr[0]),
       parent: dco_decode_opt_box_autoadd_u_32(arr[1]),
@@ -2978,6 +2978,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       onPath: dco_decode_bool(arr[6]),
       isFork: dco_decode_bool(arr[7]),
       isPeek: dco_decode_bool(arr[8]),
+      openedMs: dco_decode_i_64(arr[9]),
+      dwellMs: dco_decode_i_64(arr[10]),
+      actions: dco_decode_list_String(arr[11]),
     );
   }
 
@@ -4742,6 +4745,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_onPath = sse_decode_bool(deserializer);
     var var_isFork = sse_decode_bool(deserializer);
     var var_isPeek = sse_decode_bool(deserializer);
+    var var_openedMs = sse_decode_i_64(deserializer);
+    var var_dwellMs = sse_decode_i_64(deserializer);
+    var var_actions = sse_decode_list_String(deserializer);
     return StopDto(
       index: var_index,
       parent: var_parent,
@@ -4752,6 +4758,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       onPath: var_onPath,
       isFork: var_isFork,
       isPeek: var_isPeek,
+      openedMs: var_openedMs,
+      dwellMs: var_dwellMs,
+      actions: var_actions,
     );
   }
 
@@ -6292,6 +6301,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.onPath, serializer);
     sse_encode_bool(self.isFork, serializer);
     sse_encode_bool(self.isPeek, serializer);
+    sse_encode_i_64(self.openedMs, serializer);
+    sse_encode_i_64(self.dwellMs, serializer);
+    sse_encode_list_String(self.actions, serializer);
   }
 
   @protected

@@ -1461,6 +1461,9 @@ class StopDto {
   final bool onPath;
   final bool isFork;
   final bool isPeek;
+  final PlatformInt64 openedMs;
+  final PlatformInt64 dwellMs;
+  final List<String> actions;
 
   const StopDto({
     required this.index,
@@ -1472,6 +1475,9 @@ class StopDto {
     required this.onPath,
     required this.isFork,
     required this.isPeek,
+    required this.openedMs,
+    required this.dwellMs,
+    required this.actions,
   });
 
   @override
@@ -1484,7 +1490,10 @@ class StopDto {
       viaSource.hashCode ^
       onPath.hashCode ^
       isFork.hashCode ^
-      isPeek.hashCode;
+      isPeek.hashCode ^
+      openedMs.hashCode ^
+      dwellMs.hashCode ^
+      actions.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1499,7 +1508,10 @@ class StopDto {
           viaSource == other.viaSource &&
           onPath == other.onPath &&
           isFork == other.isFork &&
-          isPeek == other.isPeek;
+          isPeek == other.isPeek &&
+          openedMs == other.openedMs &&
+          dwellMs == other.dwellMs &&
+          actions == other.actions;
 }
 
 @freezed
