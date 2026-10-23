@@ -94,6 +94,15 @@ pub fn set_volume(scalar: f32) -> Result<VolumeDto, String> {
     api()?.set_volume(scalar)
 }
 
+/// One volume key press on the device Meret plays on.
+pub fn step_volume(up: bool, fine: bool) -> Result<VolumeDto, String> {
+    api()?.step_volume(up, fine)
+}
+
+pub fn set_mute(muted: bool) -> Result<VolumeDto, String> {
+    api()?.set_mute(muted)
+}
+
 /// Budgeted discovery runs off the UI thread; protected folders aren't walked.
 pub fn suggest_folders() -> Result<Vec<FolderSuggestionDto>, String> {
     Ok(api()?.suggest_folders())

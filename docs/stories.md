@@ -71,7 +71,7 @@ Decided 2026-10-14.
 | I control playback while working in another app | Menu bar item, media keys | Built |
 | I know whether I'm hearing it bit-perfect | Now, signal path | Built |
 | I skip, go back, seek | Now, under the body; the bar on narrow windows | Built |
-| I set the volume | Now's device-volume slider; at the DAC when the device has no settable volume | Built (device volume; samples stay untouched) |
+| I set the volume | Now's device-volume slider, and the volume keys while Meret plays on a device that isn't macOS's default output; at the DAC when the device has no settable volume | Built (device volume and mute; samples stay untouched) |
 
 ## Keeping the collection
 

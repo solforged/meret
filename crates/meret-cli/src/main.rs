@@ -101,6 +101,15 @@ enum LibraryCmd {
     /// Read or set the output device's own volume (0–1), without sample gain.
     Volume {
         scalar: Option<f32>,
+        /// Step it as a volume key does: `up` or `down`.
+        #[arg(long, conflicts_with = "scalar")]
+        step: Option<VolumeStep>,
+        /// With --step: a quarter step, as ⌥⇧ does.
+        #[arg(long, requires = "step")]
+        fine: bool,
+        /// Set the device's own mute.
+        #[arg(long, conflicts_with_all = ["scalar", "step"])]
+        mute: Option<bool>,
         #[command(flatten)]
         out: OutputArgs,
     },
@@ -171,6 +180,12 @@ enum LibraryCmd {
         #[arg(value_enum)]
         answer: Option<Answer>,
     },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum VolumeStep {
+    Up,
+    Down,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -257,10 +272,16 @@ fn main() -> Result<()> {
                 LibraryCmd::Rescan => library::rescan(&api, &rt),
                 LibraryCmd::Front => library::front(&api, &rt),
                 LibraryCmd::History { limit } => library::history(&api, limit),
-                LibraryCmd::Volume { scalar, .. } => {
-                    let volume = match scalar { Some(value) => api.set_volume(value), None => api.volume() }
-                        .map_err(anyhow::Error::msg)?;
-                    println!("scalar={:?} settable={} reason={:?}", volume.scalar, volume.settable, volume.reason);
+                LibraryCmd::Volume { scalar, step, fine, mute, .. } => {
+                    let volume = match (scalar, step, mute) {
+                        (Some(value), _, _) => api.set_volume(value),
+                        (_, Some(step), _) => api.step_volume(step == VolumeStep::Up, fine),
+                        (_, _, Some(muted)) => api.set_mute(muted),
+                        _ => api.volume(),
+                    }
+                    .map_err(anyhow::Error::msg)?;
+                    println!("device={:?} scalar={:?} settable={} muted={:?} reason={:?}",
+                        volume.device, volume.scalar, volume.settable, volume.muted, volume.reason);
                     Ok(())
                 }
                 LibraryCmd::Search { input } => library::search(&api, &rt, &input),

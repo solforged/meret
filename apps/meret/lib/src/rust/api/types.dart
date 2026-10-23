@@ -1851,22 +1851,37 @@ class ViewDto {
 }
 
 class VolumeDto {
+  final String? device;
   final double? scalar;
   final bool settable;
+  final bool? muted;
   final String? reason;
 
-  const VolumeDto({this.scalar, required this.settable, this.reason});
+  const VolumeDto({
+    this.device,
+    this.scalar,
+    required this.settable,
+    this.muted,
+    this.reason,
+  });
 
   @override
-  int get hashCode => scalar.hashCode ^ settable.hashCode ^ reason.hashCode;
+  int get hashCode =>
+      device.hashCode ^
+      scalar.hashCode ^
+      settable.hashCode ^
+      muted.hashCode ^
+      reason.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is VolumeDto &&
           runtimeType == other.runtimeType &&
+          device == other.device &&
           scalar == other.scalar &&
           settable == other.settable &&
+          muted == other.muted &&
           reason == other.reason;
 }
 

@@ -88,7 +88,7 @@ void main() {
     outside.now(paused());
     await Future<void>.delayed(Duration.zero);
     expect(sent.where((c) => c.method == 'pickUp'), hasLength(2));
-    final rows = sent.last.arguments as List;
+    final rows = sent.lastWhere((c) => c.method == 'pickUp').arguments as List;
     expect(rows, hasLength(lessThanOrEqualTo(Outside.pickUpLimit)));
   });
 
@@ -122,11 +122,41 @@ void main() {
     expect(rows.map((r) => r['detail']), ['1:54:10', 'Scarlet Begonias', '1:54:10']);
     expect(rows.first['title'], 'Cornell 5/8/77 · Grateful Dead');
   });
+
+  test('volume keys step from where the last press landed, and mute toggles', () async {
+    await Future.wait([
+      command('volumeKey', {'key': 'up', 'fine': false}),
+      command('volumeKey', {'key': 'up', 'fine': false}),
+    ]);
+    expect(outside.volume.value?.scalar, 0.625);
+    await command('volumeKey', {'key': 'down', 'fine': true});
+    expect(outside.volume.value?.scalar, closeTo(0.609, 0.001));
+    await command('volumeKey', {'key': 'mute', 'fine': false});
+    expect(outside.volume.value?.muted, isTrue);
+    await command('volumeKey', {'key': 'up', 'fine': false});
+    expect(outside.volume.value?.muted, isFalse);
+  });
+
+  test('Swift learns which device the volume keys would reach, only when it can be set', () async {
+    outside.now(playing());
+    await Future<void>.delayed(Duration.zero);
+    expect(sent.lastWhere((c) => c.method == 'volumeTarget').arguments, {'device': 'speakers', 'mute': true});
+    core.fixed = true;
+    outside.now(paused());
+    await Future<void>.delayed(Duration.zero);
+    expect(sent.lastWhere((c) => c.method == 'volumeTarget').arguments, {'device': null, 'mute': false});
+  });
 }
 
 class _RecordingCore extends FakeCore {
   final transports = <TransportDto>[];
   int playSomethingCalls = 0;
+  bool fixed = false;
+
+  @override
+  Future<VolumeDto> volume() async => fixed
+    ? const VolumeDto(device: 'dac', settable: false, reason: 'Use the amplifier on this output.')
+    : super.volume();
 
   @override
   Future<void> transport(TransportDto cmd) {

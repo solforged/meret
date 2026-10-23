@@ -56,6 +56,9 @@ abstract interface class CoreBridge {
   Future<List<OutputDeviceDto>> outputDevices();
   Future<VolumeDto> volume();
   Future<VolumeDto> setVolume(double scalar);
+  /// One volume key press: a step of 16, or of 64 when [fine].
+  Future<VolumeDto> stepVolume({required bool up, required bool fine});
+  Future<VolumeDto> setMute(bool muted);
   Future<List<FolderSuggestionDto>> suggestFolders();
   Future<RowsDto> rows(String query, ViewDto view, int offset, int limit);
   Future<void> playResults(String query, ViewDto view, int index);
@@ -156,6 +159,10 @@ class RustCore implements CoreBridge {
   Future<VolumeDto> volume() => rust.volume();
   @override
   Future<VolumeDto> setVolume(double scalar) => rust.setVolume(scalar: scalar);
+  @override
+  Future<VolumeDto> stepVolume({required bool up, required bool fine}) => rust.stepVolume(up: up, fine: fine);
+  @override
+  Future<VolumeDto> setMute(bool muted) => rust.setMute(muted: muted);
   @override
   Future<List<FolderSuggestionDto>> suggestFolders() => rust.suggestFolders();
   @override
@@ -946,12 +953,24 @@ class FakeCore implements CoreBridge {
   ];
 
   double _volume = 0.5;
+  bool _muted = false;
   @override
-  Future<VolumeDto> volume() async => VolumeDto(scalar: _volume, settable: true);
+  Future<VolumeDto> volume() async => VolumeDto(device: 'speakers', scalar: _volume, settable: true, muted: _muted);
   @override
   Future<VolumeDto> setVolume(double scalar) async {
     if (!scalar.isFinite || scalar < 0 || scalar > 1) throw 'Volume must be between 0 and 1';
     _volume = scalar;
+    _muted = false;
+    return volume();
+  }
+  @override
+  Future<VolumeDto> stepVolume({required bool up, required bool fine}) {
+    final steps = fine ? 64 : 16;
+    return setVolume((((_volume * steps).round() + (up ? 1 : -1)) / steps).clamp(0.0, 1.0));
+  }
+  @override
+  Future<VolumeDto> setMute(bool muted) async {
+    _muted = muted;
     return volume();
   }
 

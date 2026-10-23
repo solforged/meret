@@ -69,6 +69,13 @@ Future<VolumeDto> volume() => RustLib.instance.api.crateApiCoreVolume();
 Future<VolumeDto> setVolume({required double scalar}) =>
     RustLib.instance.api.crateApiCoreSetVolume(scalar: scalar);
 
+/// One volume key press on the device Meret plays on.
+Future<VolumeDto> stepVolume({required bool up, required bool fine}) =>
+    RustLib.instance.api.crateApiCoreStepVolume(up: up, fine: fine);
+
+Future<VolumeDto> setMute({required bool muted}) =>
+    RustLib.instance.api.crateApiCoreSetMute(muted: muted);
+
 /// Budgeted discovery runs off the UI thread; protected folders aren't walked.
 Future<List<FolderSuggestionDto>> suggestFolders() =>
     RustLib.instance.api.crateApiCoreSuggestFolders();

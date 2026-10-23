@@ -153,6 +153,24 @@ void main() {
     expect(tester.widget<Slider>(slider).value, closeTo(volume.scalar!, 0.001));
   });
 
+  testWidgets('Now’s volume follows the volume keys and shows mute', (tester) async {
+    await _surface(tester, FakeCore());
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    await tester.pump();
+    const channel = MethodChannel('meret/outside');
+    Future<void> key(String key) => tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      channel.name, channel.codec.encodeMethodCall(MethodCall('volumeKey', {'key': key, 'fine': false})), (_) {},
+    );
+    await key('up');
+    await tester.pump();
+    final slider = find.byKey(const ValueKey('now-volume'));
+    expect(tester.widget<Slider>(slider).value, 0.5625);
+    expect(find.text('56%'), findsOneWidget);
+    await key('mute');
+    await tester.pump();
+    expect(find.text('muted'), findsOneWidget);
+  });
+
   testWidgets('Now disables unsupported device volume and explains why', (tester) async {
     await _surface(tester, _FixedVolumeCore());
     await _commandKey(tester, LogicalKeyboardKey.digit1);
