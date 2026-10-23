@@ -17,7 +17,7 @@ import 'picks.dart';
 import 'signal_path.dart';
 
 /// Now: what's playing, the transport, the signal path and the queue.
-/// Pinned at the right from 1400 px; [NowBar] below that. [nothingToPlay]
+/// Pinned at the right from 1560 px; [NowBar] below that. [nothingToPlay]
 /// is the reply when play found nothing: the title slot says so.
 class NowPane extends StatelessWidget {
   const NowPane({

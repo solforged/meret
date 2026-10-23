@@ -11,7 +11,9 @@ enum WidthClass {
   /// Two or three panes; Now as a bar.
   laptop(panes: 3, nowWidth: null),
 
-  /// Two or three panes and Now pinned at the right (decided 2026-10-17: pin from 1400).
+  /// Two or three panes and Now pinned at the right (decided 2026-10-23: pin
+  /// from 1560, so the Front keeps three columns and a branch three panes
+  /// beside the 360 px Now; 1400 lost both).
   desk(panes: 3, nowWidth: 360),
 
   /// Four or five panes plus spines, and Now pinned at the right.
@@ -27,7 +29,7 @@ enum WidthClass {
   static WidthClass of(double width) => switch (width) {
         < 600 => phone,
         < 1000 => foldable,
-        < 1400 => laptop,
+        < 1560 => laptop,
         < 1800 => desk,
         _ => large,
       };

@@ -144,6 +144,6 @@ The table and the sky are two views of the same query: `↵` opens a search as a
 
 1. Does the Front stay fixed, or can you arrange it?
 2. Should a kept trail be shareable (a file, or a ListenBrainz playlist with the threads as annotations)?
-3. ~~On a laptop, does Now take a pane or collapse to a bar?~~ Decided 2026-10-17: a pinned pane from 1400 px wide, a bar below that.
+3. ~~On a laptop, does Now take a pane or collapse to a bar?~~ Decided 2026-10-17: a pinned pane, a bar below it; the pin moved from 1400 to 1560 px on 2026-10-23 so the Front keeps three columns and a branch three panes beside it.
 4. Long trails: ~~when do old stops fold to spines~~ (decided 2026-10-17: a pane needs 440 px, 300 on a window under 1000 px; older stops fold to 46 px spines once the branch won't fit, up to the width class's cap of 3 or 5 panes), and how deep can the strip draw a tree before it collapses older branches?
 5. How is the sky laid out (UMAP or similar over embeddings) so that it stays put as the library grows?
