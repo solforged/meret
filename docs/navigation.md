@@ -2,7 +2,7 @@
 
 > **Design specification.** This document includes planned behavior as well as implemented navigation. For what is built and what is missing, see [Architecture](architecture.md#state-of-the-scaffold).
 
-Draft, 2026-10-13. Sol: "this is it" for the trail model. Plates: [`design/2026-10-13-trails/`](../design/2026-10-13-trails/index.html) (01 trail, 02 Front, 03 phone and foldable, 04 table, 05 sky, 06–08 forks, 09–11 press play and resume, 12 habits).
+Draft, 2026-10-13. Sol: "this is it" for the trail model. Plates: [`design/2026-10-13-trails/`](../design/2026-10-13-trails/index.html) (01 trail, 02 Front, 03 phone and foldable, 04 table, 05 sky, 06–08 forks, 09–11 press play and resume, 12 habits). Revised 2026-10-23 after driving the build: Home, the pane row and the chrome. Plates: [`design/2026-10-23-navigation/`](../design/2026-10-23-navigation/index.html) (01 Home, 02 a trail with its threads drawn, 03 and 09 motion demos, 04 chrome, 06 Home's states and doors, 07 a day of trails, 08 every move).
 
 ## What was wrong
 
@@ -26,13 +26,45 @@ There are no pages to file things into. There is one surface.
 
 - **Pane.** Everything you open (a release, a person, a work, a crate, a search, the collection table) is a pane. It opens to the right of the pane you opened it from. A large screen shows four or five panes side by side, a laptop two or three, an unfolded foldable two, a phone one. Older panes fold to spines.
 - **Thread.** A labelled relation between two things: *composed by*, *sung by*, *member of*, *recording of*, *sampled*, *same session*, *sounds like*, *listened after*. Every thread names its source (MusicBrainz, VGMdb, Discogs, local audio, ListenBrainz, you). Following one opens a pane, and the pane says which thread brought you.
-- **Trail.** The row of panes you followed, drawn across the top as a small constellation: a star per stop, a line per thread. This is where the galaxy idea survives: a constellation is lines you draw between stars yourself. Trails are kept automatically, can be named, and can be **played** (the queue walks the trail).
+- **Trail.** The row of panes you followed. Each pane's header is its star, and the thread you followed is drawn from the row you clicked to the pane it opened (decided 2026-10-23; the separate strip across the top is gone, and the tree view keeps the whole constellation). This is where the galaxy idea survives: a constellation is lines you draw between stars yourself. Trails are kept automatically, can be named, and can be **played** (the queue walks the trail).
 - **Query line.** `/` searches everything you own, can stream or have found, in one list, and takes commands (`play`, `want`, `crate add`). Saved queries are smart crates.
-- **Front.** Where trails start: one flat page of doors, not a feed. Leads, collection, crates, kept trails, wants and your log, each line openable.
-- **Now.** Pinned at the right on large screens, a player bar on phones. It holds the playing body (the radial drawing), the signal path and the queue.
-- **Status line.** Always visible on desktop. It shows every source's state, every running job (crawls, analysis) and how many items need identifying.
+- **Home.** Where trails start: a column of doors at the left edge, folding to a rail inside a trail. It replaced the Front and the Now stage on 2026-10-23. See [Home](#home).
+- **Now.** The transport, title, scrubber and quality marks sit in an LCD at the top centre at every desktop width (iTunes' place). The Now panel (the playing body, the signal path and the queue) opens from it or with `N`, and is pinned by default from 1800 pt. Phones keep a player bar under the thumb.
+- **Activity.** One indicator in the top line, replacing the status line on 2026-10-23. It is a dot while every source is fine, a ring while a job runs, and amber when something needs you. Its popover lists sources, folders, jobs and guesses, and opens Settings. There is no bottom row on desktop.
 
-Keyboard: `/` search, `[` `]` move along the trail, `⌘↵` follow, `W` want, `C` crate, `⌘S` keep the trail.
+Keyboard: `/` search, `[` `]` move along the trail, `⌘↵` follow, `W` want, `C` crate, `⌘S` keep the trail, `⌘1` Home, `N` Now. Key hints live in the menu bar (Go and Controls menus), a `?` sheet and tooltips, not on screen.
+
+## Home
+
+Decided 2026-10-23 (plates 01, 06, 07). Sol: "Home as a column feels right." It isn't a sidebar of places: every entry is a door that opens a pane, and plumbing stays out of it.
+
+- **Three states.** A 248 pt column when nothing is open, beside Today. A 52 pt rail inside a trail, with the door the trail started from lit. The column laid over the trail with `⌘1` or `◐`: the panes dim and never move. `Esc`, `]` or a click on a pane closes it. From 2200 pt the column can stay open as a setting.
+- **Today** is Home's own page, not a trail stop: Resume first, then Play something with its reasons, partway through, added lately and your week. Meret opens here. Opening something from Today starts a trail whose first pane says so ("from Today · added lately").
+- **Doors start trees.** A door starts a new tree, as a search does, and the old tree moves to Trails, one `[` away. Doors never fork the current tree.
+- **Sections are fixed:** Listen (Today, Pick up, Play something), Library (All tracks, then one row per idiom you own, People, Games), Crates, Trails, Out there (Leads, Wants, Needs you). Crates and trails can be pinned and reordered. Needs you shows only while it isn't zero. Folders, sources and jobs never get a door; they live in the activity popover and Settings.
+- **Keys.** `⌘1`–`⌘9` go to the first nine doors in order.
+
+## The pane row
+
+Decided 2026-10-23 (plates 03, 08, 09). One rule: only the thing that changed moves. A pane enters, a branch leaves, or the window shifts by whole panes. The row never slides as a block.
+
+- **What the row shows:** the path (root to current) plus the stops ahead, the chain of most recently entered children that `]` would walk. Stops ahead are dimmed. `[` moves focus and dims; it never removes a pane. A click anywhere on a dimmed pane goes to its stop, as a spine does; nothing inside it takes the click.
+- **Widths.** A pane's width depends only on the row's width: as many 440–560 pt panes as fit with one spine's room kept back, capped by the width class (about 560 pt at 1728). So a pane never resizes when a neighbour opens, and pinning Now costs one pane, not a reshuffle. A wide pane (the table) takes the leftover room and gives some back when a pane opens after it, the one time a pane changes width.
+- **Spines on both sides.** Stops before the window fold to 46 pt spines on the left, and stops ahead of it fold on the right; when there isn't room for every spine, the ones nearest the window show. The window only shifts when the focused pane would fall outside it, and only far enough to fit it. A resize fits it afresh, keeping as much of the path in view as it can.
+- **The ghost slot** shows where the next pane will open, while the last stop is in the window and at least 140 pt are left over.
+- **Threads look like threads.** Followable rows end in an arrow, and `←` marks where you came from.
+
+| Move | Motion |
+|---|---|
+| Follow | The new pane fades in from 12 pt to the left, 160 ms ease-out. Nothing else moves |
+| Follow past the window | The oldest full pane folds to a spine and the rest shift by its width, 200 ms, then the new pane enters |
+| `[` `]` within the window | Focus moves and panes dim or brighten, 120 ms |
+| `[` past the window, or a spine | The window shifts by whole panes, 200 ms |
+| Fork, peek, prune | The panes ahead drop 16 pt and fade, 160 ms; a new pane enters 120 ms later |
+| `⌥[` `⌥]` | The panes after the fork swap vertically (`⌥]` brings the next branch up from below), 180 ms |
+| New tree, previous tree, the tree view | The page fades through, 100 ms out and 100 ms in |
+| `⌘1` | The Home column slides over the rail, 200 ms; panes dim |
+| `N` | Now slides in from the right; a covered pane folds to a spine in the same move |
 
 ## Discovery primitives
 
@@ -51,15 +83,15 @@ Leads come from: people you follow, the rest of what you own (other editions, th
 
 ## What replaces Sources and Unmatched
 
-- **Availability is a mark on every row.** Filled: own, lossless. Half: own, lossy. Ringed: stream, with a service code (sp, qb, yt, bc, ia). Dashed: known, nowhere to hear yet. A pane shows "where to hear it" when that matters, such as for a lead. Connections live in the status line and settings.
-- **Identity is a mark too.** `≈` means guessed. You fix it where you see it. The status line counts the guesses, and the Front's "Needs you" list offers batch fixes (for example, sending 41 game rips to MusicBrainz's editor).
+- **Availability is a mark on every row.** Filled: own, lossless. Half: own, lossy. Ringed: stream, with a service code (sp, qb, yt, bc, ia). Dashed: known, nowhere to hear yet. A pane shows "where to hear it" when that matters, such as for a lead. Connections live in the activity popover and settings.
+- **Identity is a mark too.** `≈` means guessed. You fix it where you see it. The activity indicator counts the guesses, and Home's Needs you door offers batch fixes (for example, sending 41 game rips to MusicBrainz's editor).
 
 ## Forks: trails are trees
 
 Decided 2026-10-13: a trail is a tree. Plates 06–08.
 
 - **Branching.** Following a thread from any pane except the last starts a branch. Nothing is thrown away.
-- **Panes show one branch:** the path from the root to where you are. The strip at the top shows the whole tree: the current branch on the main line in gold, earlier branches above and below in grey, each fork ringed.
+- **Panes show one branch:** the path from the root to where you are, plus the stops ahead of you on it (dimmed; decided 2026-10-23). The tree view (`T`) shows the whole tree: the current branch on the main line in gold, earlier branches above and below in grey, each fork ringed.
 - **Forks are visible in the panes too.** A pane you forked from says so ("Forks here", with each branch, its time and what happened on it). A thread you've already followed carries `⑂ → where it led`.
 - **Peeks fold away.** A stop you leave within a few seconds is a peek. It folds into a tick, so browsing doesn't fill the tree with stubs.
 - **Branches meet.** When two branches reach the same thing, or close neighbours on the sky, a dotted line joins them. Two independent routes to one place make that place a strong lead.
@@ -67,13 +99,13 @@ Decided 2026-10-13: a trail is a tree. Plates 06–08.
 - **Playing.** Play this branch, or play the whole tree depth first.
 - **Keys.** `[` `]` move along this branch. `⌥[` `⌥]` switch to a sibling branch at the nearest fork. `T` opens the whole tree as a pane, with a table of branches and the same tree drawn on the sky.
 - **A search ends a trail.** Decided 2026-10-13. Running a search from the query line starts a new tree, rooted at that search, and the old trail is kept as it was. Nothing else ends a trail: not time, not idle, not the Front, and not filtering inside a pane (brushing a table column, lassoing the sky). `[` from the first stop of a new trail steps back into the previous one.
-- **Phone.** The strip shows only the current branch, with ringed stars and stubs at forks. Long-press a fork for a sheet of its branches.
+- **Phone.** The trail chip shows only the current branch, with ringed stars and stubs at forks. Long-press a fork for a sheet of its branches.
 
 ## Press play and resume
 
 Plates 09–11. Most sessions are "press play", so playing never goes through a trail.
 
-- **Meret opens to Now**, paused where you left it. `Space` resumes. `⌥Space` starts the current piece from the top. `[` steps back into the last trail. Pressing play never starts or changes a trail.
+- **Meret opens to Today** (decided 2026-10-23; it was the Now stage), with Resume at the top, paused where you left it. `Space` resumes. `⌥Space` starts the current piece from the top. `[` steps back into the last trail. Pressing play never starts or changes a trail.
 - **Pick up where you left off.** Everything you were partway through is listed, and each resumes the way its music does:
 
 | Idiom | Resumes |
@@ -133,17 +165,17 @@ The table and the sky are two views of the same query: `↵` opens a search as a
 
 ## How it scales
 
-| Surface | Panes | Trail | Query | Now |
-|---|---|---|---|---|
-| Large desktop (2560+) | 4–5, plus spines | Constellation with names and threads | Top left | Pinned pane at right |
-| Laptop (1440) | 2–3 | Names only | Top left | Narrow pane, or a bar |
-| Foldable, open | 2: where you came from, where you are | Names | Bottom, beside the player | Bar |
-| Phone, foldable cover | 1; swipe sideways along the trail | Stars only, current name | Bottom, under the thumb | Bar above the query |
+| Surface | Home | Panes | Trail | Query | Now |
+|---|---|---|---|---|---|
+| Large desktop (2560+) | Column can stay open | 4–5, plus spines | Pane headers, threads drawn; chip | Top line | LCD; panel pinned |
+| Laptop (1440) | Rail | 2–3, plus spines | Pane headers, threads drawn; chip | Top line | LCD; panel on `N` |
+| Foldable, open | Rail | 2: where you came from, where you are | Chip | Bottom, beside the player | Bar |
+| Phone, foldable cover | A sheet from the chip | 1; swipe sideways along the trail | Chip: stars only, current name | Bottom, under the thumb | Bar above the query |
 
 ## Open
 
-1. Does the Front stay fixed, or can you arrange it?
+1. ~~Does the Front stay fixed, or can you arrange it?~~ Decided 2026-10-23: Home's sections are fixed; crates and trails inside them can be pinned and reordered.
 2. Should a kept trail be shareable (a file, or a ListenBrainz playlist with the threads as annotations)?
-3. ~~On a laptop, does Now take a pane or collapse to a bar?~~ Decided 2026-10-17: a pinned pane, a bar below it; the pin moved from 1400 to 1560 px on 2026-10-23 so the Front keeps three columns and a branch three panes beside it.
-4. Long trails: ~~when do old stops fold to spines~~ (decided 2026-10-17: a pane needs 440 px, 300 on a window under 1000 px; older stops fold to 46 px spines once the branch won't fit, up to the width class's cap of 3 or 5 panes), and how deep can the strip draw a tree before it collapses older branches?
+3. ~~On a laptop, does Now take a pane or collapse to a bar?~~ Decided 2026-10-17: a pinned pane, a bar below it; the pin moved from 1400 to 1560 px on 2026-10-23. Superseded 2026-10-23: the transport is the top line's LCD at every width, and the Now panel is pinned by default from 1800 pt.
+4. Long trails: ~~when do old stops fold to spines~~ (decided 2026-10-17, revised 2026-10-23: a pane's width depends only on the row's width, 440–560 px, and stops outside the window fold to 46 px spines on either side, up to the width class's cap of 3 or 5 panes), and how deep can the tree view draw a tree before it collapses older branches?
 5. How is the sky laid out (UMAP or similar over embeddings) so that it stays put as the library grows?

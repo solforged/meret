@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
@@ -113,7 +114,7 @@ class PaneActionButton extends StatelessWidget {
 class Pane extends StatefulWidget {
   const Pane({
     super.key, required this.kind, required this.title, this.via, this.source, this.body,
-    this.showTitle = true, this.compact = false, this.onSpineTap,
+    this.showTitle = true, this.compact = false, this.onSpineTap, this.ahead = false,
   });
 
   /// "PERSON · COMPOSER", "SCORE · 1998", "GROUP · NOT OWNED".
@@ -131,8 +132,15 @@ class Pane extends StatefulWidget {
   /// One header line, `kind · title`, for a search whose table needs the room.
   final bool compact;
 
-  /// A folded pane, clicked: bring its stop back into view.
+  /// A folded pane, or a dimmed one, clicked: go to its stop.
   final VoidCallback? onSpineTap;
+
+  /// A stop ahead of the current one, which `]` walks back into: dimmed. A
+  /// click anywhere on it goes there; nothing inside takes the click.
+  final bool ahead;
+
+  static const aheadOpacity = 0.42;
+  static const dimming = Duration(milliseconds: 120);
 
   @override
   State<Pane> createState() => _PaneState();
@@ -169,15 +177,17 @@ class _PaneState extends State<Pane> {
         _folded = folded;
       }
       if (!folded) _fullWidth = box.maxWidth;
-      final Pane(:kind, :title, :via, :source, :body, :compact, :showTitle, :onSpineTap) = widget;
-      return Stack(fit: StackFit.expand, children: [
+      final Pane(:kind, :title, :via, :source, :body, :compact, :showTitle, :onSpineTap, :ahead) = widget;
+      return AnimatedOpacity(
+        opacity: ahead ? Pane.aheadOpacity : 1, duration: Pane.dimming,
+        child: Stack(fit: StackFit.expand, children: [
         Visibility(
           visible: !folded, maintainState: true,
           // Keep a hidden body at its last full width, not the spine's 46 px.
           child: OverflowBox(
             alignment: Alignment.topLeft, minWidth: _fullWidth, maxWidth: _fullWidth,
             child: Focus(
-              focusNode: _focus, canRequestFocus: false, descendantsAreFocusable: !folded,
+              focusNode: _focus, canRequestFocus: false, descendantsAreFocusable: !folded && !ahead,
               child: Container(
                 decoration: const BoxDecoration(color: Tok.sky, border: Border(right: BorderSide(color: Tok.line))),
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -210,8 +220,16 @@ class _PaneState extends State<Pane> {
             ),
           ),
         ),
-        if (folded) PaneSpine(title: title, meta: via ?? kind, onTap: onSpineTap),
-      ]);
+        if (folded) PaneSpine(title: title, meta: via ?? kind, onTap: onSpineTap)
+        else if (ahead && onSpineTap != null)
+          Semantics(
+            button: true, label: title,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(key: const ValueKey('pane-ahead'), behavior: HitTestBehavior.opaque, onTap: onSpineTap),
+            ),
+          ),
+      ]));
     });
   }
 }
@@ -255,9 +273,12 @@ class PaneSpine extends StatelessWidget {
 
 /// The tree around one pane, shared by its fork rows and thread marks.
 class TrailPaneScope extends InheritedWidget {
-  const TrailPaneScope({super.key, required this.trail, required this.stop, required this.onGo, required this.onPrune, required super.child});
+  const TrailPaneScope({super.key, required this.trail, required this.stop, required this.onGo, required this.onPrune, this.ahead = const {}, required super.child});
   final TrailDto trail;
   final StopDto stop;
+
+  /// The stops ahead on the row; they show as dimmed panes, not as marks.
+  final Set<int> ahead;
   final ValueChanged<int> onGo;
   final ValueChanged<int> onPrune;
 
@@ -265,7 +286,7 @@ class TrailPaneScope extends InheritedWidget {
 
   String? followedLeaf(TargetDto target) {
     final stops = {for (final node in trail.stops) node.index: node};
-    final children = trail.stops.where((node) => node.parent == stop.index && !node.isPeek && !node.onPath && node.target == target)
+    final children = trail.stops.where((node) => node.parent == stop.index && !node.isPeek && !node.onPath && !ahead.contains(node.index) && node.target == target)
         .map((node) => node.index).toSet();
     if (children.isEmpty) return null;
     for (final branch in trail.branches) {
@@ -279,7 +300,7 @@ class TrailPaneScope extends InheritedWidget {
   }
 
   @override
-  bool updateShouldNotify(TrailPaneScope oldWidget) => trail != oldWidget.trail || stop != oldWidget.stop;
+  bool updateShouldNotify(TrailPaneScope oldWidget) => trail != oldWidget.trail || stop != oldWidget.stop || !setEquals(ahead, oldWidget.ahead);
 }
 
 /// Appended to a followed thread without changing its destination or action.
@@ -345,4 +366,52 @@ class ForksHere extends StatelessWidget {
     ]);
     return sliver ? SliverToBoxAdapter(child: content) : content;
   }
+}
+
+/// The slot after the last pane where the next one will open (plate 08).
+class PaneGhost extends StatelessWidget {
+  const PaneGhost({super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(14),
+    child: CustomPaint(
+      painter: const _DashedBox(Tok.rule),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Next stop', style: Tok.body.copyWith(fontSize: 13.5, fontWeight: FontWeight.w600, color: Tok.muted), maxLines: 1),
+          const SizedBox(height: 6),
+          Text('Follow a thread and it opens here.', style: Tok.body.copyWith(fontSize: 13, color: Tok.faint), maxLines: 3, overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+    ),
+  );
+}
+
+class _DashedBox extends CustomPainter {
+  const _DashedBox(this.colour);
+  final Color colour;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = colour..strokeWidth = 1;
+    const dash = 4.0, gap = 3.0;
+    void line(Offset a, Offset b) {
+      final length = (b - a).distance;
+      final step = (b - a) / length;
+      for (var d = 0.0; d < length; d += dash + gap) {
+        canvas.drawLine(a + step * d, a + step * (d + dash).clamp(0, length), paint);
+      }
+    }
+    final r = Offset.zero & size;
+    final box = r.deflate(0.5);
+    line(box.topLeft, box.topRight);
+    line(box.topRight, box.bottomRight);
+    line(box.bottomRight, box.bottomLeft);
+    line(box.bottomLeft, box.topLeft);
+  }
+
+  @override
+  bool shouldRepaint(_DashedBox old) => old.colour != colour;
 }

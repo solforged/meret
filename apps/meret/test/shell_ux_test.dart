@@ -11,33 +11,57 @@ import 'package:meret/now/now_pane.dart';
 import 'package:meret/now/history_sheet.dart';
 import 'package:meret/now/now_stage.dart';
 import 'package:meret/panes/pane.dart';
+import 'package:meret/panes/person_pane.dart';
 import 'package:meret/panes/release_pane.dart';
 import 'package:meret/panes/table_pane.dart';
 import 'package:meret/panes/tree_pane.dart';
 import 'package:meret/shell/pane_row.dart';
 import 'package:meret/shell/query_line.dart';
-import 'package:meret/theme/tokens.dart';
 
 void main() {
-  testWidgets('ANIM-A1 a trail step slides for kMotion, easing out', (tester) async {
+  testWidgets('ANIM-A1 [ within the window moves no pane and dims the stop ahead over 120 ms', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 3);
     await _surface(tester, core);
     await _showTrail(tester);
-    expect(kMotion, const Duration(milliseconds: 200));
+    final xs = _paneXs(tester);
+    expect(xs, hasLength(3));
     await _key(tester, LogicalKeyboardKey.bracketLeft);
-    final slide = tester.widget<PaneRow>(find.byType(PaneRow)).slide;
-    expect(slide.value, -1);
-    final width = tester.getSize(_paneOf<ReleasePane>()).width;
-    final start = tester.getTopLeft(_paneOf<ReleasePane>()).dx;
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(slide.value, closeTo(-0.125, 0.005), reason: 'easeOutCubic halfway through 200 ms');
-    expect(tester.getTopLeft(_paneOf<ReleasePane>()).dx, closeTo(start + 0.875 * width, 0.5));
-    await tester.pump(const Duration(milliseconds: 30));
-    expect(slide.value, lessThan(-0.03), reason: 'still moving at 130 ms, where the halved slide used to end');
-    await tester.pump(const Duration(milliseconds: 70));
-    expect(slide.value, 0);
-    expect(tester.getTopLeft(_paneOf<ReleasePane>()).dx, closeTo(start + width, 0.5));
+    expect((await core.trail())!.current, 1);
+    expect(tester.widget<Pane>(_paneOf<PersonPane>()).ahead, isTrue, reason: '[ dims the stop ahead; it never removes it');
+    expect(find.textContaining('⑂ →'), findsNothing, reason: 'the stop ahead is a dimmed pane, not a fork mark');
+    expect(_fadeOver(tester, find.byType(PersonPane)), 1);
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(_fadeOver(tester, find.byType(PersonPane)), closeTo((1 + Pane.aheadOpacity) / 2, 0.01));
+    expect(_paneXs(tester), xs);
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(_fadeOver(tester, find.byType(PersonPane)), Pane.aheadOpacity);
+    expect(_paneXs(tester), xs);
+    await _key(tester, LogicalKeyboardKey.bracketRight);
+    await tester.pumpAndSettle();
+    expect((await core.trail())!.current, 2);
+    expect(tester.widget<Pane>(_paneOf<PersonPane>()).ahead, isFalse);
+    expect(_fadeOver(tester, find.byType(PersonPane)), 1);
+    expect(_paneXs(tester), xs);
+  });
+
+  testWidgets('ANIM-A1b a click on a dimmed pane goes to its stop and nothing inside it takes the click', (tester) async {
+    final core = FakeCore();
+    await _seedTrail(core, stops: 3);
+    await _surface(tester, core);
+    await _showTrail(tester);
+    final xs = _paneXs(tester);
+    final stops = (await core.trail())!.stops.length;
+    await _key(tester, LogicalKeyboardKey.bracketLeft);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Pane>(_paneOf<PersonPane>()).ahead, isTrue);
+    await tester.tapAt(tester.getCenter(_paneOf<PersonPane>()));
+    await tester.pumpAndSettle();
+    final trail = (await core.trail())!;
+    expect(trail.current, 2, reason: 'the click walks forward to the dimmed stop');
+    expect(trail.stops, hasLength(stops), reason: 'and follows nothing from it');
+    expect(tester.widget<Pane>(_paneOf<PersonPane>()).ahead, isFalse);
+    expect(_paneXs(tester), xs);
   });
 
   testWidgets('ANIM-A3 a search from the Now stage fades the stage through and does not slide', (tester) async {
@@ -50,15 +74,14 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     await tester.pump();
-    final slide = tester.widget<PaneRow>(find.byType(PaneRow)).slide;
-    expect(slide.value, 0, reason: 'leaving the stage is a page change');
+    final xs = _paneXs(tester);
     for (final ms in [0, 50, 100, 150, 200]) {
       if (ms > 0) await tester.pump(const Duration(milliseconds: 50));
       final stage = find.byKey(const ValueKey('stage-now'));
       final outgoing = stage.evaluate().isEmpty ? 0.0 : _fadeOver(tester, stage);
       final incoming = _fadeOver(tester, find.byKey(const ValueKey('stage-trail')));
       expect(outgoing > 0.5 && incoming > 0.5, isFalse, reason: 'two pages visible at $ms ms');
-      expect(slide.value, 0);
+      expect(_paneXs(tester), xs, reason: 'a new tree arrives whole; nothing slides');
     }
     await tester.pump(const Duration(milliseconds: 1));
     expect(find.byKey(const ValueKey('stage-now')), findsNothing);
@@ -73,13 +96,13 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.pumpAndSettle();
     expect((await core.trail())!.current, 0);
-    final slide = tester.widget<PaneRow>(find.byType(PaneRow)).slide;
+    final xs = _paneXs(tester, offstage: true);
     final table = tester.state(find.byType(TablePane));
 
     Future<void> fadesIn(LogicalKeyboardKey key, String page, {bool meta = false}) async {
       await _key(tester, key, meta: meta);
       expect(_rowCovered(tester), isTrue);
-      expect(slide.value, 0);
+      expect(_paneXs(tester, offstage: true), xs);
       expect(_fadeOver(tester, find.byKey(ValueKey(page))), 0, reason: '$page at 0 ms');
       await tester.pump(const Duration(milliseconds: 100));
       expect(_fadeOver(tester, find.byKey(ValueKey(page))), 0, reason: '$page waits for the first half');
@@ -87,7 +110,7 @@ void main() {
       expect(_fadeOver(tester, find.byKey(ValueKey(page))), closeTo(0.5, 0.01));
       await tester.pump(const Duration(milliseconds: 50));
       expect(_fadeOver(tester, find.byKey(ValueKey(page))), 1);
-      expect(slide.value, 0);
+      expect(_paneXs(tester, offstage: true), xs);
     }
 
     Future<void> fadesOut(LogicalKeyboardKey key, String page, {bool meta = false}) async {
@@ -102,7 +125,7 @@ void main() {
       expect(_fadeOver(tester, find.byKey(ValueKey(page))), 0);
       await tester.pump(const Duration(milliseconds: 1));
       expect(find.byKey(ValueKey(page)), findsNothing, reason: '$page is unmounted once its fade ends');
-      expect(slide.value, 0, reason: 'the row was there all along');
+      expect(_paneXs(tester, offstage: true), xs, reason: 'the row was there all along');
       expect(tester.state(find.byType(TablePane)), same(table));
     }
 
@@ -118,7 +141,7 @@ void main() {
     expect((await core.trail())!.current, 0, reason: 'none of this moved along the trail');
   });
 
-  testWidgets('NAV-N2 a stop that leaves the path keeps its pane, data and scroll for [ then ]', (tester) async {
+  testWidgets('NAV-N2 [ keeps the stop ahead on the row, dimmed, with its data and scroll, and ] brings it back', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 2);
     await _surface(tester, core, height: 600);
@@ -129,7 +152,7 @@ void main() {
     state.position.jumpTo(state.position.maxScrollExtent);
     await tester.pumpAndSettle();
     final offset = state.position.pixels;
-    final width = tester.getSize(_paneOf<ReleasePane>()).width;
+    final box = tester.getRect(_paneOf<ReleasePane>());
     await tester.tap(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('release-row-')).last);
     await core.transport(const TransportDto.pause());
     await tester.pumpAndSettle();
@@ -137,22 +160,45 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.pumpAndSettle();
-    expect(FocusManager.instance.primaryFocus?.debugLabel, 'surface', reason: 'a parked pane cannot keep the keys');
     expect((await core.trail())!.current, 0);
-    expect(find.byType(ReleasePane), findsNothing);
-    final parked = find.byType(ReleasePane, skipOffstage: false);
-    expect(parked, findsOneWidget, reason: 'parked, not disposed');
-    expect(tester.state(find.descendant(of: parked, matching: find.byType(Scrollable, skipOffstage: false), skipOffstage: false)), same(state));
-    expect(tester.getSize(_paneOf<ReleasePane>(offstage: true)).width, width, reason: 'parked at its last width, so the offset is not clamped');
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'surface', reason: 'a dimmed pane cannot keep the keys');
+    expect(find.byType(ReleasePane), findsOneWidget, reason: 'dimmed, not removed');
+    expect(tester.widget<Pane>(_paneOf<ReleasePane>()).ahead, isTrue);
+    expect(tester.getRect(_paneOf<ReleasePane>()), box, reason: 'nothing moved');
+    expect(tester.state<ScrollableState>(scrollable), same(state));
+    expect(state.position.pixels, offset);
 
     await _key(tester, LogicalKeyboardKey.bracketRight);
-    expect(find.text('Reading release…'), findsNothing, reason: 'the pane comes back loaded on the first frame');
-    expect(tester.state<ScrollableState>(scrollable), same(state));
-    expect(state.position.pixels, offset);
+    expect(find.text('Reading release…'), findsNothing);
     await tester.pumpAndSettle();
+    expect(tester.widget<Pane>(_paneOf<ReleasePane>()).ahead, isFalse);
     expect(tester.state<ScrollableState>(scrollable), same(state));
     expect(state.position.pixels, offset);
-    expect(find.byType(ReleasePane, skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('NAV-N2 a branch swapped away is parked with its scroll, and swaps back the same', (tester) async {
+    final core = FakeCore();
+    await core.startTrail(const TargetDto.search(query: ''));
+    await core.follow(0, TargetDto.release(id: PlatformInt64Util.from(1)), ThreadKind.appearsOn, 'local_tags');
+    await core.follow(0, TargetDto.release(id: PlatformInt64Util.from(2)), ThreadKind.appearsOn, 'local_tags');
+    await _surface(tester, core);
+    await _showTrail(tester);
+    final scrollable = find.descendant(of: find.byType(ReleasePane), matching: find.byType(Scrollable));
+    final state = tester.state<ScrollableState>(scrollable);
+    expect(state.position.maxScrollExtent, greaterThan(60));
+    state.position.jumpTo(60);
+    await tester.pumpAndSettle();
+
+    await _sibling(tester, 1);
+    expect(find.byType(ReleasePane), findsOneWidget, reason: 'the other branch is on the row');
+    expect(tester.state<ScrollableState>(scrollable), isNot(same(state)));
+    final parked = find.byType(ReleasePane, skipOffstage: false);
+    expect(parked, findsNWidgets(2), reason: 'parked, not disposed');
+
+    await _sibling(tester, 1);
+    expect(tester.state<ScrollableState>(scrollable), same(state));
+    expect(state.position.pixels, 60);
+    expect(find.text('Reading release…'), findsNothing);
   });
 
   testWidgets('NAV-N2 command 1 and ] return the same pane with its scroll', (tester) async {
@@ -177,18 +223,17 @@ void main() {
 
   testWidgets('NAV-N2 the parked set keeps the last six stops and empties for another trail', (tester) async {
     final core = FakeCore();
-    var trail = await core.startTrail(const TargetDto.search(query: ''));
+    await core.startTrail(const TargetDto.search(query: ''));
     for (var i = 1; i <= 8; i++) {
-      trail = await core.follow(trail.current, TargetDto.release(id: PlatformInt64Util.from(i)), ThreadKind.appearsOn, 'local_tags');
+      await core.follow(0, TargetDto.release(id: PlatformInt64Util.from(i)), ThreadKind.appearsOn, 'local_tags');
     }
     await _surface(tester, core);
     await _showTrail(tester);
     for (var i = 0; i < 8; i++) {
-      await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
-      await tester.pumpAndSettle();
+      await _sibling(tester, 1);
     }
-    expect((await core.trail())!.current, 0);
-    expect(find.byType(ReleasePane, skipOffstage: false), findsNWidgets(6));
+    expect(find.byType(ReleasePane), findsOneWidget);
+    expect(find.byType(ReleasePane, skipOffstage: false), findsNWidgets(7), reason: 'the one on the row and six parked');
     await _key(tester, LogicalKeyboardKey.keyL, meta: true);
     await tester.pumpAndSettle();
     expect(find.byType(ReleasePane, skipOffstage: false), findsNothing, reason: 'a new trail parks nothing from the old one');
@@ -389,7 +434,21 @@ Future<void> _key(WidgetTester tester, LogicalKeyboardKey key, {bool meta = fals
   await tester.pump();
 }
 
+/// `⌥]` (1) or `⌥[` (-1), settled.
+Future<void> _sibling(WidgetTester tester, int step) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+  await tester.sendKeyEvent(step > 0 ? LogicalKeyboardKey.bracketRight : LogicalKeyboardKey.bracketLeft);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+  await tester.pumpAndSettle();
+}
+
 String _hints(WidgetTester tester) => tester.widget<Text>(find.byKey(const ValueKey('status-keys'))).textSpan!.toPlainText();
+
+/// Where each pane on the row starts.
+List<double> _paneXs(WidgetTester tester, {bool offstage = false}) => [
+  for (final pane in find.descendant(of: find.byType(PaneRow), matching: find.byType(Pane, skipOffstage: !offstage), skipOffstage: !offstage).evaluate())
+    if ((pane.findRenderObject() as RenderBox?)?.hasSize ?? false) (pane.findRenderObject()! as RenderBox).localToGlobal(Offset.zero).dx,
+];
 
 Finder _paneOf<T extends Widget>({bool offstage = false}) =>
     find.ancestor(of: find.byType(T, skipOffstage: !offstage), matching: find.byType(Pane, skipOffstage: !offstage)).first;
