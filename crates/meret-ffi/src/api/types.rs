@@ -408,6 +408,9 @@ pub struct _StopDto {
     pub on_path: bool,
     pub is_fork: bool,
     pub is_peek: bool,
+    pub opened_ms: i64,
+    pub dwell_ms: i64,
+    pub actions: Vec<String>,
 }
 #[frb(mirror(BranchDto))]
 pub struct _BranchDto {

@@ -214,101 +214,236 @@ class _TrailStripState extends State<TrailStrip> {
 }
 
 
-/// The trail strip: a star per stop, a line per thread. The current branch
-/// runs along the main line in gold; other branches sit above and below in
-/// grey; forks are ringed; peeks are left out (plates 01, 06).
-class ConstellationPainter extends CustomPainter {
-  ConstellationPainter(this.trail);
-
-  final TrailDto trail;
-  final _labels = <String, TextPainter>{};
-
-  TextPainter _text(String s, TextStyle style) => _labels.putIfAbsent(
-        '$s/${style.color}',
-        () => TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr, maxLines: 1, ellipsis: '…')..layout(maxWidth: 128),
-      );
-
-  Iterable<StopDto> get _visible => trail.stops.where((s) => !s.isPeek || s.onPath);
-
-  StopDto? get root => trail.stops.where((stop) => stop.parent == null).firstOrNull;
-  String get keptLabel => '◆ ${trail.name ?? root?.title ?? ''}';
-  double get keptLabelWidth => trail.kept ? _text(keptLabel, Tok.label.copyWith(color: Tok.gold)).width : 0;
-  double get _keptSpace => trail.kept ? keptLabelWidth + 8 : 0;
-  double get rootTitleWidth => _text(root?.title ?? '', Tok.body.copyWith(fontSize: 11.5, color: Tok.muted)).width;
-
-  double contentWidth(double viewportWidth) => math.max(viewportWidth, (_visible.length + 0.5) * 144 + _keptSpace);
-
-  Map<int, Offset> layoutPositions(Size size) {
-    final stops = {for (final stop in _visible) stop.index: stop};
-    final depths = <int, int>{};
+/// One depth-and-lane layout for the strip and the whole tree.
+class TrailTreeLayout {
+  TrailTreeLayout(TrailDto trail, {bool includePeeks = false}) {
+    final stops = {
+      for (final stop in trail.stops)
+        if (includePeeks || !stop.isPeek || stop.onPath) stop.index: stop,
+    };
     int depth(StopDto stop) => depths.putIfAbsent(stop.index, () {
       final parent = stops[stop.parent];
       return parent == null ? 0 : depth(parent) + 1;
     });
-    final step = ((size.width - _keptSpace) / (stops.length + 0.5)).clamp(144.0, 220.0);
-    final middle = size.height * 0.55;
-    final positions = <int, Offset>{};
-    // The first branch goes below: titles on the main line sit above it.
-    var flip = 1.0;
-    var column = 0;
-    for (final stop in stops.values.toList()..sort((a, b) {
+    final ordered = stops.values.toList();
+    for (final stop in ordered) {
+      depth(stop);
+    }
+    ordered.sort((a, b) {
       final order = depth(a).compareTo(depth(b));
       return order == 0 ? a.index.compareTo(b.index) : order;
-    })) {
-      final parent = positions[stop.parent];
-      final y = stop.onPath ? middle : parent != null && !stops[stop.parent]!.onPath
-          ? parent.dy : middle + flip * size.height * 0.28;
-      positions[stop.index] = Offset(step * (column + 0.5) + (column == 0 ? 0 : _keptSpace), y);
-      column++;
-      if (!stop.onPath && (parent == null || stops[stop.parent]!.onPath)) flip = -flip;
+    });
+    final continued = <int>{};
+    var nextLane = 1;
+    int lane() {
+      final n = nextLane++;
+      return n.isOdd ? (n + 1) ~/ 2 : -n ~/ 2;
     }
-    return positions;
+    for (final stop in ordered) {
+      final parentLane = lanes[stop.parent];
+      lanes[stop.index] = stop.onPath ? 0
+          : parentLane != null && parentLane != 0 && continued.add(stop.parent!) && !stop.isPeek
+              ? parentLane : lane();
+    }
   }
 
+  final depths = <int, int>{};
+  static const rowSpacing = 88.0;
+  static const topInset = 52.0;
+  static const bottomInset = 44.0;
+  final lanes = <int, int>{};
+  int get maxDepth => depths.values.fold(0, math.max);
+  int get topLane => lanes.values.fold(0, math.min);
+  int get bottomLane => lanes.values.fold(0, math.max);
+  double get expandedHeight => topInset + (bottomLane - topLane) * rowSpacing + bottomInset;
+
+  double columnSpacing(double width, {required bool expanded, double keptSpace = 0}) =>
+      ((width - keptSpace) / (maxDepth + 1)).clamp(expanded ? 224.0 : 144.0, expanded ? 280.0 : 220.0);
+
+  Map<int, Offset> positions(TrailDto trail, Size size, {required bool expanded, double keptSpace = 0}) {
+    final step = columnSpacing(size.width, expanded: expanded, keptSpace: keptSpace);
+    final middle = expanded
+        ? topInset - topLane * rowSpacing
+        : size.height * 0.55;
+    final laneStep = expanded
+        ? rowSpacing
+        : math.min(
+            topLane == 0 ? double.infinity : (middle - 10) / -topLane,
+            bottomLane == 0 ? double.infinity : (size.height - middle - 10) / bottomLane,
+          );
+    return {
+      for (final stop in trail.stops)
+        if (depths[stop.index] case final depth?)
+          stop.index: Offset(
+            step * (depth + 0.5 - (expanded && stop.isPeek && !stop.onPath ? 0.45 : 0)) + (depth == 0 ? 0 : keptSpace),
+            middle + lanes[stop.index]! * (laneStep.isFinite ? laneStep : 0),
+          ),
+    };
+  }
+}
+
+String trailActions(List<String> actions) {
+  final counts = <String, int>{};
+  for (final action in actions) {
+    counts.update(action, (count) => count + 1, ifAbsent: () => 1);
+  }
+  return counts.entries.map((entry) {
+    final label = entry.key == 'wanted' ? '♥ want' : entry.key;
+    return entry.value == 1 ? label : '$label ×${entry.value}';
+  }).join(' · ');
+}
+
+/// The whole tree uses the strip's layout and painter at a reading size.
+class TrailTree extends StatefulWidget {
+  const TrailTree({super.key, required this.trail, required this.onGo});
+  final TrailDto trail;
+  final ValueChanged<int> onGo;
+
+  @override
+  State<TrailTree> createState() => _TrailTreeState();
+}
+
+class _TrailTreeState extends State<TrailTree> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+    final painter = ConstellationPainter(widget.trail, expanded: true);
+    final size = Size(painter.contentWidth(box.maxWidth), painter.contentHeight);
+    final positions = painter.layoutPositions(size);
+    return DecoratedBox(
+      decoration: BoxDecoration(color: Tok.void_, border: Border.all(color: Tok.line)),
+      child: Scrollbar(
+        controller: _scroll,
+        thumbVisibility: size.width > box.maxWidth,
+        child: SingleChildScrollView(
+          key: const ValueKey('tree-drawing-scroll'),
+          controller: _scroll,
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: size.width, height: size.height,
+            child: Stack(children: [
+              Positioned.fill(child: CustomPaint(painter: painter)),
+              for (final stop in widget.trail.stops)
+                if (positions[stop.index] case final position?)
+                  Positioned(
+                    left: position.dx - 22, top: position.dy - 22, width: 44, height: 44,
+                    child: Semantics(
+                      key: ValueKey('tree-stop-${stop.index}'),
+                      label: stop.isPeek && !stop.onPath ? 'peeked: ${stop.title}' : stop.title,
+                      button: true, selected: stop.index == widget.trail.current,
+                      child: Tooltip(
+                        message: stop.title,
+                        excludeFromSemantics: true,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => widget.onGo(stop.index),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  });
+}
+
+/// Current stops run along the gold line; earlier branches get their own lanes.
+class ConstellationPainter extends CustomPainter {
+  ConstellationPainter(this.trail, {this.expanded = false});
+
+  final TrailDto trail;
+  final bool expanded;
+  late final _layout = TrailTreeLayout(trail, includePeeks: expanded);
+  final _labels = <(String, TextStyle, double), TextPainter>{};
+
+  TextPainter _text(String s, TextStyle style, {double? maxWidth}) {
+    final width = maxWidth ?? (expanded ? 190.0 : 128.0);
+    return _labels.putIfAbsent(
+      (s, style, width),
+      () => TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr, maxLines: 1, ellipsis: '…')
+        ..layout(maxWidth: width),
+    );
+  }
+
+  Iterable<StopDto> get _visible => trail.stops.where((s) => expanded || !s.isPeek || s.onPath);
+
+  StopDto? get root => trail.stops.where((stop) => stop.parent == null).firstOrNull;
+  String get keptLabel => '◆ ${trail.name ?? root?.title ?? ''}';
+  double get keptLabelWidth => trail.kept ? _text(keptLabel, Tok.label.copyWith(color: Tok.gold)).width : 0;
+  double get _keptSpace => trail.kept && !expanded ? keptLabelWidth + 8 : 0;
+  double get rootTitleWidth => _text(root?.title ?? '', Tok.body.copyWith(fontSize: 11.5, color: Tok.muted)).width;
+  double get contentHeight => _layout.expandedHeight;
+
+  double contentWidth(double viewportWidth) => math.max(viewportWidth, (_layout.maxDepth + 1) * (expanded ? 224.0 : 144.0) + _keptSpace);
+
+  Map<int, Offset> layoutPositions(Size size) => _layout.positions(trail, size, expanded: expanded, keptSpace: _keptSpace);
 
   @override
   void paint(Canvas canvas, Size size) {
     final stops = _visible.toList();
     final pos = layoutPositions(size);
-
-    final gold = Paint()
-      ..color = Tok.gold
-      ..strokeWidth = 1.2;
-    final grey = Paint()
-      ..color = Tok.dim
-      ..strokeWidth = 1;
+    final titleWidth = _layout.columnSpacing(size.width, expanded: expanded, keptSpace: _keptSpace) - 24;
+    final gold = Paint()..color = Tok.gold..strokeWidth = expanded ? 1.5 : 1.2;
+    final grey = Paint()..color = Tok.dim..strokeWidth = 1;
     for (final s in stops) {
       final p = pos[s.index], q = pos[s.parent];
       if (p == null || q == null) continue;
-      canvas.drawLine(q, p, s.onPath ? gold : grey);
-      // Only the main line names its threads; a grey branch's label would sit on the gold one's.
-      if (s.via != null && s.onPath) {
-        final t = _text(s.via!, Tok.label.copyWith(fontSize: 9.5, fontStyle: FontStyle.italic));
-        t.paint(canvas, Offset((p.dx + q.dx) / 2 - t.width / 2, (p.dy + q.dy) / 2 + 8));
+      final peek = expanded && s.isPeek && !s.onPath;
+      if (peek) {
+        _dots(canvas, q, p, Tok.dim);
+      } else {
+        canvas.drawLine(q, p, s.onPath ? gold : grey);
+      }
+      if (s.via != null && !peek && (expanded || s.onPath)) {
+        final t = _text(s.via!, Tok.label.copyWith(
+          fontSize: expanded ? 10.5 : 9.5, fontStyle: FontStyle.italic, color: Tok.gold2,
+        ));
+        t.paint(canvas, Offset((p.dx + q.dx) / 2 - t.width / 2, (p.dy + q.dy) / 2 + (expanded ? -t.height - 8 : 8)));
       }
     }
-    final meeting = Paint()..color = Tok.gold2;
     for (final (a, b) in trail.meetings) {
       final from = pos[a], to = pos[b];
-      if (from == null || to == null) continue;
-      final delta = to - from;
-      final distance = delta.distance;
-      // Leave the stars clear, and draw individual dots rather than dashes.
-      for (var d = 9.0; d < distance - 8; d += 6) {
-        canvas.drawCircle(from + delta * (d / distance), 1, meeting);
-      }
+      if (from != null && to != null) _dots(canvas, from, to, Tok.gold2);
     }
     for (final s in stops) {
       final p = pos[s.index];
       if (p == null) continue;
       final current = s.index == trail.current;
-      canvas.drawCircle(p, current ? 4.5 : 3, Paint()..color = s.onPath ? Tok.gold : Tok.faint);
-      if (s.isFork) {
-        canvas.drawCircle(p, 7, Paint()
-          ..color = Tok.gold2
-          ..style = PaintingStyle.stroke);
+      final peek = expanded && s.isPeek && !s.onPath;
+      if (peek) {
+        canvas.drawLine(p + const Offset(-4, 4), p + const Offset(4, -4), grey..strokeWidth = 2);
+      } else {
+        if (current && expanded) canvas.drawCircle(p, 12, Paint()..color = Tok.gold3);
+        canvas.drawCircle(p, current ? 4.5 : 3, Paint()..color = s.onPath ? Tok.gold : Tok.faint);
+        if (s.isFork) {
+          canvas.drawCircle(p, expanded ? 9 : 7, Paint()..color = Tok.gold2..style = PaintingStyle.stroke);
+        }
       }
-      if (s.onPath) {
+      if (expanded) {
+        final title = _text(peek ? 'peeked: ${s.title}' : s.title, Tok.body.copyWith(
+          fontSize: peek ? 11 : 13, color: current ? Tok.ink : s.onPath ? Tok.muted : Tok.faint,
+        ), maxWidth: titleWidth);
+        title.paint(canvas, p + Offset(-title.width / 2, -title.height - 28));
+        final note = _text([
+          clockTime(s.openedMs.toInt()),
+          if (s.actions.isNotEmpty) trailActions(s.actions),
+          if (current) 'now',
+        ].join(' · '), Tok.label.copyWith(fontSize: 10, letterSpacing: 0));
+        note.paint(canvas, p + Offset(-note.width / 2, 15));
+      } else if (s.onPath) {
         final t = _text(s.title, Tok.body.copyWith(fontSize: 11.5, color: current ? Tok.ink : Tok.muted));
         t.paint(canvas, p + Offset(-t.width / 2, -22));
       } else {
@@ -318,11 +453,19 @@ class ConstellationPainter extends CustomPainter {
     }
   }
 
+  void _dots(Canvas canvas, Offset from, Offset to, Color color) {
+    final delta = to - from;
+    final distance = delta.distance;
+    final paint = Paint()..color = color;
+    for (var d = 9.0; d < distance - 8; d += 6) {
+      canvas.drawCircle(from + delta * (d / distance), 1, paint);
+    }
+  }
 
   @override
   SemanticsBuilderCallback get semanticsBuilder => (size) {
     final positions = layoutPositions(size);
-    return [for (final stop in trail.stops)
+    return [for (final stop in _visible)
       if (positions[stop.index] case final position?)
         CustomPainterSemantics(
           rect: Rect.fromCenter(center: position, width: 44, height: 44),
@@ -332,8 +475,8 @@ class ConstellationPainter extends CustomPainter {
   };
 
   @override
-  bool shouldRebuildSemantics(ConstellationPainter oldDelegate) => oldDelegate.trail != trail;
+  bool shouldRebuildSemantics(ConstellationPainter oldDelegate) => oldDelegate.trail != trail || oldDelegate.expanded != expanded;
 
   @override
-  bool shouldRepaint(ConstellationPainter old) => old.trail != trail;
+  bool shouldRepaint(ConstellationPainter old) => old.trail != trail || old.expanded != expanded;
 }

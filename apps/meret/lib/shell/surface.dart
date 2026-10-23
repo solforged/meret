@@ -15,6 +15,7 @@ import '../panes/pane.dart';
 import '../panes/person_pane.dart';
 import '../panes/release_pane.dart';
 import '../panes/search_pane.dart';
+import '../panes/tree_pane.dart';
 import '../panes/work_pane.dart';
 import '../settings/settings_window.dart';
 import '../theme/light.dart';
@@ -51,6 +52,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   StatusDto? _status;
   TrailDto? _trail;
   bool _frontOnly = true;
+  bool _treeOnly = false;
   _Stage _stage = _Stage.undecided;
   int _navigationVersion = 0;
   int _memoryVersion = 0;
@@ -137,7 +139,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     final root = trail.stops.firstWhere((stop) => stop.parent == null).title;
     final leaf = trail.stops.firstWhere((stop) => stop.index == trail.current).title;
     final version = _navigationVersion;
-    final name = await askTrailName(context, suggested: root == leaf ? root : '$root → $leaf');
+    final name = await askTrailName(context, suggested: trail.name ?? (root == leaf ? root : '$root → $leaf'));
     if (name == null || !mounted || version != _navigationVersion) return;
     final kept = await widget.core.keepTrail(name: name.name);
     if (!mounted || version != _navigationVersion) return;
@@ -168,7 +170,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _slide.animateTo(0, curve: Curves.easeOutCubic);
   }
 
-  Future<void> _navigate(Future<TrailDto?> Function() call, {bool frontOnNull = false, int direction = 1}) async {
+  Future<void> _navigate(Future<TrailDto?> Function() call, {bool frontOnNull = false, int direction = 1, bool closeTree = true}) async {
     _leaveStage();
     final version = ++_navigationVersion;
     final trail = await call();
@@ -176,6 +178,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     final moved = trail != null && (trail.current != _trail?.current || trail.stops.length != _trail?.stops.length);
     setState(() {
       _navigationError = null;
+      if (closeTree) _treeOnly = false;
       if (trail != null) {
         _memoryVersion++;
         _trail = trail;
@@ -205,7 +208,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     await _navigate(() => widget.core.trailSibling(step), direction: step);
   }
 
-  Future<void> _prune(int leaf) => _navigate(() => widget.core.pruneBranch(leaf));
+  Future<void> _prune(int leaf) => _navigate(() => widget.core.pruneBranch(leaf), closeTree: false);
 
   Future<void> _pruneNewest() async {
     if (_editing) return;
@@ -248,6 +251,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     setState(() {
       _stage = _Stage.front;
       _frontOnly = true;
+      _treeOnly = false;
       _navigationError = null;
     });
   }
@@ -256,9 +260,28 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _navigationVersion++;
     setState(() {
       _frontOnly = false;
+      _treeOnly = false;
       _navigationError = null;
     });
     _animate(1);
+  }
+
+  void _toggleTree() {
+    if (_editing || _trail == null) return;
+    _navigationVersion++;
+    _slide.stop();
+    _slide.value = 0;
+    setState(() {
+      _stage = _Stage.front;
+      _frontOnly = false;
+      _treeOnly = !_treeOnly;
+      _navigationError = null;
+    });
+  }
+
+  void _closeTree() {
+    if (_editing || !_treeOnly) return;
+    setState(() => _treeOnly = false);
   }
 
   Future<void> _start(TargetDto to) => _navigate(() => widget.core.startTrail(to));
@@ -291,6 +314,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     setState(() {
       _trail = trail;
       _frontOnly = false;
+      _treeOnly = false;
       _navigationError = null;
     });
     if (hit != null) {
@@ -376,6 +400,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         SingleActivator(LogicalKeyboardKey.space, shift: true, includeRepeats: false): _PlaySomething(),
         SingleActivator(LogicalKeyboardKey.space, alt: true, includeRepeats: false): _FromStart(),
         SingleActivator(LogicalKeyboardKey.keyH): _History(),
+        SingleActivator(LogicalKeyboardKey.keyT, includeRepeats: false): _Tree(),
+        SingleActivator(LogicalKeyboardKey.escape, includeRepeats: false): _CloseTree(),
         SingleActivator(LogicalKeyboardKey.bracketLeft): _Move(-1),
         SingleActivator(LogicalKeyboardKey.bracketRight): _Move(1),
         SingleActivator(LogicalKeyboardKey.bracketLeft, alt: true): _Sibling(-1),
@@ -393,6 +419,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           _PlaySomething: CallbackAction<_PlaySomething>(onInvoke: (_) => _report(_playSomething())),
           _FromStart: CallbackAction<_FromStart>(onInvoke: (_) => _fromStart()),
           _History: CallbackAction<_History>(onInvoke: (_) => _history()),
+          _Tree: CallbackAction<_Tree>(onInvoke: (_) => _toggleTree()),
+          _CloseTree: CallbackAction<_CloseTree>(onInvoke: (_) => _closeTree()),
           _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
           _Sibling: CallbackAction<_Sibling>(onInvoke: (i) => _report(_sibling(i.step))),
           _Prune: CallbackAction<_Prune>(onInvoke: (_) => _report(_pruneNewest())),
@@ -487,7 +515,17 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                         )),
                       ])
                     : Row(key: const ValueKey('stage-trail'), children: [
-                        Expanded(child: row),
+                        Expanded(child: Stack(fit: StackFit.expand, children: [
+                          Visibility(visible: !_treeOnly, maintainState: true, child: row),
+                          if (_treeOnly && _trail != null)
+                            TreePane(
+                              trail: _trail!,
+                              onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop))),
+                              onPrune: (leaf) => _report(_prune(leaf)),
+                              onKeep: () => _report(_keep()),
+                              onPlay: (whole) => _report(_playTrail(whole)),
+                            ),
+                        ])),
                         // Retain loaded details: async remounts clamp a restored scroll offset.
                         Visibility(
                           visible: wc.pinnedNow, maintainState: true, maintainAnimation: false, maintainSize: false,
@@ -506,7 +544,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   onRelease: (id) => _report(_start(TargetDto.release(id: id))),
                 ),
                 if (wc != WidthClass.phone)
-                  StatusLine(core: widget.core, status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), ('␣', 'play'), ('⇧␣', 'play something'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
+                  StatusLine(core: widget.core, status: _status, keys: [('/', 'search'), ('[ ]', 'along the trail'), if (trailOpen) ('T', _treeOnly ? 'panes' : 'tree'), ('␣', 'play'), ('⇧␣', 'play something'), if (wc == WidthClass.large) ...[('⌘1', 'Front'), ('⌘L', 'table')]]),
               ]);
             }),
           ),
@@ -575,4 +613,12 @@ class _Sibling extends Intent {
 
 class _Prune extends Intent {
   const _Prune();
+}
+
+class _Tree extends Intent {
+  const _Tree();
+}
+
+class _CloseTree extends Intent {
+  const _CloseTree();
 }

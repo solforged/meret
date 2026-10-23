@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64Util;
 import 'package:meret/core/bridge.dart';
 import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
@@ -256,6 +257,7 @@ void main() {
 StopDto _stop(int index, int? parent, bool onPath, {bool peek = false}) => StopDto(
   index: index, parent: parent, target: TargetDto.search(query: 'Stop $index'),
   title: 'Stop $index', onPath: onPath, isFork: false, isPeek: peek,
+  openedMs: PlatformInt64Util.from(0), dwellMs: PlatformInt64Util.from(0), actions: const [],
 );
 
 TrailDto _longTrail(int count, int current) => TrailDto(

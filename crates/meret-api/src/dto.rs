@@ -1196,6 +1196,12 @@ pub struct StopDto {
     pub on_path: bool,
     pub is_fork: bool,
     pub is_peek: bool,
+    /// When it was last entered.
+    pub opened_ms: i64,
+    /// Time spent on it, the current stop's up to now.
+    pub dwell_ms: i64,
+    /// What was done on it, in order, repeats kept: "played", "wanted".
+    pub actions: Vec<String>,
 }
 
 /// A branch of the tree, peeks folded away: the run of stops from the one
@@ -1248,6 +1254,7 @@ impl TrailDto {
     pub fn from_trail(t: &Trail, now: i64, title: impl Fn(&TargetDto) -> String) -> Self {
         let path = t.path();
         let forks = t.forks(now);
+        let dwell = t.snapshot(now);
         let stops = (0..t.len())
             .filter(|&i| !t.stop(i).pruned)
             .map(|i| {
@@ -1263,6 +1270,9 @@ impl TrailDto {
                     on_path: path.contains(&i),
                     is_fork: forks.contains(&i),
                     is_peek: t.is_peek(i, now),
+                    opened_ms: s.opened_at,
+                    dwell_ms: dwell.stop(i).dwell_ms,
+                    actions: s.actions.iter().map(|a| action_name(*a).to_string()).collect(),
                 }
             })
             .collect();

@@ -23,18 +23,18 @@ class PaneActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(spacing: 8, runSpacing: 8, children: [
-    _ActionButton(key: primaryKey, label: primary, hint: secondary == null ? 'Space' : '', primary: true, onTap: onPrimary),
+    PaneActionButton(key: primaryKey, label: primary, hint: secondary == null ? 'Space' : '', primary: true, onTap: onPrimary),
     if (secondary case final label?)
-      _ActionButton(label: label, hint: '', onTap: onSecondary)
+      PaneActionButton(label: label, hint: '', onTap: onSecondary)
     else ...[
-      const _ActionButton(label: 'Want', hint: 'W', later: true),
-      const _ActionButton(label: 'Crate', hint: 'C', later: true),
+      const PaneActionButton(label: 'Want', hint: 'W', later: true),
+      const PaneActionButton(label: 'Crate', hint: 'C', later: true),
     ],
   ]);
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({super.key, required this.label, required this.hint, this.primary = false, this.onTap, this.later = false});
+class PaneActionButton extends StatelessWidget {
+  const PaneActionButton({super.key, required this.label, this.hint = '', this.primary = false, this.onTap, this.later = false});
   final String label;
   final String hint;
   final bool primary;
@@ -56,14 +56,13 @@ class _ActionButton extends StatelessWidget {
             color: primary && enabled ? Tok.gold : Colors.transparent,
             border: Border.all(color: primary && enabled ? Tok.gold : Tok.rule),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
+          child: Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
             Text(label, style: Tok.body.copyWith(
               fontSize: 12.5,
               fontWeight: primary ? FontWeight.w600 : FontWeight.w500,
               color: primary && enabled ? Tok.sky : enabled ? Tok.ink : Tok.faint,
             )),
             if (hint.isNotEmpty) ...[
-              const SizedBox(width: 6),
               Text(hint, style: Tok.label.copyWith(color: primary && enabled ? Tok.sky.withValues(alpha: 0.6) : Tok.faint, letterSpacing: 0)),
             ],
           ]),

@@ -2279,6 +2279,9 @@ const _: fn() = || {
         let _: bool = StopDto.on_path;
         let _: bool = StopDto.is_fork;
         let _: bool = StopDto.is_peek;
+        let _: i64 = StopDto.opened_ms;
+        let _: i64 = StopDto.dwell_ms;
+        let _: Vec<String> = StopDto.actions;
     }
     match None::<crate::api::types::TargetDto>.unwrap() {
         crate::api::types::TargetDto::Search { query } => {
@@ -3922,6 +3925,9 @@ impl SseDecode for crate::api::types::StopDto {
         let mut var_onPath = <bool>::sse_decode(deserializer);
         let mut var_isFork = <bool>::sse_decode(deserializer);
         let mut var_isPeek = <bool>::sse_decode(deserializer);
+        let mut var_openedMs = <i64>::sse_decode(deserializer);
+        let mut var_dwellMs = <i64>::sse_decode(deserializer);
+        let mut var_actions = <Vec<String>>::sse_decode(deserializer);
         return crate::api::types::StopDto {
             index: var_index,
             parent: var_parent,
@@ -3932,6 +3938,9 @@ impl SseDecode for crate::api::types::StopDto {
             on_path: var_onPath,
             is_fork: var_isFork,
             is_peek: var_isPeek,
+            opened_ms: var_openedMs,
+            dwell_ms: var_dwellMs,
+            actions: var_actions,
         };
     }
 }
@@ -5509,6 +5518,9 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::StopDto> {
             self.0.on_path.into_into_dart().into_dart(),
             self.0.is_fork.into_into_dart().into_dart(),
             self.0.is_peek.into_into_dart().into_dart(),
+            self.0.opened_ms.into_into_dart().into_dart(),
+            self.0.dwell_ms.into_into_dart().into_dart(),
+            self.0.actions.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -7038,6 +7050,9 @@ impl SseEncode for crate::api::types::StopDto {
         <bool>::sse_encode(self.on_path, serializer);
         <bool>::sse_encode(self.is_fork, serializer);
         <bool>::sse_encode(self.is_peek, serializer);
+        <i64>::sse_encode(self.opened_ms, serializer);
+        <i64>::sse_encode(self.dwell_ms, serializer);
+        <Vec<String>>::sse_encode(self.actions, serializer);
     }
 }
 

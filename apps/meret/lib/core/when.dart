@@ -31,6 +31,12 @@ String clockTime(int ms) {
   return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 }
 
+/// Calendar day, "Tue 13 Oct".
+String dayDate(int ms) {
+  final t = _local(ms);
+  return '${_weekdays[t.weekday - 1].substring(0, 3)} ${t.day} ${_months[t.month - 1]}';
+}
+
 /// "Tue 23:14" today or this week, otherwise "12 Oct 23:14".
 String dayAndTime(int ms, {DateTime? now}) {
   now ??= DateTime.now();
