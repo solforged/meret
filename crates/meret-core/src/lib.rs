@@ -496,6 +496,15 @@ impl Core {
         self.player.lock().queue().items.clone()
     }
 
+    /// The release of the queue's current item: what Now shows as loaded,
+    /// playing, paused or restored from the last run.
+    pub fn loaded_release(&self) -> Option<ReleaseId> {
+        if let Some(saved) = &*self.pending.lock() {
+            return saved.items.get(saved.cursor).and_then(|item| item.release);
+        }
+        self.player.lock().queue().current().and_then(|item| item.release)
+    }
+
     /// The queue after the playing item, up to `limit` items, and how many
     /// follow in all.
     pub fn up_next(&self, limit: usize) -> (Vec<QueueItem>, usize) {

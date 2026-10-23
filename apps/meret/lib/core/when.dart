@@ -1,5 +1,5 @@
 /// How Meret says when something happened. One voice for the Front, Now
-/// and the strip: "Tuesday", "yesterday", "23:14", "2y".
+/// and the strip: "Tuesday", "yesterday", "23:14", "just now", "2y".
 library;
 
 const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -37,14 +37,22 @@ String dayDate(int ms) {
   return '${_weekdays[t.weekday - 1].substring(0, 3)} ${t.day} ${_months[t.month - 1]}';
 }
 
-/// "Tue 23:14" today or this week, otherwise "12 Oct 23:14".
+/// A moment, as Now says it: "just now" within a minute, "today 06:28",
+/// "yesterday 21:57", "Thu 21:57" within the week, otherwise "12 Oct 23:14".
 String dayAndTime(int ms, {DateTime? now}) {
   now ??= DateTime.now();
   final then = _local(ms);
+  if (now.difference(then) < justNow) return 'just now';
   final days = _midnight(now).difference(_midnight(then)).inDays;
-  final day = days < 7 ? _weekdays[then.weekday - 1].substring(0, 3) : '${then.day} ${_months[then.month - 1]}';
+  final day = days <= 0 ? 'today'
+    : days == 1 ? 'yesterday'
+    : days < 7 ? _weekdays[then.weekday - 1].substring(0, 3)
+    : '${then.day} ${_months[then.month - 1]}';
   return '$day ${clockTime(ms)}';
 }
+
+/// How long [dayAndTime] keeps saying "just now".
+const justNow = Duration(minutes: 1);
 
 /// How long ago, tersely: "2y", "18mo", "3d", "5h", "now".
 String agoShort(int ms, {DateTime? now}) {

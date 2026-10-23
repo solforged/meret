@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 /// The row of panes along a trail. Older panes fold to spines.
@@ -12,13 +13,21 @@ import 'package:flutter/widgets.dart';
 /// [maxVisible]; the rest fold to [spine]-wide spines on the left. Panes
 /// share the width equally, except that panes listed in [wide] (a table)
 /// take whatever the others don't need once they reach [maxPane].
-class PaneRow extends StatelessWidget {
+///
+/// Panes that left the path ride along in [parked]: laid out at the width
+/// they last had on the path, never painted, hit or focused, so a stop that
+/// comes back keeps its loaded data and scroll. Give every pane a
+/// `GlobalKey`; the same key moves it between [children] and [parked].
+class PaneRow extends StatefulWidget {
   const PaneRow({
-    super.key, required this.children, required this.slide,
+    super.key, required this.children, required this.slide, this.parked = const [],
     this.maxVisible = 5, this.minPane = 440, this.maxPane = 560, this.wide = const {}, this.spine = 46,
   });
 
   final List<Widget> children;
+
+  /// Off-path panes kept mounted, oldest first.
+  final List<Widget> parked;
 
   /// 0 when settled; eases from 1 for forward or -1 for reverse navigation.
   final Animation<double> slide;
@@ -71,24 +80,42 @@ class PaneRow extends StatelessWidget {
   }
 
   @override
+  State<PaneRow> createState() => _PaneRowState();
+}
+
+class _PaneRowState extends State<PaneRow> {
+  /// The last full width each keyed pane had on the path; parked panes keep it.
+  final _lastWidths = <Key, double>{};
+
+  @override
   Widget build(BuildContext context) {
+    final PaneRow(:children, :parked) = widget;
+    final keys = [for (final c in children) c.key, for (final c in parked) c.key];
+    _lastWidths.removeWhere((key, _) => !keys.contains(key));
     return Flow(
       delegate: _PaneFlow(
-        count: children.length, slide: slide, maxVisible: maxVisible,
-        minPane: minPane, maxPane: maxPane, wide: wide, spine: spine,
+        count: children.length, keys: keys,
+        lastWidths: _lastWidths, slide: widget.slide, maxVisible: widget.maxVisible,
+        minPane: widget.minPane, maxPane: widget.maxPane, wide: widget.wide, spine: widget.spine,
       ),
-      children: [for (final c in children) RepaintBoundary(child: c)],
+      children: [
+        for (final c in children) RepaintBoundary(child: c),
+        for (final c in parked) Visibility(visible: false, maintainState: true, child: c),
+      ],
     );
   }
 }
 
 class _PaneFlow extends FlowDelegate {
   _PaneFlow({
-    required this.count, required this.slide, required this.maxVisible,
+    required this.count, required this.keys, required this.lastWidths, required this.slide, required this.maxVisible,
     required this.minPane, required this.maxPane, required this.wide, required this.spine,
   }) : super(repaint: slide);
 
+  /// On-path panes; children past [count] are parked.
   final int count;
+  final List<Key?> keys;
+  final Map<Key, double> lastWidths;
   final Animation<double> slide;
   final int maxVisible;
   final double minPane;
@@ -104,7 +131,16 @@ class _PaneFlow extends FlowDelegate {
   @override
   BoxConstraints getConstraintsForChild(int i, BoxConstraints constraints) {
     final size = constraints.biggest;
-    return BoxConstraints.tightFor(width: _widths(size)[i], height: size.height);
+    final widths = _widths(size);
+    final key = keys[i];
+    final double width;
+    if (i < count) {
+      width = widths[i];
+      if (key != null && width > spine) lastWidths[key] = width;
+    } else {
+      width = (key == null ? null : lastWidths[key]) ?? (widths.isEmpty ? minPane : widths.last);
+    }
+    return BoxConstraints.tightFor(width: width, height: size.height);
   }
 
   @override
@@ -113,7 +149,8 @@ class _PaneFlow extends FlowDelegate {
     final spines = count - PaneRow.fit(count: count, width: context.size.width, maxVisible: maxVisible, minPane: minPane, spine: spine);
     final shift = slide.value * (widths.isEmpty ? 0 : widths.last);
     var x = 0.0;
-    for (var i = 0; i < context.childCount; i++) {
+    // Parked panes (past count) are laid out but never painted, so they take no hits.
+    for (var i = 0; i < count; i++) {
       // Spines stay put; full panes slide from the direction of navigation.
       final dx = i < spines ? x : x + shift;
       context.paintChild(i, transform: Matrix4.translationValues(dx, 0, 0));
@@ -123,7 +160,7 @@ class _PaneFlow extends FlowDelegate {
 
   @override
   bool shouldRelayout(_PaneFlow old) =>
-      old.count != count || old.maxVisible != maxVisible || old.minPane != minPane ||
+      old.count != count || !listEquals(old.keys, keys) || old.maxVisible != maxVisible || old.minPane != minPane ||
       old.maxPane != maxPane || old.spine != spine || !_sameWide(old.wide);
 
   bool _sameWide(Set<int> other) => other.length == wide.length && other.containsAll(wide);

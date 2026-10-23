@@ -505,7 +505,10 @@ class _SettingsWindowState extends State<_SettingsWindow> {
             child: _button(label, _savingLookups ? null : () => _setLookups(setting), primary: _lookupStatus!.setting == setting),
           ),
       ]),
-      note: 'sends IDs, album titles and album artists to MusicBrainz, album titles to Wikidata'),
+      note: [
+        if (_lookupStatus?.setting == LookupsDto.unasked) 'Asks first',
+        'Sends IDs, album titles and album artists to MusicBrainz, album titles to Wikidata',
+      ].join(' · ')),
     if (_lookupStatus case final lookups?)
       if (lookups.lookedUp > BigInt.zero || lookups.waiting > BigInt.zero || lookups.failed > BigInt.zero)
         Padding(

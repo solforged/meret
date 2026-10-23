@@ -9,11 +9,14 @@ import 'pane.dart';
 import 'release_pane.dart';
 
 class GamePane extends StatefulWidget {
-  const GamePane({super.key, required this.core, required this.id, required this.onFollow, this.libraryVersion, this.lookupsVersion});
+  const GamePane({super.key, required this.core, required this.id, required this.onFollow, this.title, this.libraryVersion, this.lookupsVersion});
 
   final CoreBridge core;
   final PlatformInt64 id;
   final Future<void> Function(TargetDto, ThreadKind, String) onFollow;
+
+  /// The stop's title, shown over the placeholder until the game arrives.
+  final String? title;
   final BigInt? libraryVersion;
   final BigInt? lookupsVersion;
 
@@ -37,7 +40,14 @@ class _GamePaneState extends State<GamePane> {
   @override
   void didUpdateWidget(GamePane old) {
     super.didUpdateWidget(old);
-    if (old.id != widget.id || old.core != widget.core || old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) _load();
+    if (old.id != widget.id || old.core != widget.core) {
+      _game = null;
+      _selected = null;
+      _load();
+    } else if (old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) {
+      // Facts filled in: refetch in place, keeping what is shown until the new DTO lands.
+      _load();
+    }
   }
 
   @override
@@ -48,14 +58,13 @@ class _GamePaneState extends State<GamePane> {
 
   Future<void> _load() async {
     final generation = ++_generation;
-    _game = null;
-    _selected = null;
     try {
       final game = await widget.core.game(widget.id);
       if (!mounted || generation != _generation) return;
       setState(() {
         _game = game;
         _error = null;
+        if (_selected case final selected? when selected >= game.rows.length) _selected = null;
       });
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _error = error.toString());
@@ -113,15 +122,14 @@ class _GamePaneState extends State<GamePane> {
       key: ValueKey('game-row-$index'),
       button: true,
       selected: _selected == index,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
+      child: Door(
+        builder: (context, hover) => GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _play(index),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 6),
             decoration: BoxDecoration(
-              color: lit ? light.wash : _selected == index ? Tok.panel2 : Colors.transparent,
+              color: lit ? light.wash : _selected == index || hover ? Tok.panel2 : Colors.transparent,
               border: Border(
                 bottom: const BorderSide(color: Tok.line),
                 left: BorderSide(color: lit ? light.accent : Colors.transparent, width: 2),
@@ -158,7 +166,7 @@ class _GamePaneState extends State<GamePane> {
   @override
   Widget build(BuildContext context) {
     final game = _game;
-    if (game == null) return Text(_error ?? 'Reading game…', style: Tok.label.copyWith(color: _error == null ? Tok.faint : Tok.warn));
+    if (game == null) return paneReading(widget.title, _error ?? 'Reading game…', error: _error != null);
     final facts = [
       if (game.year case final year?) '$year',
       ?game.developers,

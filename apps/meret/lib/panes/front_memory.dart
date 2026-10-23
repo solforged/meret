@@ -261,6 +261,13 @@ class FrontDoor extends StatefulWidget {
 
 class _FrontDoorState extends State<FrontDoor> {
   bool _hover = false;
+  bool _pressed = false;
+
+  Color get _fill {
+    if (widget.onTap == null) return Tok.sky;
+    if (_pressed) return Tok.line;
+    return _hover ? Tok.panel2 : Tok.sky;
+  }
 
   @override
   Widget build(BuildContext context) => MouseRegion(
@@ -272,9 +279,12 @@ class _FrontDoorState extends State<FrontDoor> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
-          decoration: BoxDecoration(color: _hover && widget.onTap != null ? Tok.panel2 : Tok.sky, border: const Border(bottom: BorderSide(color: Tok.line))),
+          decoration: BoxDecoration(color: _fill, border: const Border(bottom: BorderSide(color: Tok.line))),
           child: widget.child,
         ),
       ),

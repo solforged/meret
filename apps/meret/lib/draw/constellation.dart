@@ -8,9 +8,12 @@ import '../core/when.dart';
 import '../theme/tokens.dart';
 
 class NoTrailStrip extends StatefulWidget {
-  const NoTrailStrip({super.key, required this.core, required this.memoryVersion});
+  const NoTrailStrip({super.key, required this.core, required this.memoryVersion, this.onResume});
   final CoreBridge core;
   final int memoryVersion;
+
+  /// Opens the last trail; the "[ to resume …" line is a door only when set.
+  final VoidCallback? onResume;
 
   @override
   State<NoTrailStrip> createState() => _NoTrailStripState();
@@ -45,26 +48,70 @@ class _NoTrailStripState extends State<NoTrailStrip> {
         future: _history,
         builder: (context, snapshot) {
           final trail = snapshot.data?.firstOrNull;
-          return Text.rich(
-            TextSpan(children: [
-              if (snapshot.hasError)
-                TextSpan(text: "couldn't load trails · ${snapshot.error}", style: Tok.label.copyWith(color: Tok.warn))
-              else if (trail == null)
-                const TextSpan(text: 'no trail yet')
-              else ...[
-                TextSpan(text: '[', style: Tok.label.copyWith(color: Tok.gold)),
-                TextSpan(text: ' to resume ${dayPossessive(trail.whenMs.toInt())} · ${trail.name ?? trail.title} · ${trail.stops} ${trail.stops == 1 ? 'stop' : 'stops'}'),
-              ],
+          if (snapshot.hasError) {
+            return _line([
+              TextSpan(text: "couldn't load trails · ${snapshot.error}", style: Tok.label.copyWith(color: Tok.warn)),
+            ]);
+          }
+          if (trail == null) return _line([const TextSpan(text: 'no trail yet')]);
+          return _ResumeDoor(
+            onTap: widget.onResume,
+            child: _line([
+              TextSpan(text: '[', style: Tok.label.copyWith(color: Tok.gold)),
+              TextSpan(text: ' to resume ${dayPossessive(trail.whenMs.toInt())} · ${trail.name ?? trail.title} · ${trail.stops} ${trail.stops == 1 ? 'stop' : 'stops'}'),
             ]),
-            style: Tok.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           );
         },
       )),
     ]),
   );
+
+  Widget _line(List<InlineSpan> spans) => Text.rich(
+    TextSpan(children: spans),
+    style: Tok.label,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+  );
 }
+
+/// The resume line is a quiet door like a Front row: hand cursor and a panel tint on hover.
+class _ResumeDoor extends StatefulWidget {
+  const _ResumeDoor({required this.child, this.onTap});
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  State<_ResumeDoor> createState() => _ResumeDoorState();
+}
+
+class _ResumeDoorState extends State<_ResumeDoor> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+    return MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Semantics(
+        button: enabled,
+        child: GestureDetector(
+          key: const ValueKey('trail-resume'),
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: Container(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            color: _hover && enabled ? Tok.panel2 : null,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class TrailStrip extends StatefulWidget {
   const TrailStrip({super.key, required this.trail, required this.onGo, this.onPlay});
   final TrailDto trail;
@@ -135,9 +182,9 @@ class _TrailStripState extends State<TrailStrip> {
     }
     final overflow = size.width > viewport.width;
     return Stack(children: [
-      Scrollbar(
-        controller: _scroll,
-        thumbVisibility: overflow,
+      // The pager chevrons stand in for a scrollbar: a 44 px strip has no row left for a thumb.
+      ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: SingleChildScrollView(
           key: const ValueKey('trail-scroll'),
           controller: _scroll,
@@ -150,7 +197,7 @@ class _TrailStripState extends State<TrailStrip> {
               if (painter.root case final root? when widget.trail.kept)
                 if (positions[root.index] case final position?)
                   Positioned(
-                    left: position.dx + painter.rootTitleWidth / 2 + 8,
+                    left: position.dx + painter.rootTitleWidth(size) / 2 + 8,
                     top: position.dy - 22,
                     width: painter.keptLabelWidth,
                     child: Text(
@@ -258,7 +305,11 @@ class TrailTreeLayout {
   double get expandedHeight => topInset + (bottomLane - topLane) * rowSpacing + bottomInset;
 
   double columnSpacing(double width, {required bool expanded, double keptSpace = 0}) =>
-      ((width - keptSpace) / (maxDepth + 1)).clamp(expanded ? 224.0 : 144.0, expanded ? 280.0 : 220.0);
+      ((width - keptSpace) / (maxDepth + 1)).clamp(expanded ? 224.0 : 144.0, expanded ? 280.0 : 264.0);
+
+  /// Labels take the room between neighbouring stars, less a gutter, up to a reading width.
+  double labelWidth(double width, {required bool expanded, double keptSpace = 0}) =>
+      (columnSpacing(width, expanded: expanded, keptSpace: keptSpace) - 24).clamp(expanded ? 190.0 : 128.0, 240.0);
 
   Map<int, Offset> positions(TrailDto trail, Size size, {required bool expanded, double keptSpace = 0}) {
     final step = columnSpacing(size.width, expanded: expanded, keptSpace: keptSpace);
@@ -369,22 +420,21 @@ class ConstellationPainter extends CustomPainter {
   late final _layout = TrailTreeLayout(trail, includePeeks: expanded);
   final _labels = <(String, TextStyle, double), TextPainter>{};
 
-  TextPainter _text(String s, TextStyle style, {double? maxWidth}) {
-    final width = maxWidth ?? (expanded ? 190.0 : 128.0);
-    return _labels.putIfAbsent(
-      (s, style, width),
-      () => TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr, maxLines: 1, ellipsis: '…')
-        ..layout(maxWidth: width),
-    );
-  }
+  TextPainter _text(String s, TextStyle style, {required double width}) => _labels.putIfAbsent(
+    (s, style, width),
+    () => TextPainter(text: TextSpan(text: s, style: style), textDirection: TextDirection.ltr, maxLines: 1, ellipsis: '…')
+      ..layout(maxWidth: width),
+  );
 
   Iterable<StopDto> get _visible => trail.stops.where((s) => expanded || !s.isPeek || s.onPath);
 
   StopDto? get root => trail.stops.where((stop) => stop.parent == null).firstOrNull;
   String get keptLabel => '◆ ${trail.name ?? root?.title ?? ''}';
-  double get keptLabelWidth => trail.kept ? _text(keptLabel, Tok.label.copyWith(color: Tok.gold)).width : 0;
+  /// Measured before layout (it feeds the column spacing), so it stays at the narrowest label width.
+  double get keptLabelWidth => trail.kept ? _text(keptLabel, Tok.label.copyWith(color: Tok.gold), width: 128).width : 0;
   double get _keptSpace => trail.kept && !expanded ? keptLabelWidth + 8 : 0;
-  double get rootTitleWidth => _text(root?.title ?? '', Tok.body.copyWith(fontSize: 11.5, color: Tok.muted)).width;
+  double labelWidth(Size size) => _layout.labelWidth(size.width, expanded: expanded, keptSpace: _keptSpace);
+  double rootTitleWidth(Size size) => _text(root?.title ?? '', Tok.body.copyWith(fontSize: 11.5, color: Tok.muted), width: labelWidth(size)).width;
   double get contentHeight => _layout.expandedHeight;
 
   double contentWidth(double viewportWidth) => math.max(viewportWidth, (_layout.maxDepth + 1) * (expanded ? 224.0 : 144.0) + _keptSpace);
@@ -395,7 +445,7 @@ class ConstellationPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final stops = _visible.toList();
     final pos = layoutPositions(size);
-    final titleWidth = _layout.columnSpacing(size.width, expanded: expanded, keptSpace: _keptSpace) - 24;
+    final width = labelWidth(size);
     final gold = Paint()..color = Tok.gold..strokeWidth = expanded ? 1.5 : 1.2;
     final grey = Paint()..color = Tok.dim..strokeWidth = 1;
     for (final s in stops) {
@@ -410,7 +460,7 @@ class ConstellationPainter extends CustomPainter {
       if (s.via != null && !peek && (expanded || s.onPath)) {
         final t = _text(s.via!, Tok.label.copyWith(
           fontSize: expanded ? 10.5 : 9.5, fontStyle: FontStyle.italic, color: Tok.gold2,
-        ));
+        ), width: width);
         t.paint(canvas, Offset((p.dx + q.dx) / 2 - t.width / 2, (p.dy + q.dy) / 2 + (expanded ? -t.height - 8 : 8)));
       }
     }
@@ -435,19 +485,19 @@ class ConstellationPainter extends CustomPainter {
       if (expanded) {
         final title = _text(peek ? 'peeked: ${s.title}' : s.title, Tok.body.copyWith(
           fontSize: peek ? 11 : 13, color: current ? Tok.ink : s.onPath ? Tok.muted : Tok.faint,
-        ), maxWidth: titleWidth);
+        ), width: width);
         title.paint(canvas, p + Offset(-title.width / 2, -title.height - 28));
         final note = _text([
           clockTime(s.openedMs.toInt()),
           if (s.actions.isNotEmpty) trailActions(s.actions),
           if (current) 'now',
-        ].join(' · '), Tok.label.copyWith(fontSize: 10, letterSpacing: 0));
+        ].join(' · '), Tok.label.copyWith(fontSize: 10, letterSpacing: 0), width: width);
         note.paint(canvas, p + Offset(-note.width / 2, 15));
       } else if (s.onPath) {
-        final t = _text(s.title, Tok.body.copyWith(fontSize: 11.5, color: current ? Tok.ink : Tok.muted));
+        final t = _text(s.title, Tok.body.copyWith(fontSize: 11.5, color: current ? Tok.ink : Tok.muted), width: width);
         t.paint(canvas, p + Offset(-t.width / 2, -22));
       } else {
-        final t = _text(s.title, Tok.label.copyWith(fontSize: 9));
+        final t = _text(s.title, Tok.label.copyWith(fontSize: 9), width: width);
         t.paint(canvas, p + Offset(8, -t.height / 2));
       }
     }

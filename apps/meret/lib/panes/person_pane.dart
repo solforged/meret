@@ -34,12 +34,17 @@ class _PersonPaneState extends State<PersonPane> {
   @override
   void didUpdateWidget(PersonPane old) {
     super.didUpdateWidget(old);
-    if (old.id != widget.id || old.core != widget.core || old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) _load();
+    if (old.id != widget.id || old.core != widget.core) {
+      _person = null;
+      _load();
+    } else if (old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) {
+      // Facts filled in: refetch in place, keeping what is shown until the new DTO lands.
+      _load();
+    }
   }
 
   Future<void> _load() async {
     final generation = ++_generation;
-    _person = null;
     try {
       final person = await widget.core.person(widget.id);
       if (!mounted || generation != _generation) return;
@@ -76,7 +81,7 @@ class _PersonPaneState extends State<PersonPane> {
   @override
   Widget build(BuildContext context) {
     final person = _person;
-    if (person == null) return Text(_error ?? 'Reading person…', style: Tok.label.copyWith(color: _error == null ? Tok.faint : Tok.warn));
+    if (person == null) return paneReading(null, _error ?? 'Reading person…', error: _error != null);
     return CustomScrollView(slivers: [
       SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text([

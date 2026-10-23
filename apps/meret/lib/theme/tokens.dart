@@ -1,5 +1,8 @@
 import 'package:flutter/painting.dart';
 
+/// One length for every move: trail steps slide, pages fade.
+const kMotion = Duration(milliseconds: 200);
+
 /// The instrument: fixed colours from the trails plates.
 abstract final class Tok {
   static const void_ = Color(0xFF03050C);

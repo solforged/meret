@@ -105,7 +105,7 @@ class _StatusLineState extends State<StatusLine> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: const BoxDecoration(color: Tok.void_, border: Border(top: BorderSide(color: Tok.line))),
       child: Row(children: [
-        Expanded(child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+        Expanded(flex: 2, child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
           if (status != null) ...[
             for (final source in status.sources) _source(source, status),
             for (var index = 0; index < status.jobs.length; index++) _job(status.jobs[index], index),
@@ -113,12 +113,22 @@ class _StatusLineState extends State<StatusLine> {
               Text('≈ ${_n(status.guessed)} to identify', style: Tok.label.copyWith(color: Tok.warn)),
           ],
         ]))),
-        for (final (key, what) in widget.keys) ...[
-          const SizedBox(width: 12),
-          Text(key, style: Tok.label.copyWith(color: Tok.gold)),
-          const SizedBox(width: 5),
-          Text(what, style: Tok.label),
-        ],
+        const SizedBox(width: 12),
+        // Hints never push the row wider: one line, cut at the right.
+        Expanded(flex: 3, child: Text.rich(
+          TextSpan(children: [
+            for (final (i, (key, what)) in widget.keys.indexed) ...[
+              if (i > 0) const TextSpan(text: '  '),
+              TextSpan(text: key, style: Tok.label.copyWith(color: Tok.gold)),
+              TextSpan(text: ' $what'),
+            ],
+          ]),
+          key: const ValueKey('status-keys'),
+          style: Tok.label,
+          textAlign: TextAlign.right,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        )),
       ]),
     );
   }

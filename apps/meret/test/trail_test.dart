@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -63,6 +65,52 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('trail-more-right')));
     await tester.pumpAndSettle();
     expect(scroll.offset, greaterThan(0));
+  });
+
+  testWidgets('stop titles take the room between stars: written out at 1728, clipped when stars crowd', (tester) async {
+    const title = 'Tyranny Official OST';
+    TrailDto trail(int stops) => TrailDto(rootQuery: '', current: 0, kept: false, branches: const [], meetings: const [],
+      stops: [for (var i = 0; i < stops; i++) _stop(i, i == 0 ? null : i - 1, true, title: title)]);
+    final natural = TextPainter(
+      text: TextSpan(text: title, style: Tok.body.copyWith(fontSize: 11.5, color: Tok.ink)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    expect(natural.width, greaterThan(128), reason: 'the title must not fit the old fixed width');
+    natural.dispose();
+    bool clipped(WidgetTester tester) {
+      final paint = tester.renderObject<RenderCustomPaint>(find.byWidgetPredicate(
+        (widget) => widget is CustomPaint && widget.painter is ConstellationPainter,
+      ));
+      final paragraphs = <ui.Paragraph>[];
+      expect(paint, paints..everything((method, arguments) {
+        if (method == #drawParagraph) paragraphs.add(arguments[0] as ui.Paragraph);
+        return true;
+      }));
+      return paragraphs.first.didExceedMaxLines;
+    }
+    await tester.pumpWidget(_strip(trail(1), width: 1728, height: 44));
+    await tester.pumpAndSettle();
+    expect(clipped(tester), isFalse);
+    expect(find.byType(Scrollbar), findsNothing);
+    await tester.pumpWidget(_strip(trail(3), width: 360, height: 44));
+    await tester.pumpAndSettle();
+    expect(clipped(tester), isTrue);
+  });
+
+  testWidgets('the resume line is a door that calls onResume', (tester) async {
+    final core = FakeCore();
+    await core.startTrail(const TargetDto.search(query: 'Iona'));
+    await core.keepTrail(name: 'A kept tree');
+    var resumed = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(
+      height: 64, child: NoTrailStrip(core: core, memoryVersion: 0, onResume: () => resumed++),
+    ))));
+    await tester.pumpAndSettle();
+    final door = find.byKey(const ValueKey('trail-resume'));
+    expect(find.descendant(of: door, matching: find.textContaining('to resume')), findsOneWidget);
+    expect(tester.widget<MouseRegion>(find.ancestor(of: door, matching: find.byType(MouseRegion)).first).cursor, SystemMouseCursors.click);
+    await tester.tap(door);
+    expect(resumed, 1);
   });
 
   testWidgets('bracket at a new search root restores the previous trail and strip', (tester) async {
@@ -149,7 +197,7 @@ void main() {
     expect(find.byType(TrailStrip), findsOneWidget, reason: 'the Front does not end a trail');
     expect(find.byType(NoTrailStrip), findsNothing);
     expect(find.byKey(const ValueKey('front-over-trail')), findsOneWidget);
-    expect(find.text('Front · ⌘1 back to Everything'), findsOneWidget);
+    expect(find.text('Front · ⌘1 or ] back to Everything'), findsOneWidget);
     await _command(tester, LogicalKeyboardKey.keyS);
     expect(find.byKey(const ValueKey('keep-trail-dialog')), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -193,7 +241,7 @@ void main() {
     expect(find.text('no trail yet'), findsOneWidget);
   });
 
-  testWidgets('command S does not keep while typing in the query line', (tester) async {
+  testWidgets('command S keeps while typing in the query line, like command 1', (tester) async {
     _desktop(tester);
     final core = _KeepingCore();
     await core.startTrail(const TargetDto.search(query: 'Iona'));
@@ -202,8 +250,8 @@ void main() {
     await _restoreTrail(tester);
     await tester.tap(find.byType(TextField));
     await _command(tester, LogicalKeyboardKey.keyS);
-    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
-    expect(core.names, isEmpty);
+    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsOneWidget);
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('trail-name'))).controller!.text, 'Iona');
   });
 
   test('fake trail follows loop back instead of appending and keeps newer history', () async {
@@ -254,9 +302,9 @@ void main() {
   });
 }
 
-StopDto _stop(int index, int? parent, bool onPath, {bool peek = false}) => StopDto(
+StopDto _stop(int index, int? parent, bool onPath, {bool peek = false, String? title}) => StopDto(
   index: index, parent: parent, target: TargetDto.search(query: 'Stop $index'),
-  title: 'Stop $index', onPath: onPath, isFork: false, isPeek: peek,
+  title: title ?? 'Stop $index', onPath: onPath, isFork: false, isPeek: peek,
   openedMs: PlatformInt64Util.from(0), dwellMs: PlatformInt64Util.from(0), actions: const [],
 );
 
@@ -267,8 +315,8 @@ TrailDto _longTrail(int count, int current) => TrailDto(
   branches: const [],
 );
 
-Widget _strip(TrailDto trail) => MaterialApp(home: Scaffold(body: Center(child: SizedBox(
-  width: 360, height: 64, child: TrailStrip(trail: trail, onGo: (_) {}),
+Widget _strip(TrailDto trail, {double width = 360, double height = 64}) => MaterialApp(home: Scaffold(body: Center(child: SizedBox(
+  width: width, height: height, child: TrailStrip(trail: trail, onGo: (_) {}),
 ))));
 
 List<String> _titles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children

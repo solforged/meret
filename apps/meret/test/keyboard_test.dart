@@ -10,7 +10,7 @@ import 'package:meret/shell/query_line.dart';
 import 'package:meret/theme/light.dart';
 
 void main() {
-  testWidgets('KEYS-1 Escape dismisses suggestions then unfocuses, or unfocuses immediately without suggestions', (tester) async {
+  testWidgets('KEYS-1 Escape dismisses suggestions then empties and unfocuses, or does so at once without suggestions', (tester) async {
     await _surface(tester, _KeysCore());
     final field = find.byType(TextField);
     final focus = tester.widget<QueryLine>(find.byType(QueryLine)).focus;
@@ -26,7 +26,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(focus.hasFocus, isFalse);
-    expect(tester.widget<TextField>(field).controller!.text, 'o');
+    expect(tester.widget<TextField>(field).controller!.text, '', reason: 'nothing stale promises an Enter');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.slash);
     await tester.pump();
@@ -37,7 +37,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
       expect(focus.hasFocus, isFalse);
-      expect(tester.widget<TextField>(field).controller!.text, input);
+      expect(tester.widget<TextField>(field).controller!.text, '');
     }
   });
 

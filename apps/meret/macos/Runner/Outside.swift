@@ -138,9 +138,13 @@ final class Outside: NSObject, NSMenuDelegate {
       return
     }
     let title = now.title.count > 32 ? String(now.title.prefix(31)).trimmingCharacters(in: .whitespaces) + "…" : now.title
+    // Paused reads dimmer than playing; the string itself is the same.
     button.attributedTitle = NSAttributedString(
       string: " \(title) · \(Outside.clock(now.positionMs))",
-      attributes: [.font: NSFont.menuBarFont(ofSize: 0)])
+      attributes: [
+        .font: NSFont.menuBarFont(ofSize: 0),
+        .foregroundColor: now.playing ? NSColor.labelColor : NSColor.secondaryLabelColor,
+      ])
     button.toolTip = "\(now.title)\n\(now.subtitle)"
   }
 
