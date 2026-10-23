@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
+import '../core/bridge.dart';
 import '../core/when.dart';
 import '../theme/tokens.dart';
 
@@ -216,4 +217,98 @@ class PaneSpine extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// The tree around one pane, shared by its fork rows and thread marks.
+class TrailPaneScope extends InheritedWidget {
+  const TrailPaneScope({super.key, required this.trail, required this.stop, required this.onGo, required this.onPrune, required super.child});
+  final TrailDto trail;
+  final StopDto stop;
+  final ValueChanged<int> onGo;
+  final ValueChanged<int> onPrune;
+
+  static TrailPaneScope? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<TrailPaneScope>();
+
+  String? followedLeaf(TargetDto target) {
+    final stops = {for (final node in trail.stops) node.index: node};
+    final children = trail.stops.where((node) => node.parent == stop.index && !node.isPeek && !node.onPath && node.target == target)
+        .map((node) => node.index).toSet();
+    if (children.isEmpty) return null;
+    for (final branch in trail.branches) {
+      StopDto? node = stops[branch.leaf];
+      while (node != null && node.index != stop.index) {
+        if (children.contains(node.index)) return stops[branch.leaf]?.title;
+        node = stops[node.parent];
+      }
+    }
+    return null;
+  }
+
+  @override
+  bool updateShouldNotify(TrailPaneScope oldWidget) => trail != oldWidget.trail || stop != oldWidget.stop;
+}
+
+/// Appended to a followed thread without changing its destination or action.
+class TrailThreadMark extends StatelessWidget {
+  const TrailThreadMark({super.key, required this.target});
+  final TargetDto target;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = TrailPaneScope.of(context)?.followedLeaf(target);
+    return title == null ? const SizedBox.shrink() : Text('⑂ → $title', style: Tok.label.copyWith(color: Tok.dim), maxLines: 1, overflow: TextOverflow.ellipsis);
+  }
+}
+
+/// Shared fork rows, as a sliver for entity panes or a box for search.
+class ForksHere extends StatelessWidget {
+  const ForksHere({super.key, this.sliver = true});
+  final bool sliver;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = TrailPaneScope.of(context);
+    final branches = scope?.trail.branches.where((branch) => branch.fork == scope.stop.index).toList() ?? const <BranchDto>[];
+    if (scope == null || !scope.stop.isFork || branches.isEmpty) {
+      return sliver ? const SliverToBoxAdapter(child: SizedBox.shrink()) : const SizedBox.shrink();
+    }
+    final stops = {for (final stop in scope.trail.stops) stop.index: stop};
+    final content = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Container(
+        margin: EdgeInsets.only(top: sliver ? 18 : 8, bottom: 6),
+        padding: const EdgeInsets.only(bottom: 6),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
+        child: const Text('Forks here', style: Tok.label),
+      ),
+      for (final branch in branches)
+        Row(children: [
+          Expanded(child: Semantics(
+            selected: branch.current,
+            button: true,
+            child: InkWell(
+              key: ValueKey('fork-${scope.stop.index}-${branch.leaf}'),
+              onTap: () => scope.onGo(branch.leaf),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(stops[branch.leaf]!.title, style: Tok.body.copyWith(color: branch.current ? Tok.gold : Tok.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text([
+                    ?stops[branch.first]?.via,
+                    agoShort(branch.whenMs.toInt()),
+                    ...branch.actions,
+                  ].join(' · '), style: Tok.label),
+                ]),
+              ),
+            ),
+          )),
+          if (branch.prunable) TextButton(
+            key: ValueKey('prune-${scope.stop.index}-${branch.leaf}'),
+            onPressed: () => scope.onPrune(branch.leaf),
+            child: Text('prune', style: Tok.label.copyWith(color: Tok.dim)),
+          ),
+        ]),
+    ]);
+    return sliver ? SliverToBoxAdapter(child: content) : content;
+  }
 }

@@ -32,6 +32,9 @@ abstract interface class CoreBridge {
   Future<TrailDto?> trailBack();
   Future<TrailDto?> trailForward();
   Future<TrailDto> trailGo(int stop);
+  Future<TrailDto?> trailSibling(int step);
+  Future<TrailDto> pruneBranch(int leaf);
+  Future<int> playTrail(bool whole);
   Future<List<TrailSummaryDto>> trailHistory(int limit);
   Future<TrailDto> keepTrail({String? name});
   /// A trail from the Front's history becomes active at the stop it was left on.
@@ -110,6 +113,12 @@ class RustCore implements CoreBridge {
   Future<TrailDto?> trailForward() => rust.trailForward();
   @override
   Future<TrailDto> trailGo(int stop) => rust.trailGo(stop: stop);
+  @override
+  Future<TrailDto?> trailSibling(int step) => rust.trailSibling(step: step);
+  @override
+  Future<TrailDto> pruneBranch(int leaf) => rust.pruneBranch(leaf: leaf);
+  @override
+  Future<int> playTrail(bool whole) => rust.playTrail(whole: whole);
   @override
   Future<List<TrailSummaryDto>> trailHistory(int limit) => rust.trailHistory(limit: limit);
   @override
@@ -201,6 +210,8 @@ class FakeCore implements CoreBridge {
   final _trailCreated = <String, int>{};
   final _keptTrails = <String, String?>{};
   final _trailPlayed = <String, Set<int>>{};
+  final _trailVisits = <String, Map<int, int>>{};
+  int _visitClock = 0;
   int _nextTrail = 0;
 
   @override
@@ -251,7 +262,38 @@ class FakeCore implements CoreBridge {
   TrailDto _withKept(TrailDto trail, int index) {
     final uid = _trailUids[index];
     return TrailDto(rootQuery: trail.rootQuery, current: trail.current, stops: trail.stops, meetings: trail.meetings,
-      kept: _keptTrails.containsKey(uid), name: _keptTrails[uid]);
+      branches: _branches(trail, uid), kept: _keptTrails.containsKey(uid), name: _keptTrails[uid]);
+  }
+
+  List<BranchDto> _branches(TrailDto trail, String uid) {
+    final stops = {for (final stop in trail.stops) stop.index: stop};
+    final parents = trail.stops.map((stop) => stop.parent).toSet();
+    final played = _trailPlayed[uid] ?? const <int>{};
+    final visits = _trailVisits[uid] ?? const <int, int>{};
+    final branches = <BranchDto>[];
+    for (final leaf in trail.stops.where((stop) => !parents.contains(stop.index) && !stop.isPeek)) {
+      final path = <StopDto>[leaf];
+      var node = leaf;
+      int? fork;
+      while (node.parent != null) {
+        final parent = stops[node.parent]!;
+        if (parent.isFork) {
+          fork = parent.index;
+          break;
+        }
+        path.add(parent);
+        node = parent;
+      }
+      final current = path.any((stop) => stop.index == trail.current);
+      final actions = path.any((stop) => played.contains(stop.index)) ? ['played'] : <String>[];
+      branches.add(BranchDto(
+        fork: fork, first: path.last.index, leaf: leaf.index, stops: path.length,
+        whenMs: PlatformInt64Util.from(visits[leaf.index] ?? _trailCreated[uid]!),
+        actions: actions, current: current, prunable: !current && actions.isEmpty,
+      ));
+    }
+    branches.sort((a, b) => a.current != b.current ? (a.current ? -1 : 1) : (visits[b.leaf] ?? 0).compareTo(visits[a.leaf] ?? 0));
+    return branches;
   }
 
   void _saveTrail() {
@@ -479,6 +521,7 @@ class FakeCore implements CoreBridge {
       current: 0,
       stops: [StopDto(index: 0, target: target, title: title, onPath: true, isFork: false, isPeek: false)],
       meetings: const [],
+      branches: const [],
       kept: false,
     );
     _trailHistory.add((trail: trail, forward: {}, departure: 0));
@@ -486,7 +529,8 @@ class FakeCore implements CoreBridge {
     _trailUids.add(uid);
     _trailCreated[uid] = DateTime.now().millisecondsSinceEpoch;
     _historyIndex = _trailHistory.length - 1;
-    return _trail = trail;
+    (_trailVisits[uid] ??= {})[0] = DateTime.now().millisecondsSinceEpoch + _visitClock++;
+    return _trail = _withKept(trail, _historyIndex!);
   }
 
   String _searchQuery(String query) {
@@ -526,9 +570,9 @@ class FakeCore implements CoreBridge {
       _forward[fromStop] = existing.first.index;
       return trailGo(existing.first.index);
     }
-    final index = trail.stops.length;
+    final index = trail.stops.map((stop) => stop.index).reduce((a, b) => a > b ? a : b) + 1;
     _forward[fromStop] = index;
-    _trail = TrailDto(rootQuery: trail.rootQuery, current: index, kept: trail.kept, name: trail.name, stops: [
+    _trail = TrailDto(rootQuery: trail.rootQuery, current: index, branches: const [], kept: trail.kept, name: trail.name, stops: [
       ...trail.stops,
       StopDto(index: index, parent: fromStop, target: to, title: title, via: _threadLabel(via),
         viaSource: switch (provider) { 'musicbrainz' => 'MB', 'wikidata' => 'Wikidata', 'library' => 'your library', _ => 'tags' },
@@ -574,14 +618,15 @@ class FakeCore implements CoreBridge {
     while (cursor != null) {
       path.add(cursor);
       final parent = byIndex[cursor]!.parent;
-      if (cursor == stop && parent != null) _forward[parent] = cursor;
+      if (parent != null) _forward[parent] = cursor;
       cursor = parent;
     }
     final children = <int, int>{};
     for (final node in trail.stops) {
       if (node.parent != null) children.update(node.parent!, (count) => count + 1, ifAbsent: () => 1);
     }
-    return _trail = _withKept(TrailDto(rootQuery: trail.rootQuery, current: stop, kept: false, stops: [
+    (_trailVisits[_trailUids[_historyIndex!]] ??= {})[stop] = DateTime.now().millisecondsSinceEpoch + _visitClock++;
+    return _trail = _withKept(TrailDto(rootQuery: trail.rootQuery, current: stop, branches: const [], kept: false, stops: [
       for (final node in trail.stops)
         StopDto(index: node.index, parent: node.parent, target: node.target, title: node.title,
           via: node.via, viaSource: node.viaSource, onPath: path.contains(node.index),
@@ -616,6 +661,98 @@ class FakeCore implements CoreBridge {
     final preferred = _forward[trail.current];
     final child = visible.where((stop) => stop.index == preferred);
     return child.isNotEmpty ? trailGo(child.first.index) : visible.isEmpty ? null : trailGo(visible.last.index);
+  }
+
+  @override
+  Future<TrailDto?> trailSibling(int step) async {
+    final trail = _trail;
+    if (trail == null) return null;
+    final stops = {for (final stop in trail.stops) stop.index: stop};
+    var child = stops[trail.current]!;
+    while (child.parent != null) {
+      final parent = stops[child.parent]!;
+      final siblings = trail.stops.where((stop) => stop.parent == parent.index && !stop.isPeek).toList();
+      if (siblings.length > 1) {
+        final next = siblings[(siblings.indexOf(child) + step.sign) % siblings.length];
+        bool below(StopDto node) {
+          while (node.index != next.index && node.parent != null) {
+            node = stops[node.parent]!;
+          }
+          return node.index == next.index;
+        }
+        final visits = _trailVisits[_trailUids[_historyIndex!]]!;
+        final candidates = trail.stops.where((stop) => !stop.isPeek && below(stop)).toList()
+          ..sort((a, b) => (visits[b.index] ?? 0).compareTo(visits[a.index] ?? 0));
+        return trailGo(candidates.first.index);
+      }
+      child = parent;
+    }
+    return null;
+  }
+
+  @override
+  Future<TrailDto> pruneBranch(int leaf) async {
+    final trail = await this.trail();
+    if (trail == null) throw "there's no trail to prune";
+    final branch = trail.branches.where((branch) => branch.leaf == leaf).firstOrNull;
+    if (branch == null) throw 'Unknown branch';
+    if (branch.current) throw 'cannot prune the current branch';
+    if (!branch.prunable) throw 'cannot prune a branch with actions';
+    final stops = {for (final stop in trail.stops) stop.index: stop};
+    final removed = <int>{};
+    StopDto? node = stops[leaf];
+    while (node != null && node.index != branch.fork) {
+      removed.add(node.index);
+      node = stops[node.parent];
+    }
+    _forward.removeWhere((parent, child) => removed.contains(parent) || removed.contains(child));
+    _trail = TrailDto(
+      rootQuery: trail.rootQuery, current: trail.current, kept: trail.kept, name: trail.name, branches: const [],
+      stops: trail.stops.where((stop) => !removed.contains(stop.index)).toList(),
+      meetings: trail.meetings.where((pair) => !removed.contains(pair.$1) && !removed.contains(pair.$2)).toList(),
+    );
+    return trailGo(trail.current);
+  }
+
+  @override
+  Future<int> playTrail(bool whole) async {
+    final trail = _trail;
+    if (trail == null) throw 'nothing on this trail has tracks to play';
+    final stops = {for (final stop in trail.stops) stop.index: stop};
+    final selected = <StopDto>[];
+    if (whole) {
+      void visit(StopDto stop) {
+        selected.add(stop);
+        for (final child in trail.stops.where((node) => node.parent == stop.index && !node.isPeek)) {
+          visit(child);
+        }
+      }
+      visit(trail.stops.firstWhere((stop) => stop.parent == null));
+    } else {
+      StopDto? stop = stops[trail.current];
+      while (stop != null) {
+        selected.insert(0, stop);
+        stop = stops[stop.parent];
+      }
+    }
+    final rows = <TrackRowDto>[];
+    final tracks = <PlatformInt64>{};
+    final played = <int>{};
+    for (final stop in selected) {
+      final found = switch (stop.target) {
+        TargetDto_Release(:final id) => (await release(id)).rows,
+        TargetDto_Work(:final id) => (await work(id)).rows,
+        TargetDto_Game(:final id) => (await game(id)).rows,
+        _ => const <TrackRowDto>[],
+      };
+      if (found.isNotEmpty) played.add(stop.index);
+      rows.addAll(found.where((row) => tracks.add(row.trackId)));
+    }
+    if (rows.isEmpty) throw 'nothing on this trail has tracks to play';
+    _playQueue(rows);
+    (_trailPlayed[_trailUids[_historyIndex!]] ??= <int>{}).addAll(played);
+    _trail = _withKept(trail, _historyIndex!);
+    return rows.length;
   }
 
   static int _rank(String name, List<String> words) {
@@ -1171,6 +1308,7 @@ class FakeCore implements CoreBridge {
     if (fromStop != null && historyIndex != null && trail != null &&
         trail.stops.any((stop) => stop.index == fromStop && stop.target == TargetDto.release(id: id))) {
       (_trailPlayed[_trailUids[historyIndex]] ??= <int>{}).add(fromStop);
+      _trail = _withKept(trail, historyIndex);
     }
   }
 

@@ -66,9 +66,10 @@ class _NoTrailStripState extends State<NoTrailStrip> {
   );
 }
 class TrailStrip extends StatefulWidget {
-  const TrailStrip({super.key, required this.trail, required this.onGo});
+  const TrailStrip({super.key, required this.trail, required this.onGo, this.onPlay});
   final TrailDto trail;
   final ValueChanged<int> onGo;
+  final ValueChanged<bool>? onPlay;
 
   @override
   State<TrailStrip> createState() => _TrailStripState();
@@ -105,7 +106,25 @@ class _TrailStripState extends State<TrailStrip> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+  Widget build(BuildContext context) => Row(children: [
+    Expanded(child: _tree()),
+    if (widget.onPlay != null) Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _playLabel('Play branch', false),
+        if (widget.trail.branches.length > 1) _playLabel('Play tree', true),
+      ]),
+    ),
+  ]);
+
+  Widget _playLabel(String label, bool whole) => TextButton(
+    key: ValueKey(whole ? 'trail-play-tree' : 'trail-play-branch'),
+    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 20), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+    onPressed: () => widget.onPlay!(whole),
+    child: Text(label, style: Tok.label.copyWith(color: Tok.gold)),
+  );
+
+  Widget _tree() => LayoutBuilder(builder: (context, box) {
     final painter = ConstellationPainter(widget.trail);
     final viewport = box.biggest;
     final size = Size(painter.contentWidth(viewport.width), viewport.height);

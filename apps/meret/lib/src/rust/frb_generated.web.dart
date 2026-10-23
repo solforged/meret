@@ -97,6 +97,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ViewDto dco_decode_box_autoadd_view_dto(dynamic raw);
 
   @protected
+  BranchDto dco_decode_branch_dto(dynamic raw);
+
+  @protected
   ColumnDto dco_decode_column_dto(dynamic raw);
 
   @protected
@@ -173,6 +176,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<BranchDto> dco_decode_list_branch_dto(dynamic raw);
 
   @protected
   List<CreditSectionDto> dco_decode_list_credit_section_dto(dynamic raw);
@@ -503,6 +509,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ViewDto sse_decode_box_autoadd_view_dto(SseDeserializer deserializer);
 
   @protected
+  BranchDto sse_decode_branch_dto(SseDeserializer deserializer);
+
+  @protected
   ColumnDto sse_decode_column_dto(SseDeserializer deserializer);
 
   @protected
@@ -581,6 +590,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<BranchDto> sse_decode_list_branch_dto(SseDeserializer deserializer);
 
   @protected
   List<CreditSectionDto> sse_decode_list_credit_section_dto(
@@ -972,6 +984,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_view_dto(ViewDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_branch_dto(BranchDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_column_dto(ColumnDto self, SseSerializer serializer);
 
   @protected
@@ -1057,6 +1072,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_branch_dto(
+    List<BranchDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_credit_section_dto(

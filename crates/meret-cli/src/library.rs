@@ -236,8 +236,22 @@ pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[Stri
             _ if step.starts_with("search=") => api.start_trail(TargetDto::Search { query: step["search=".len()..].into() }),
             _ if step.starts_with("trail=") => api.open_trail(&step["trail=".len()..]).map_err(anyhow::Error::msg)?,
             "keep" => api.keep_trail(None).map_err(anyhow::Error::msg)?,
+            "{" => api.trail_sibling(-1).ok_or_else(|| anyhow!("there's no fork above"))?,
+            "}" => api.trail_sibling(1).ok_or_else(|| anyhow!("there's no fork above"))?,
+            "play" | "play-tree" => {
+                let queued = api.play_trail(step == "play-tree").map_err(anyhow::Error::msg)?;
+                println!("queued {queued} tracks");
+                trail
+            }
+            _ if step.starts_with("go=") => api.trail_go(step["go=".len()..].parse()?).map_err(anyhow::Error::msg)?,
+            _ if step.starts_with("prune=") => api.prune_branch(step["prune=".len()..].parse()?).map_err(anyhow::Error::msg)?,
+            _ if step.starts_with("wait=") => {
+                std::thread::sleep(std::time::Duration::from_secs_f64(step["wait=".len()..].parse()?));
+                trail
+            }
             _ => {
-                let index: usize = step.parse().map_err(|_| anyhow!("expected a line number, '[', ']', 'keep', 'search=QUERY' or 'trail=UID', got {step:?}"))?;
+                let index: usize = step.parse().map_err(|_| anyhow!(
+                    "expected a line number, '[', ']', '{{', '}}', 'go=STOP', 'prune=LEAF', 'play', 'play-tree', 'keep', 'search=QUERY' or 'trail=UID', got {step:?}"))?;
                 let (via, to, provider, _) = lines.get(index).cloned().ok_or_else(|| anyhow!("there's no line {index}"))?;
                 api.follow(trail.current, to, via, &provider).map_err(|e| anyhow!(e))?
             }
@@ -351,6 +365,14 @@ fn print_strip(trail: &meret_api::TrailDto) {
         })
         .collect();
     println!("\ntrail: {}  ({} stops total; current {})", strip.join(" "), trail.stops.len(), trail.current);
+    if trail.branches.len() > 1 {
+        let title = |i: u32| trail.stops.iter().find(|s| s.index == i).map_or("?", |s| s.title.as_str());
+        for b in &trail.branches {
+            println!("  branch {}stops {}–{} → {} · {} stops{}{}", b.fork.map(|f| format!("from {} · ", title(f))).unwrap_or_default(),
+                b.first, b.leaf, title(b.leaf), b.stops, if b.actions.is_empty() { String::new() } else { format!(" · {}", b.actions.join(", ")) },
+                if b.current { " · current" } else if b.prunable { " · prunable" } else { "" });
+        }
+    }
 }
 
 fn thread_line(label: &str, c: &ThreadDto) -> String {

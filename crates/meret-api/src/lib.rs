@@ -322,6 +322,36 @@ impl Api {
         self.move_along(|t, now| t.go(stop as usize, now)).ok_or_else(|| format!("the trail has no stop {stop}"))
     }
 
+    /// `⌥]` (`step` 1) and `⌥[` (`step` -1): the neighbouring branch at the
+    /// nearest fork above the current stop. None with no fork above.
+    pub fn trail_sibling(&self, step: i32) -> Option<TrailDto> {
+        self.move_along(|t, now| t.sibling(step.signum() as isize, now))
+    }
+
+    /// `⌘⌫` or a branch's prune: hides the branch ending at stop `leaf`.
+    /// Refused for the current branch and one with something done on it.
+    pub fn prune_branch(&self, leaf: u32) -> Result<TrailDto, String> {
+        let t = {
+            let mut history = self.core.trail.lock();
+            let trail = history.current_mut().ok_or("there's no trail to prune")?;
+            let branch = trail
+                .branches(now_ms())
+                .into_iter()
+                .find(|b| b.leaf == leaf as usize)
+                .ok_or_else(|| format!("no branch ends at stop {leaf}"))?;
+            trail.prune(&branch).map_err(|e| e.to_string())?;
+            trail.clone()
+        };
+        self.core.save_trails().map_err(|e| e.to_string())?;
+        Ok(self.trail_dto(&t))
+    }
+
+    /// Plays this branch, root to the current stop, or with `whole` the
+    /// tree depth first. Returns how many tracks were queued.
+    pub fn play_trail(&self, whole: bool) -> Result<u32, String> {
+        self.core.play_trail(whole).map(|n| n as u32).map_err(|e| e.to_string())
+    }
+
     /// A trail picked on the Front becomes active at the stop it was left on.
     pub fn open_trail(&self, uid: &str) -> Result<TrailDto, String> {
         let uid = meret_model::TrailUid(uid.parse().map_err(|_| format!("{uid} isn't a trail id"))?);
@@ -624,6 +654,37 @@ mod trail_memory_tests {
         assert_eq!(api.trail_back().unwrap().current, release.current);
         assert_eq!(reopened.load_trails().unwrap()[1].0.current(), release.current as usize);
         drop(reopened);
+        branches_switch_with_alt_brackets_and_only_a_branch_you_left_prunes(&core, &api, &dir);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Runs inside the test above: the core is one per process.
+    fn branches_switch_with_alt_brackets_and_only_a_branch_you_left_prunes(core: &Arc<meret_core::Core>, api: &Api, dir: &std::path::Path) {
+        core.store.writer.write(|tx| tx.execute_batch(
+            "INSERT INTO agent(id,kind,name,rev) VALUES(2,0,'Fixture one',1), (3,0,'Fixture two',1);",
+        )).unwrap();
+        let (minute, t0) = (60_000, now_ms() - 10 * 60_000);
+        let by = || meret_graph::Via { kind: ThreadKind::By, source: LOCAL_TAGS.into() };
+        let mut trail = meret_graph::Trail::start(EntityRef::Search, Some("branches".into()), t0);
+        let uid = trail.uid;
+        let release = trail.follow(0, EntityRef::Release(ReleaseId(1)), meret_graph::Via { kind: ThreadKind::Matched, source: "library".into() }, t0 + minute);
+        let one = trail.follow(release, EntityRef::Agent(AgentId(2)), by(), t0 + 2 * minute);
+        trail.back(t0 + 3 * minute);
+        let two = trail.follow(release, EntityRef::Agent(AgentId(3)), by(), t0 + 4 * minute);
+        core.trail.lock().start(trail, t0);
+
+        let dto = api.trail().unwrap();
+        let leaves: Vec<_> = dto.branches.iter().map(|b| (b.fork, b.leaf, b.current, b.prunable)).collect();
+        assert_eq!(leaves, [(Some(release as u32), two as u32, true, false), (Some(release as u32), one as u32, false, true)]);
+        assert!(api.prune_branch(two as u32).is_err(), "the current branch stays");
+
+        assert_eq!(api.trail_sibling(1).unwrap().current, one as u32);
+        let pruned = api.prune_branch(two as u32).unwrap();
+        assert!(pruned.stops.iter().all(|s| s.index != two as u32));
+        assert_eq!(pruned.branches.len(), 1);
+        assert!(api.trail_sibling(1).is_none(), "no fork left");
+        let saved = meret_store::Store::open(&dir.join("library.db")).unwrap().load_trails().unwrap();
+        assert!(saved.iter().find(|t| t.0.uid == uid).unwrap().0.stop(two).pruned);
+        assert!(api.play_trail(true).is_err(), "nothing here has a file");
     }
 }
