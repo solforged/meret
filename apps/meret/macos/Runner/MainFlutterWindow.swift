@@ -25,12 +25,27 @@ class MainFlutterWindow: NSWindow {
     }
   }
 
+  /// The first launch opens at a laptop width (Now pinned, two panes) that
+  /// fits the screen; afterwards the frame is whatever it was last time.
+  private func firstFrame() -> NSRect {
+    let visible = (screen ?? NSScreen.main)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let size = NSSize(width: min(1440, visible.width - 80), height: min(900, visible.height - 60))
+    return NSRect(
+      x: visible.midX - size.width / 2, y: visible.midY - size.height / 2,
+      width: size.width, height: size.height)
+  }
+
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
     isReleasedWhenClosed = false
+
+    // Below 600 pt the layout is the phone's; keep the desktop above it.
+    contentMinSize = NSSize(width: 600, height: 480)
+    if !setFrameUsingName("MeretMain") { setFrame(firstFrame(), display: false) }
+    setFrameAutosaveName("MeretMain")
 
     styleMask.insert(.fullSizeContentView)
     titlebarAppearsTransparent = true

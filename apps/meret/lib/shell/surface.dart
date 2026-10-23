@@ -329,7 +329,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       _navigate(() => widget.core.follow(from, to, via, provider));
 
   Widget _pane(StopDto stop) {
-    final scanning = _status?.jobs.any((job) => job.verb == 'scanning' || job.verb == 'reading tags') ?? false;
+    final scanning = _status?.jobs.any((job) => job.isScan) ?? false;
     Future<void> follow(TargetDto to, ThreadKind via, String provider) => _follow(stop.index, to, via, provider);
     final body = switch (stop.target) {
       TargetDto_Search(:final query) => SearchPane(
