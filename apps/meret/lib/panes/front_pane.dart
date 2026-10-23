@@ -178,9 +178,9 @@ class _FrontPaneState extends State<FrontPane> {
   Widget _needs(FrontDto front) => _section('Needs you', [
     if (front.lookups case final lookups?)
       _door(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Text('MusicBrainz lookups', style: Tok.body),
+        const Text('Lookups', style: Tok.body),
         Text([
-          'sends IDs, album titles and album artists from tags',
+          'sends IDs, album titles and album artists to MusicBrainz, album titles to Wikidata',
           if (lookups.releases > BigInt.zero) _count(lookups.releases, 'release'),
           if (lookups.recordings > BigInt.zero) _count(lookups.recordings, 'track'),
           if (lookups.people > BigInt.zero) '${_n(lookups.people)} ${lookups.people == BigInt.one ? 'person' : 'people'}',

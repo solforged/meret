@@ -14,7 +14,7 @@ pub(crate) const COUNTED: &str = "l.played_ms >= CASE WHEN COALESCE(r.length_ms,
 // A source preserves which release was heard when a recording has several
 // editions. Older/source-less listens get one deterministic track, not a row
 // per edition. Keep recording-only listens in history even without a track.
-const LISTEN_TRACK: &str = "LEFT JOIN source s ON s.id = l.source_id
+pub(crate) const LISTEN_TRACK: &str = "LEFT JOIN source s ON s.id = l.source_id
     LEFT JOIN track t ON t.id = COALESCE(s.track_id,
         (SELECT MIN(t2.id) FROM track t2 WHERE t2.recording_id = l.recording_id))
     LEFT JOIN recording r ON r.id = l.recording_id

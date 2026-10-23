@@ -302,7 +302,7 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<Line>> {
                     println!("          recording of {}", work.title);
                 }
             }
-            r.credits.iter().chain(r.row_works.iter().flatten()).map(|c| line(&c.label, c)).collect()
+            r.credits.iter().chain(r.row_works.iter().flatten()).chain(&r.games).map(|c| line(&c.label, c)).collect()
         }
         TargetDto::Person { id } => {
             let p = api.person(*id).map_err(|e| anyhow!(e))?;
@@ -312,7 +312,7 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<Line>> {
                 .chain(p.roles.iter().map(|s| (s.title.as_str(), &s.threads)))
                 .chain([("works", &p.works)])
                 .chain(p.groups.iter().map(|s| (s.title.as_str(), &s.threads)))
-                .chain([("worked with", &p.worked_with)])
+                .chain([("worked with", &p.worked_with), ("games", &p.games)])
                 .flat_map(|(group, list)| list.iter().map(move |c| line(&group.to_lowercase(), c)))
                 .collect()
         }
@@ -328,6 +328,12 @@ fn walk_pane(api: &Api, target: &TargetDto) -> Result<Vec<Line>> {
             w.composer_links.iter().chain(&w.part_of).chain(&w.parts).map(|c| line(&c.label, c))
                 .chain(w.others.iter().map(|c| line("other recording", c)))
                 .collect()
+        }
+        TargetDto::Game { id } => {
+            let g = api.game(*id).map_err(|e| anyhow!(e))?;
+            let facts = [g.year.map(|y| y.to_string()), g.developers.clone(), g.platforms.clone(), g.series.clone()];
+            println!("\n{} · {} · {} tracks  ({:.2?})", g.title, facts.into_iter().flatten().collect::<Vec<_>>().join(" · "), g.rows.len(), t.elapsed());
+            g.composers.iter().chain(&g.soundtracks).chain(&g.same_series).map(|c| line(&c.label, c)).collect()
         }
     };
     print_lines(&lines);

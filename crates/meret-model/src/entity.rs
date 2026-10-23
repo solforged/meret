@@ -20,6 +20,7 @@ pub enum EntityRef {
     /// The search a trail starts from. Only a root is one; the trail's
     /// `root_query` says what was searched.
     Search,
+    Game(GameId),
 }
 
 /// The kind alone, for columns and indexes that store `(kind, id)` pairs.
@@ -39,6 +40,7 @@ pub enum EntityKind {
     Crate = 10,
     Trail = 11,
     Search = 12,
+    Game = 13,
 }
 
 impl EntityRef {
@@ -56,6 +58,7 @@ impl EntityRef {
             Self::Crate(_) => EntityKind::Crate,
             Self::Trail(_) => EntityKind::Trail,
             Self::Search => EntityKind::Search,
+            Self::Game(_) => EntityKind::Game,
         }
     }
 }

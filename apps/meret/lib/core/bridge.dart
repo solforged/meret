@@ -24,6 +24,8 @@ abstract interface class CoreBridge {
   Future<PersonDto> person(PlatformInt64 id);
   Future<WorkDto> work(PlatformInt64 id);
   Future<void> playWork(PlatformInt64 id, int index);
+  Future<GameDto> game(PlatformInt64 id);
+  Future<void> playGame(PlatformInt64 id, int index);
   Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop});
   Future<TrailDto> startTrail(TargetDto to);
   Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via, String provider);
@@ -91,6 +93,10 @@ class RustCore implements CoreBridge {
   Future<WorkDto> work(PlatformInt64 id) => rust.work(id: id);
   @override
   Future<void> playWork(PlatformInt64 id, int index) => rust.playWork(id: id, index: index);
+  @override
+  Future<GameDto> game(PlatformInt64 id) => rust.game(id: id);
+  @override
+  Future<void> playGame(PlatformInt64 id, int index) => rust.playGame(id: id, index: index);
   @override
   Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop}) =>
       rust.playRelease(id: id, index: index, fromStop: fromStop);
@@ -494,6 +500,7 @@ class FakeCore implements CoreBridge {
     TargetDto_Release(:final id) => (await release(id)).title,
     TargetDto_Person(:final id) => (await person(id)).name,
     TargetDto_Work(:final id) => (await work(id)).title,
+    TargetDto_Game(:final id) => (await game(id)).title,
   };
 
   @override
@@ -506,6 +513,7 @@ class FakeCore implements CoreBridge {
       ThreadKind.composedBy, ThreadKind.lyricsBy, ThreadKind.arrangedBy, ThreadKind.performedBy,
       ThreadKind.conductedBy, ThreadKind.producedBy, ThreadKind.engineeredBy, ThreadKind.recordingOf,
       ThreadKind.matched, ThreadKind.hasMember,
+      ThreadKind.scored, ThreadKind.soundtrackOf, ThreadKind.soundtrack, ThreadKind.sameSeries,
     ].contains(via)) {
       throw 'This thread is not followable yet';
     }
@@ -523,7 +531,7 @@ class FakeCore implements CoreBridge {
     _trail = TrailDto(rootQuery: trail.rootQuery, current: index, kept: trail.kept, name: trail.name, stops: [
       ...trail.stops,
       StopDto(index: index, parent: fromStop, target: to, title: title, via: _threadLabel(via),
-        viaSource: switch (provider) { 'musicbrainz' => 'MB', 'library' => 'your library', _ => 'tags' },
+        viaSource: switch (provider) { 'musicbrainz' => 'MB', 'wikidata' => 'Wikidata', 'library' => 'your library', _ => 'tags' },
         onPath: false, isFork: false, isPeek: false),
     ], meetings: [
       ...trail.meetings,
@@ -548,6 +556,10 @@ class FakeCore implements CoreBridge {
     ThreadKind.engineeredBy => 'engineered by',
     ThreadKind.recordingOf => 'recording of',
     ThreadKind.matched => 'matched',
+    ThreadKind.scored => 'scored',
+    ThreadKind.soundtrackOf => 'soundtrack of',
+    ThreadKind.soundtrack => 'soundtrack',
+    ThreadKind.sameSeries => 'same series',
     _ => throw 'This thread is not followable yet',
   };
 
@@ -1017,6 +1029,7 @@ class FakeCore implements CoreBridge {
       tracks: rows.length, discs: rows.map((row) => row.disc).toSet().length,
       lengthMs: length, formats: sortedFormats, rows: rows,
       rowWorks: [for (final row in rows) row.trackId.toInt() == 1 ? _workThread(ThreadKind.recordingOf) : null],
+      games: id.toInt() == 1 ? [_gameThread(ThreadKind.soundtrackOf)] : [],
       plays: BigInt.from(id.toInt() == 1 ? 212 : 0), lastPlayedMs: id.toInt() == 1 ? PlatformInt64Util.from(_memoryEvening.millisecondsSinceEpoch) : null,
       credits: [
         if (first.albumArtistId != null)
@@ -1070,6 +1083,7 @@ class FakeCore implements CoreBridge {
         ]),
       ] : [],
       works: name == 'Yasunori Mitsuda' ? [_workThread(ThreadKind.composedBy, detail: '1 track')] : [],
+      games: index == 0 ? [_gameThread(ThreadKind.scored)] : [],
       groups: name == 'Joanne Hogg' ? [
         CreditSectionDto(title: 'Member of', threads: [
           ThreadDto(kind: ThreadKind.hasMember, label: 'has member', source: 'MB', provider: 'musicbrainz',
@@ -1111,6 +1125,38 @@ class FakeCore implements CoreBridge {
   @override
   Future<void> playWork(PlatformInt64 id, int index) async {
     final rows = (await work(id)).rows;
+    if (index < 0 || index >= rows.length) throw RangeError.index(index, rows);
+    _playQueue(rows.sublist(index));
+  }
+
+  static ThreadDto _gameThread(ThreadKind kind) => ThreadDto(
+    kind: kind, label: _threadLabel(kind), source: 'Wikidata', provider: 'wikidata',
+    to: TargetDto.game(id: PlatformInt64Util.from(1)), title: 'Lantern Vale', detail: '1998',
+  );
+
+  @override
+  Future<GameDto> game(PlatformInt64 id) async {
+    if (_empty || id.toInt() != 1) throw 'Game no longer exists';
+    final release = await this.release(PlatformInt64Util.from(1));
+    return GameDto(
+      id: id, title: 'Lantern Vale', year: 1998, developers: 'Copper Finch',
+      platforms: 'Pocket Station', series: 'Lantern Vale',
+      composers: [
+        ThreadDto(kind: ThreadKind.composedBy, label: 'composed by', source: 'Wikidata', provider: 'wikidata',
+          to: TargetDto.person(id: _personId(_personNames.first)), title: _personNames.first, detail: ''),
+      ],
+      soundtracks: [
+        ThreadDto(kind: ThreadKind.soundtrack, label: 'soundtrack', source: 'Wikidata', provider: 'wikidata',
+          to: TargetDto.release(id: release.id), title: release.title, detail: '${release.year} · ${release.tracks} tracks'),
+      ],
+      sameSeries: [], rows: release.rows, lengthMs: release.lengthMs,
+      plays: release.plays, lastPlayedMs: release.lastPlayedMs,
+    );
+  }
+
+  @override
+  Future<void> playGame(PlatformInt64 id, int index) async {
+    final rows = (await game(id)).rows;
     if (index < 0 || index >= rows.length) throw RangeError.index(index, rows);
     _playQueue(rows.sublist(index));
   }

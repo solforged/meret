@@ -8,7 +8,7 @@ use meret_core::{Facet, FacetColumn, Facets, GroupRow, SortKey, View};
 use meret_graph::Trail;
 use meret_model::signal::Fidelity;
 use meret_model::thread::source_label;
-use meret_model::{AgentId, EntityRef, Idiom, ReleaseId, WorkId};
+use meret_model::{AgentId, EntityRef, GameId, Idiom, ReleaseId, WorkId};
 use meret_query::{NameField, Term};
 use meret_store::TrackRow;
 
@@ -777,6 +777,7 @@ pub enum TargetDto {
     Release { id: i64 },
     Person { id: i64 },
     Work { id: i64 },
+    Game { id: i64 },
 }
 
 impl TargetDto {
@@ -787,6 +788,7 @@ impl TargetDto {
             TargetDto::Release { id } => (EntityRef::Release(ReleaseId(*id)), None),
             TargetDto::Person { id } => (EntityRef::Agent(AgentId(*id)), None),
             TargetDto::Work { id } => (EntityRef::Work(WorkId(*id)), None),
+            TargetDto::Game { id } => (EntityRef::Game(GameId(*id)), None),
         }
     }
 
@@ -796,7 +798,8 @@ impl TargetDto {
             EntityRef::Release(r) => TargetDto::Release { id: r.0 },
             EntityRef::Agent(a) => TargetDto::Person { id: a.0 },
             EntityRef::Work(w) => TargetDto::Work { id: w.0 },
-            // Only `Api` writes the trail, and it only opens these four.
+            EntityRef::Game(g) => TargetDto::Game { id: g.0 },
+            // Only `Api` writes the trail, and it only opens these five.
             other => unreachable!("{other:?} is not a pane yet"),
         }
     }
@@ -847,6 +850,13 @@ impl ThreadDto {
 pub(crate) const LOCAL_TAGS: &str = "local_tags";
 /// Threads from MusicBrainz lookups.
 pub(crate) const MUSICBRAINZ: &str = "musicbrainz";
+/// Games from Wikidata.
+pub(crate) const WIKIDATA: &str = "wikidata";
+
+/// A thread to a game, with its year.
+fn game_thread(kind: ThreadKind, g: meret_core::GameLink) -> ThreadDto {
+    ThreadDto::from_source(kind, &g.source, TargetDto::Game { id: g.game.0 }, g.title, g.year.map(|y| y.to_string()).unwrap_or_default())
+}
 
 /// A release pane (plate 01, the middle pane).
 #[derive(Clone, Debug, PartialEq)]
@@ -873,6 +883,8 @@ pub struct ReleaseDto {
     /// The album artist, each track artist and where they are, then
     /// composers, arrangers, performers and the other roles.
     pub credits: Vec<ThreadDto>,
+    /// The game it's the soundtrack of.
+    pub games: Vec<ThreadDto>,
     /// Counted plays of this release, and the newest one (Unix ms).
     pub plays: u64,
     pub last_played_ms: Option<i64>,
@@ -954,6 +966,7 @@ impl ReleaseDto {
             rows,
             row_works,
             credits,
+            games: p.games.into_iter().map(|g| game_thread(ThreadKind::SoundtrackOf, g)).collect(),
             plays: p.plays,
             last_played_ms: p.last_played,
         }
@@ -978,6 +991,8 @@ pub struct PersonDto {
     pub works: Vec<ThreadDto>,
     /// "Member of" and "Members", from MusicBrainz.
     pub groups: Vec<CreditSectionDto>,
+    /// Games they scored.
+    pub games: Vec<ThreadDto>,
     /// People who share releases with them, most shared first, then the
     /// collaborations MusicBrainz knows of.
     pub worked_with: Vec<ThreadDto>,
@@ -1024,6 +1039,7 @@ impl From<PersonPage> for PersonDto {
                     threads: links.into_iter().map(|l| link(kind, l)).collect(),
                 })
                 .collect(),
+            games: p.games.into_iter().map(|g| game_thread(ThreadKind::Scored, g)).collect(),
             worked_with: p
                 .worked_with
                 .iter()
@@ -1096,6 +1112,54 @@ impl From<meret_core::WorkPage> for WorkDto {
                 Some(ThreadDto::from_source(ThreadKind::By, &o.source, TargetDto::Person { id: first.0 }, o.title, detail))
             }).collect(),
             recordings_known: p.recordings_known,
+            plays: p.plays,
+            last_played_ms: p.last_played,
+        }
+    }
+}
+
+/// A game pane: the game a score belongs to, its composers, and the
+/// soundtracks of it you have.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GameDto {
+    pub id: i64,
+    pub title: String,
+    pub year: Option<u16>,
+    /// "Acquire, FromSoftware".
+    pub developers: Option<String>,
+    /// "PlayStation, Microsoft Windows".
+    pub platforms: Option<String>,
+    pub series: Option<String>,
+    pub composers: Vec<ThreadDto>,
+    pub soundtracks: Vec<ThreadDto>,
+    /// Other games in its series you have a soundtrack of.
+    pub same_series: Vec<ThreadDto>,
+    /// Its soundtracks' tracks; row i plays with `play_game(id, i)`.
+    pub rows: Vec<TrackRowDto>,
+    pub length_ms: u64,
+    pub plays: u64,
+    pub last_played_ms: Option<i64>,
+}
+
+impl From<meret_core::GamePage> for GameDto {
+    fn from(p: meret_core::GamePage) -> Self {
+        let rows: Vec<TrackRowDto> = p.tracks.into_iter().map(TrackRowDto::from).collect();
+        GameDto {
+            id: p.game.0,
+            title: p.title,
+            year: p.year,
+            developers: p.developers,
+            platforms: p.platforms,
+            series: p.series,
+            composers: p.composers.into_iter().map(|l| link(ThreadKind::ComposedBy, l)).collect(),
+            soundtracks: p.soundtracks.into_iter().map(|r| {
+                let tracks = format!("{} {}", r.tracks, if r.tracks == 1 { "track" } else { "tracks" });
+                let detail = r.year.map(|y| format!("{y} · {tracks}")).unwrap_or(tracks);
+                ThreadDto::local(ThreadKind::Soundtrack, TargetDto::Release { id: r.release.0 }, r.title, detail)
+            }).collect(),
+            same_series: p.same_series.into_iter().map(|g| game_thread(ThreadKind::SameSeries, g)).collect(),
+            length_ms: rows.iter().filter_map(|r| r.length_ms).sum(),
+            rows,
             plays: p.plays,
             last_played_ms: p.last_played,
         }
@@ -1423,6 +1487,7 @@ mod cover_tests {
             artists: vec![],
             roles: vec![],
             works: vec![],
+            games: vec![],
             plays: 0,
             last_played: None,
         };
@@ -1441,7 +1506,7 @@ mod cover_tests {
         };
         let page = ReleasePage {
             release: ReleaseId(9), title: "Tyranny".into(), year: None, idiom: None,
-            album_artist: None, album_artists: vec![], cover: None, tracks: vec![track], artists: vec![], roles: vec![], works: vec![],
+            album_artist: None, album_artists: vec![], cover: None, tracks: vec![track], artists: vec![], roles: vec![], works: vec![], games: vec![],
             plays: 0, last_played: None,
         };
         let dto = ReleaseDto::from_page(page, Path::new("/tmp/art"));

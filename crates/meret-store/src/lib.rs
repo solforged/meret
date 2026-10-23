@@ -35,7 +35,7 @@ pub use http_cache::HttpCache;
 pub use jobs::{JobCounts, NewJob, QueuedJob};
 pub use library::{LibraryFacts, RecentRelease, ReleaseHead, TrackRow};
 pub use listens::{Dormant, ListenRow, PlayCount};
-pub use pages::{Colleague, OtherRecording, PersonLink, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
+pub use pages::{Colleague, GameLink, GamePage, OtherRecording, PersonLink, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
 pub use plan::{Plan, format_code, plan};
 pub use search::{PersonHit, ReleaseHit};
 pub use settings::{LightLevel, Lookups, Settings};

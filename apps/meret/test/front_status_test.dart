@@ -17,7 +17,7 @@ void main() {
     ))));
     await tester.pump();
     await tester.pump();
-    expect(find.text('MusicBrainz lookups'), findsOneWidget);
+    expect(find.text('Lookups'), findsOneWidget);
     final frontCalls = core.frontCalls;
     await tester.ensureVisible(find.text('Allow'));
     await tester.tap(find.text('Allow'));
@@ -25,7 +25,7 @@ void main() {
     await tester.pump();
     expect(core.answers, [LookupsDto.allowed]);
     expect(core.frontCalls, greaterThan(frontCalls));
-    expect(find.text('MusicBrainz lookups'), findsNothing);
+    expect(find.text('Lookups'), findsNothing);
 
     final person = (await core.search('Joanne Hogg')).people.single;
     final trail = await core.startTrail(TargetDto.person(id: person.id));

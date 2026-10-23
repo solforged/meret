@@ -1,0 +1,566 @@
+{
+  "head": {
+    "vars": [
+      "game",
+      "property",
+      "value",
+      "item"
+    ]
+  },
+  "results": {
+    "bindings": [
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Game Slab"
+        },
+        "property": {
+          "type": "literal",
+          "value": "platform"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q10677"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Lantern Vale 2"
+        },
+        "property": {
+          "type": "literal",
+          "value": "title"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Glass Orchard Global"
+        },
+        "property": {
+          "type": "literal",
+          "value": "developer"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q481968"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "value": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "type": "literal",
+          "value": "2000-08-07T00:00:00Z"
+        },
+        "property": {
+          "type": "literal",
+          "value": "year"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "HK 5"
+        },
+        "property": {
+          "type": "literal",
+          "value": "alias"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "HK V"
+        },
+        "property": {
+          "type": "literal",
+          "value": "alias"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Harbor Kingdom 5"
+        },
+        "property": {
+          "type": "literal",
+          "value": "alias"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Aven's Harbor Kingdom V"
+        },
+        "property": {
+          "type": "literal",
+          "value": "alias"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "type": "literal",
+          "value": "2010-09-21T00:00:00Z"
+        },
+        "property": {
+          "type": "literal",
+          "value": "year"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Harbor Kingdom V"
+        },
+        "property": {
+          "type": "literal",
+          "value": "title"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Harbor Kingdom"
+        },
+        "property": {
+          "type": "literal",
+          "value": "series"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q1868663"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Paper Harbor"
+        },
+        "property": {
+          "type": "literal",
+          "value": "developer"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q959759"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Moss OS"
+        },
+        "property": {
+          "type": "literal",
+          "value": "platform"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q388"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Window Box"
+        },
+        "property": {
+          "type": "literal",
+          "value": "platform"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q1406"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "mul",
+          "type": "literal",
+          "value": "Pear OS"
+        },
+        "property": {
+          "type": "literal",
+          "value": "platform"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q14116"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Lantern Vale II"
+        },
+        "property": {
+          "type": "literal",
+          "value": "title"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Glass Orchard"
+        },
+        "property": {
+          "type": "literal",
+          "value": "developer"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q481968"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Mira Quill"
+        },
+        "property": {
+          "type": "literal",
+          "value": "composer"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2470862"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Lantern Vale"
+        },
+        "property": {
+          "type": "literal",
+          "value": "series"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2094159"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Paper Harbor"
+        },
+        "property": {
+          "type": "literal",
+          "value": "developer"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q959759"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Aven Reed"
+        },
+        "property": {
+          "type": "literal",
+          "value": "composer"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q26844769"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Moss OS"
+        },
+        "property": {
+          "type": "literal",
+          "value": "platform"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q388"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Window Box"
+        },
+        "property": {
+          "type": "literal",
+          "value": "platform"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q1406"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2385"
+        },
+        "value": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Pear OS"
+        },
+        "property": {
+          "type": "literal",
+          "value": "platform"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q14116"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "property": {
+          "type": "literal",
+          "value": "year"
+        },
+        "value": {
+          "type": "literal",
+          "value": "1999-12-01T00:00:00Z",
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "property": {
+          "type": "literal",
+          "value": "year"
+        },
+        "value": {
+          "type": "literal",
+          "value": "2002-02-02T00:00:00Z",
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "property": {
+          "type": "literal",
+          "value": "alias"
+        },
+        "value": {
+          "type": "literal",
+          "value": "Lantern | Vale",
+          "xml:lang": "en"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "property": {
+          "type": "literal",
+          "value": "alias"
+        },
+        "value": {
+          "type": "literal",
+          "value": "Vale\u001fII",
+          "xml:lang": "mul"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "property": {
+          "type": "literal",
+          "value": "alias"
+        },
+        "value": {
+          "type": "literal",
+          "value": "Lantern | Vale",
+          "xml:lang": "mul"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "property": {
+          "type": "literal",
+          "value": "composer"
+        },
+        "value": {
+          "type": "literal",
+          "value": "Mira Universal",
+          "xml:lang": "mul"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2470862"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "property": {
+          "type": "literal",
+          "value": "composer"
+        },
+        "value": {
+          "type": "literal",
+          "value": "Oren Hush",
+          "xml:lang": "mul"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q900000001"
+        }
+      },
+      {
+        "game": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q536851"
+        },
+        "property": {
+          "type": "literal",
+          "value": "series"
+        },
+        "value": {
+          "type": "literal",
+          "value": "Lantern Multiverse",
+          "xml:lang": "mul"
+        },
+        "item": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2094159"
+        }
+      }
+    ]
+  }
+}

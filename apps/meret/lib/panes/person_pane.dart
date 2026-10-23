@@ -91,6 +91,7 @@ class _PersonPaneState extends State<PersonPane> {
       ..._section('Appears on', person.appearsOn),
       for (final role in person.roles) ..._section(role.title, role.threads),
       ..._section('Works', person.works),
+      ..._section('Games', person.games),
       for (final group in person.groups) ..._section(group.title, group.threads),
       ..._section('Worked with', person.workedWith),
       const SliverToBoxAdapter(child: SizedBox(height: 20)),
