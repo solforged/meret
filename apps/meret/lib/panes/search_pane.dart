@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/bridge.dart';
 import '../theme/tokens.dart';
+import 'pane.dart';
 import 'table_pane.dart';
 
 /// A search keeps its people and releases close to the table of results.
@@ -78,7 +79,11 @@ class _SearchPaneState extends State<SearchPane> {
           key: ValueKey('search-hit-${hit.kind.name}-${hit.id}'),
           onPressed: () => widget.onHit(hit),
           style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 28)),
-          child: Text(hit.title, style: Tok.body.copyWith(color: Tok.gold)),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(hit.title, style: Tok.body.copyWith(color: Tok.gold)),
+            if (hit.kind == HitKind.person) TrailThreadMark(target: TargetDto.person(id: hit.id)),
+            if (hit.kind == HitKind.release) TrailThreadMark(target: TargetDto.release(id: hit.id)),
+          ]),
         ),
       ),
     ),
@@ -101,6 +106,10 @@ class _SearchPaneState extends State<SearchPane> {
         ),
         const Divider(color: Tok.line, height: 12),
       ],
+      ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 180),
+        child: const SingleChildScrollView(child: ForksHere(sliver: false)),
+      ),
       Expanded(child: TablePane(
         core: widget.core,
         query: _query,

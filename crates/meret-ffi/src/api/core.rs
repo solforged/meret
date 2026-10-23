@@ -200,6 +200,24 @@ pub fn trail_forward() -> Result<Option<TrailDto>, String> {
     Ok(api()?.trail_forward())
 }
 
+/// `⌥]` (`step` 1) and `⌥[` (`step` -1): the neighbouring branch at the
+/// nearest fork above. None with no fork above.
+pub fn trail_sibling(step: i32) -> Result<Option<TrailDto>, String> {
+    Ok(api()?.trail_sibling(step))
+}
+
+/// Hides the branch ending at stop `leaf`; refused for the current branch
+/// and one with something done on it.
+pub fn prune_branch(leaf: u32) -> Result<TrailDto, String> {
+    api()?.prune_branch(leaf)
+}
+
+/// Plays this branch, or with `whole` the tree depth first. Returns how
+/// many tracks were queued.
+pub fn play_trail(whole: bool) -> Result<u32, String> {
+    api()?.play_trail(whole)
+}
+
 /// A star on the strip, clicked: that stop becomes current.
 pub fn trail_go(stop: u32) -> Result<TrailDto, String> {
     api()?.trail_go(stop)

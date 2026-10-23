@@ -229,6 +229,26 @@ impl Trail {
         true
     }
 
+    /// `⌥]` (`step` 1) and `⌥[` (`step` -1): the next or previous branch at
+    /// the nearest fork above the current stop, in the order they were
+    /// started, wrapping round. It lands where you last were on that branch.
+    /// False with no fork above.
+    pub fn sibling(&mut self, step: isize, now: i64) -> bool {
+        let forks = self.forks(now);
+        let path = self.path();
+        let Some(at) = path[..path.len() - 1].iter().rposition(|s| forks.contains(s)) else { return false };
+        let (fork, on) = (path[at], path[at + 1]);
+        let kids: Vec<usize> = self.children(fork).filter(|&c| !self.is_peek(c, now)).collect();
+        let Some(here) = kids.iter().position(|&c| c == on) else { return false };
+        let next = kids[(here as isize + step).rem_euclid(kids.len() as isize) as usize];
+        let last = (next..self.stops.len())
+            .filter(|&s| !self.stops[s].pruned && (s == next || self.is_ancestor(next, s)) && !self.is_peek(s, now))
+            .max_by_key(|&s| self.stops[s].opened_at)
+            .unwrap_or(next);
+        self.enter(last, now);
+        true
+    }
+
     pub fn is_peek(&self, i: usize, now: i64) -> bool {
         let s = &self.stops[i];
         let dwell = if i == self.current { s.dwell_ms + now - self.entered_at } else { s.dwell_ms };
@@ -484,6 +504,25 @@ mod tests {
         assert_eq!(t.current(), troy);
         assert!(!t.go(99, 43 * MIN));
         assert_eq!(t.current(), troy);
+    }
+
+    #[test]
+    fn alt_brackets_switch_branch_at_the_nearest_fork_and_land_where_you_were() {
+        let (mut t, [mitsuda, xeno, _, _, _, troy, uematsu, creid, _]) = tuesday();
+        // From Creid, the nearest fork above is Xenogears: Hogg's branch, last left at Troy.
+        assert!(t.sibling(1, 40 * MIN));
+        assert_eq!(t.current(), troy);
+        // Two branches there, so either direction swaps back.
+        assert!(t.sibling(-1, 41 * MIN));
+        assert_eq!(t.current(), creid);
+        // At Uematsu the nearest fork is Mitsuda; its other branch was last on Creid.
+        assert!(t.go(uematsu, 42 * MIN));
+        assert!(t.sibling(1, 43 * MIN));
+        assert_eq!(t.current(), creid);
+        assert_eq!(t.path(), vec![0, mitsuda, xeno, creid]);
+        let mut single = Trail::start(EntityRef::Recording(RecordingId(1)), None, 0);
+        single.follow(0, EntityRef::Agent(AgentId(10)), via(ThreadKind::ComposedBy), MIN);
+        assert!(!single.sibling(1, 2 * MIN), "no fork, no sibling");
     }
 
     #[test]

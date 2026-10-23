@@ -1194,12 +1194,34 @@ pub struct StopDto {
     pub is_peek: bool,
 }
 
+/// A branch of the tree, peeks folded away: the run of stops from the one
+/// after its fork to its leaf. "Forks here" lists those leaving a pane.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BranchDto {
+    /// The stop it leaves from; None for the trunk from the root.
+    pub fork: Option<u32>,
+    /// Its first stop, the one the fork's thread led to.
+    pub first: u32,
+    pub leaf: u32,
+    pub stops: u32,
+    /// When its leaf was last open.
+    pub when_ms: i64,
+    /// What was done on it, in order, once each: "played", "wanted".
+    pub actions: Vec<String>,
+    /// It holds the current stop.
+    pub current: bool,
+    /// Nothing done on it and not current, so `prune_branch` hides it.
+    pub prunable: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrailDto {
     pub root_query: Option<String>,
     pub current: u32,
     pub stops: Vec<StopDto>,
     pub meetings: Vec<(u32, u32)>,
+    /// The current branch first, then newest first.
+    pub branches: Vec<BranchDto>,
     pub kept: bool,
     pub name: Option<String>,
 }
@@ -1240,14 +1262,50 @@ impl TrailDto {
                 }
             })
             .collect();
+        let branches = t
+            .branches(now)
+            .into_iter()
+            .map(|b| {
+                let mut actions: Vec<String> = vec![];
+                for &s in &b.stops {
+                    for action in &t.stop(s).actions {
+                        let name = action_name(*action);
+                        if !actions.iter().any(|a| a == name) {
+                            actions.push(name.into());
+                        }
+                    }
+                }
+                let current = b.stops.contains(&t.current());
+                BranchDto {
+                    fork: b.fork.map(|f| f as u32),
+                    first: b.stops[0] as u32,
+                    leaf: b.leaf as u32,
+                    stops: b.stops.len() as u32,
+                    when_ms: t.stop(b.leaf).opened_at,
+                    prunable: !b.has_actions && !current,
+                    current,
+                    actions,
+                }
+            })
+            .collect();
         TrailDto {
             root_query: t.root_query.clone(),
             current: t.current() as u32,
             stops,
             meetings: t.meetings().into_iter().map(|(a, b)| (a as u32, b as u32)).collect(),
+            branches,
             kept: t.kept,
             name: t.name.clone(),
         }
+    }
+}
+
+fn action_name(action: meret_graph::Action) -> &'static str {
+    match action {
+        meret_graph::Action::Played => "played",
+        meret_graph::Action::Wanted => "wanted",
+        meret_graph::Action::Crated => "crated",
+        meret_graph::Action::Noted => "noted",
     }
 }
 

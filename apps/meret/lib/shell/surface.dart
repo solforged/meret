@@ -195,7 +195,39 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     }
   }
 
+  bool get _editing {
+    final focus = FocusManager.instance.primaryFocus?.context;
+    return focus != null && (focus.widget is EditableText || focus.findAncestorWidgetOfExactType<EditableText>() != null);
+  }
+
+  Future<void> _sibling(int step) async {
+    if (_editing) return;
+    await _navigate(() => widget.core.trailSibling(step), direction: step);
+  }
+
+  Future<void> _prune(int leaf) => _navigate(() => widget.core.pruneBranch(leaf));
+
+  Future<void> _pruneNewest() async {
+    if (_editing) return;
+    final branch = _trail?.branches.where((branch) => !branch.current && branch.prunable).firstOrNull;
+    if (branch != null) await _prune(branch.leaf);
+  }
+
+  Future<void> _playTrail(bool whole) async {
+    final version = _navigationVersion;
+    await widget.core.playTrail(whole);
+    final trail = await widget.core.trail();
+    if (mounted && version == _navigationVersion) {
+      setState(() {
+        _trail = trail;
+        _navigationError = null;
+        _memoryVersion++;
+      });
+    }
+  }
+
   Future<void> _move(int by) async {
+    if (_editing) return;
     if (by > 0 && _frontOnly) {
       // `]` from the Front over an open trail returns to it where it was.
       if (_trail != null) _showTrail();
@@ -306,7 +338,12 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       title: stop.title,
       via: stop.via,
       source: stop.viaSource,
-      body: body,
+      body: TrailPaneScope(
+        trail: _trail!, stop: stop,
+        onGo: (leaf) => _report(_navigate(() => widget.core.trailGo(leaf))),
+        onPrune: (leaf) => _report(_prune(leaf)),
+        child: body,
+      ),
       showTitle: stop.target is! TargetDto_Release && stop.target is! TargetDto_Work && stop.target is! TargetDto_Game,
       compact: stop.target is TargetDto_Search,
       onSpineTap: () => _report(_navigate(() => widget.core.trailGo(stop.index), direction: -1)),
@@ -341,6 +378,9 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         SingleActivator(LogicalKeyboardKey.keyH): _History(),
         SingleActivator(LogicalKeyboardKey.bracketLeft): _Move(-1),
         SingleActivator(LogicalKeyboardKey.bracketRight): _Move(1),
+        SingleActivator(LogicalKeyboardKey.bracketLeft, alt: true): _Sibling(-1),
+        SingleActivator(LogicalKeyboardKey.bracketRight, alt: true): _Sibling(1),
+        SingleActivator(LogicalKeyboardKey.backspace, meta: true, includeRepeats: false): _Prune(),
         SingleActivator(LogicalKeyboardKey.digit1, meta: true): _Front(),
         SingleActivator(LogicalKeyboardKey.keyL, meta: true): _Table(),
         SingleActivator(LogicalKeyboardKey.keyS, meta: true): _Keep(),
@@ -354,6 +394,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           _FromStart: CallbackAction<_FromStart>(onInvoke: (_) => _fromStart()),
           _History: CallbackAction<_History>(onInvoke: (_) => _history()),
           _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
+          _Sibling: CallbackAction<_Sibling>(onInvoke: (i) => _report(_sibling(i.step))),
+          _Prune: CallbackAction<_Prune>(onInvoke: (_) => _report(_pruneNewest())),
           _Front: CallbackAction<_Front>(onInvoke: (_) => _showFront()),
           _Table: CallbackAction<_Table>(onInvoke: (_) => _report(_start(const TargetDto.search(query: '')))),
           _Keep: CallbackAction<_Keep>(onInvoke: (_) => _report(_keep())),
@@ -408,7 +450,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   height: wc == WidthClass.phone ? 44 : 64,
                   child: !trailOpen
                       ? NoTrailStrip(core: widget.core, memoryVersion: _memoryVersion)
-                      : TrailStrip(trail: _trail!, onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop)))),
+                      : TrailStrip(
+                          trail: _trail!,
+                          onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop))),
+                          onPlay: (whole) => _report(_playTrail(whole)),
+                        ),
                 ),
                 if (_navigationError != null)
                   Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
@@ -520,4 +566,13 @@ class _History extends Intent {
 class _Move extends Intent {
   const _Move(this.by);
   final int by;
+}
+
+class _Sibling extends Intent {
+  const _Sibling(this.step);
+  final int step;
+}
+
+class _Prune extends Intent {
+  const _Prune();
 }

@@ -1,6 +1,51 @@
-use crate::{Core, Result};
+use std::collections::HashSet;
+
+use meret_model::EntityRef;
+
+use crate::{Core, CoreError, MAX_QUEUE, Result, queue_items};
 
 impl Core {
+    /// Plays the active trail: `whole`, every stop of the tree depth first;
+    /// otherwise this branch, from the root to the current stop. Releases,
+    /// works and games bring their tracks, people and searches none, and a
+    /// track plays once however many stops reach it. Each item points back
+    /// at its stop. Returns how many tracks were queued.
+    pub fn play_trail(&self, whole: bool) -> Result<usize> {
+        let now = now_ms();
+        let stops: Vec<_> = {
+            let history = self.trail.lock();
+            let trail = history.current().ok_or_else(|| CoreError::Query("there's no trail to play".into()))?;
+            let order = if whole { trail.depth_first() } else { trail.path() };
+            order.into_iter().filter(|&i| !trail.is_peek(i, now)).map(|i| (trail.stop(i).entity, trail.stop(i).uid)).collect()
+        };
+        let why = if whole { "the whole trail" } else { "this branch of the trail" };
+        let mut seen = HashSet::new();
+        let mut items = vec![];
+        for (entity, uid) in stops {
+            let rows = match entity {
+                EntityRef::Release(id) => self.store.release_page(id)?.map(|p| p.tracks),
+                EntityRef::Work(id) => self.store.work_page(id)?.map(|p| p.tracks),
+                EntityRef::Game(id) => self.store.game_page(id)?.map(|p| p.tracks),
+                _ => None,
+            };
+            for mut item in queue_items(rows.unwrap_or_default().into_iter().filter(|r| seen.insert(r.track))) {
+                item.from_stop = Some(uid);
+                item.why = Some(why.into());
+                items.push(item);
+            }
+            if items.len() >= MAX_QUEUE {
+                break;
+            }
+        }
+        items.truncate(MAX_QUEUE);
+        if items.is_empty() {
+            return Err(CoreError::Query("nothing on this trail has tracks to play".into()));
+        }
+        let queued = items.len();
+        self.play(items)?;
+        Ok(queued)
+    }
+
     /// Clone before entering the writer: it must never run under the trail lock.
     pub fn save_trails(&self) -> Result<()> {
         let active = self.trail.lock().active_index();
@@ -88,6 +133,33 @@ mod tests {
             assert_eq!(trail.root_query.as_deref(), Some("test"));
             assert_eq!(trail.stops(), expected);
         }
+        drop(core);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn playing_a_branch_or_the_tree_queues_each_release_once() {
+        let dir = std::env::temp_dir().join(format!("meret-core-play-trail-{}-{}", std::process::id(), now_ms()));
+        std::fs::create_dir_all(dir.join("music")).unwrap();
+        std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/meret/test/fixtures/tone-16-44.flac"), dir.join("music/tone.flac")).unwrap();
+        let (scans, _) = crossbeam_channel::unbounded();
+        let core = Core::new(CoreConfig { data_dir: dir.clone(), output: OutputChoice::Null { speed: 1.0 }, contact: "test".into() }, scans).unwrap();
+        let root = meret_library::add_root(&core.store, &dir.join("music")).unwrap();
+        meret_library::scan(&core.store, root, &|_| {}).unwrap();
+        let release = core.store.track_rows(&core.store.load_columns().unwrap().track).unwrap()[0].release;
+        core.store.writer.write(|tx| tx.execute("INSERT INTO agent (id, kind, name, rev) VALUES (900, 0, 'Fixture Person', 1)", [])).unwrap();
+        let t0 = now_ms() - 600_000;
+        let via = |kind| Via { kind, source: "local_tags".into() };
+        let mut trail = Trail::start(EntityRef::Search, Some("tone".into()), t0);
+        // The release reached twice, on two branches: a meeting.
+        trail.follow(0, EntityRef::Release(release), via(ThreadKind::Matched), t0 + 60_000);
+        trail.back(t0 + 120_000);
+        let person = trail.follow(0, EntityRef::Agent(AgentId(900)), via(ThreadKind::Matched), t0 + 180_000);
+        trail.follow(person, EntityRef::Release(release), via(ThreadKind::By), t0 + 240_000);
+        trail.back(t0 + 300_000);
+        core.trail.lock().start(trail, t0);
+        assert!(core.play_trail(false).is_err(), "a search and a person have no tracks of their own");
+        assert_eq!(core.play_trail(true).unwrap(), 1);
         drop(core);
         std::fs::remove_dir_all(dir).unwrap();
     }

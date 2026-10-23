@@ -184,6 +184,21 @@ Future<TrailDto?> trailBack() => RustLib.instance.api.crateApiCoreTrailBack();
 Future<TrailDto?> trailForward() =>
     RustLib.instance.api.crateApiCoreTrailForward();
 
+/// `⌥]` (`step` 1) and `⌥[` (`step` -1): the neighbouring branch at the
+/// nearest fork above. None with no fork above.
+Future<TrailDto?> trailSibling({required int step}) =>
+    RustLib.instance.api.crateApiCoreTrailSibling(step: step);
+
+/// Hides the branch ending at stop `leaf`; refused for the current branch
+/// and one with something done on it.
+Future<TrailDto> pruneBranch({required int leaf}) =>
+    RustLib.instance.api.crateApiCorePruneBranch(leaf: leaf);
+
+/// Plays this branch, or with `whole` the tree depth first. Returns how
+/// many tracks were queued.
+Future<int> playTrail({required bool whole}) =>
+    RustLib.instance.api.crateApiCorePlayTrail(whole: whole);
+
 /// A star on the strip, clicked: that stop becomes current.
 Future<TrailDto> trailGo({required int stop}) =>
     RustLib.instance.api.crateApiCoreTrailGo(stop: stop);

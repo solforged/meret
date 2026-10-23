@@ -5,6 +5,7 @@ pub use meret_api::{
     AnchorDto, ColumnDto, FidelityDto, FrontDto, FrontLineDto, HistogramDto, HitDto, HitKind, IdiomLineDto, JobDto,
     NowDto, PersonDto, QueryDto, QueryKind, RecentDto, ReleaseDto, RootDto, RowsDto, SearchDto, SourceDto, StageDto,
     StatusDto, StopDto, TargetDto, ThreadDto, ThreadKind, TrackRowDto, TrailDto, TransportDto, CreditSectionDto, WorkDto, GameDto,
+    BranchDto,
 };
 pub use meret_api::LightDto;
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
@@ -406,6 +407,17 @@ pub struct _StopDto {
     pub is_fork: bool,
     pub is_peek: bool,
 }
+#[frb(mirror(BranchDto))]
+pub struct _BranchDto {
+    pub fork: Option<u32>,
+    pub first: u32,
+    pub leaf: u32,
+    pub stops: u32,
+    pub when_ms: i64,
+    pub actions: Vec<String>,
+    pub current: bool,
+    pub prunable: bool,
+}
 
 #[frb(mirror(TrailDto))]
 pub struct _TrailDto {
@@ -413,6 +425,7 @@ pub struct _TrailDto {
     pub current: u32,
     pub stops: Vec<StopDto>,
     pub meetings: Vec<(u32, u32)>,
+    pub branches: Vec<BranchDto>,
     pub kept: bool,
     pub name: Option<String>,
 }

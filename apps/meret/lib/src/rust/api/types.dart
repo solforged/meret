@@ -33,6 +33,53 @@ class AnchorDto {
           rate == other.rate;
 }
 
+class BranchDto {
+  final int? fork;
+  final int first;
+  final int leaf;
+  final int stops;
+  final PlatformInt64 whenMs;
+  final List<String> actions;
+  final bool current;
+  final bool prunable;
+
+  const BranchDto({
+    this.fork,
+    required this.first,
+    required this.leaf,
+    required this.stops,
+    required this.whenMs,
+    required this.actions,
+    required this.current,
+    required this.prunable,
+  });
+
+  @override
+  int get hashCode =>
+      fork.hashCode ^
+      first.hashCode ^
+      leaf.hashCode ^
+      stops.hashCode ^
+      whenMs.hashCode ^
+      actions.hashCode ^
+      current.hashCode ^
+      prunable.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BranchDto &&
+          runtimeType == other.runtimeType &&
+          fork == other.fork &&
+          first == other.first &&
+          leaf == other.leaf &&
+          stops == other.stops &&
+          whenMs == other.whenMs &&
+          actions == other.actions &&
+          current == other.current &&
+          prunable == other.prunable;
+}
+
 enum ColumnDto { year, length, plays, lastPlayed, added, dr }
 
 class CreditSectionDto {
@@ -1618,6 +1665,7 @@ class TrailDto {
   final int current;
   final List<StopDto> stops;
   final List<(int, int)> meetings;
+  final List<BranchDto> branches;
   final bool kept;
   final String? name;
 
@@ -1626,6 +1674,7 @@ class TrailDto {
     required this.current,
     required this.stops,
     required this.meetings,
+    required this.branches,
     required this.kept,
     this.name,
   });
@@ -1636,6 +1685,7 @@ class TrailDto {
       current.hashCode ^
       stops.hashCode ^
       meetings.hashCode ^
+      branches.hashCode ^
       kept.hashCode ^
       name.hashCode;
 
@@ -1648,6 +1698,7 @@ class TrailDto {
           current == other.current &&
           stops == other.stops &&
           meetings == other.meetings &&
+          branches == other.branches &&
           kept == other.kept &&
           name == other.name;
 }

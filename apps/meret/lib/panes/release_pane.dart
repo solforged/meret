@@ -142,7 +142,10 @@ class _ReleasePaneState extends State<ReleasePane> {
                     child: GestureDetector(
                       key: ValueKey('release-work-$index'),
                       onTap: () => _follow(work),
-                      child: Text(work.title, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(work.title, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        TrailThreadMark(target: work.to),
+                      ]),
                     ),
                   ),
                 ],
@@ -208,9 +211,10 @@ class _ReleasePaneState extends State<ReleasePane> {
             ])),
           ]),
           if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
-          // Credits before the tracklist, so their threads stay in reach on a long release.
-          if (release.credits.isNotEmpty) _heading('Credits'),
         ])),
+        const ForksHere(),
+        // Credits before the tracklist, so their threads stay in reach on a long release.
+        if (release.credits.isNotEmpty) SliverToBoxAdapter(child: _heading('Credits')),
         SliverList(delegate: SliverChildBuilderDelegate(
           (_, i) => ThreadLine(thread: release.credits[i], onFollow: () => _follow(release.credits[i])),
           childCount: _allCredits ? release.credits.length : release.credits.length.clamp(0, _credits),
@@ -273,7 +277,10 @@ class WrittenCredit extends StatelessWidget {
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () => onFollow(match.person),
-              child: Text(written.substring(match.start, match.end), style: Tok.body.copyWith(color: Tok.muted)),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(written.substring(match.start, match.end), style: Tok.body.copyWith(color: Tok.muted)),
+                TrailThreadMark(target: match.person.to),
+              ]),
             ),
           ),
         ),
@@ -325,6 +332,7 @@ class ThreadLine extends StatelessWidget {
               padding: const EdgeInsets.only(left: _label, top: 2),
               child: Text(thread.detail, style: Tok.label),
             ),
+            Padding(padding: const EdgeInsets.only(left: _label), child: TrailThreadMark(target: thread.to)),
           ]),
         ),
       ),

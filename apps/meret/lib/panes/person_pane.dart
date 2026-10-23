@@ -87,6 +87,7 @@ class _PersonPaneState extends State<PersonPane> {
         ].join(' · '), style: Tok.label),
         if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
       ])),
+      const ForksHere(),
       ..._section('Releases', person.releases),
       ..._section('Appears on', person.appearsOn),
       for (final role in person.roles) ..._section(role.title, role.threads),
