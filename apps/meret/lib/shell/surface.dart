@@ -42,17 +42,19 @@ class Surface extends StatefulWidget {
 }
 
 /// One pane per stop of the open trail; the key follows the stop off the
-/// path and back, so its State does.
+/// path and back, so its State does. A new tree fades in while the old one
+/// fades out, so each tree has keys of its own.
 class _StopKey extends GlobalKey<State<StatefulWidget>> {
-  const _StopKey(this.index, this.target) : super.constructor();
+  const _StopKey(this.tree, this.index, this.target) : super.constructor();
+  final int tree;
   final int index;
   final TargetDto target;
 
   @override
-  bool operator ==(Object other) => other is _StopKey && other.index == index && other.target == target;
+  bool operator ==(Object other) => other is _StopKey && other.tree == tree && other.index == index && other.target == target;
 
   @override
-  int get hashCode => Object.hash(index, target);
+  int get hashCode => Object.hash(tree, index, target);
 }
 
 /// Pages fade through: the outgoing page is gone before the incoming one shows.
@@ -91,7 +93,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   /// The Home column laid over the trail (plate 06 C); the panes dim and never move.
   bool _homeOver = false;
   final _doors = HomeDoors();
-  final _anchors = ThreadAnchors();
+  /// Each tree's thread ends; the old tree keeps its own while it fades out.
+  var _anchors = ThreadAnchors();
 
   /// Nothing draws until the first Now, so the opening never flickers.
   bool _decided = false;
@@ -245,13 +248,14 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     if (old == null || !_sameTrail(old, trail)) {
       _parked.clear();
       _tree++;
+      _anchors = ThreadAnchors();
       return;
     }
     final onRow = {for (final stop in _row(trail)) stop.index};
     final targets = {for (final stop in trail.stops) stop.index: stop.target};
     for (final stop in _row(old)) {
       if (onRow.contains(stop.index)) continue;
-      final key = _StopKey(stop.index, stop.target);
+      final key = _StopKey(_tree, stop.index, stop.target);
       _parked..remove(key)..add(key);
     }
     _parked.removeWhere((key) => onRow.contains(key.index) || targets[key.index] != key.target);
@@ -503,7 +507,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         libraryVersion: _status?.libraryVersion, lookupsVersion: _status?.lookupsVersion),
     };
     return Pane(
-      key: _StopKey(stop.index, stop.target),
+      key: _StopKey(_tree, stop.index, stop.target),
       kind: switch (stop.target) {
         TargetDto_Search() => 'Search',
         TargetDto_Release() => 'Release',
@@ -617,8 +621,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               final aheadStops = {for (final stop in along.skip(path.length)) stop.index};
               // The row holds the trail's path, the stops ahead and the parked
               // stops whatever page lies over it, so nothing is thrown away by a page.
-              final row = ThreadLines(anchors: _anchors, stops: [for (final stop in along) stop.index], path: path.length, child: PaneRow(
-                key: ValueKey(('row', _tree)),
+              // A new tree, or the previous one, fades through like a page: the
+              // old row is gone before the new one shows, and nothing slides.
+              final row = AnimatedSwitcher(
+                duration: kMotion,
+                transitionBuilder: _fadeThrough,
+                layoutBuilder: _stacked,
+                child: ThreadLines(key: ValueKey(('row', _tree)), anchors: _anchors, stops: [for (final stop in along) stop.index], path: path.length, child: PaneRow(
                 focus: path.length - 1,
                 swap: _swap,
                 maxVisible: wc.panes,
@@ -627,7 +636,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 ghost: const PaneGhost(),
                 parked: [for (final key in _parked) _pane(stops[key.index]!, aheadStops: aheadStops)],
                 children: [for (var i = 0; i < along.length; i++) _pane(along[i], ahead: i >= path.length, aheadStops: aheadStops)],
-              ));
+              )));
               final phone = wc == WidthClass.phone;
               _phone = phone;
               _doors.load(widget.core, libraryVersion: _status?.libraryVersion, memoryVersion: _memoryVersion);
