@@ -281,6 +281,49 @@ void main() {
     await closed();
   });
 
+  testWidgets('ANIM-4 a new tree and the previous one fade the row through, out then in, with nothing sliding', (tester) async {
+    final core = FakeCore();
+    await core.startTrail(const TargetDto.search(query: 'Iona'));
+    await _surface(tester, core);
+    await _showTrail(tester);
+    final rows = find.byType(ThreadLines);
+    expect(rows, findsOneWidget);
+    double fade(int i) => _fadeOver(tester, rows.at(i));
+    List<double> xs(int i) => [
+      for (final pane in find.descendant(of: rows.at(i), matching: find.byType(Pane)).evaluate())
+        (pane.findRenderObject()! as RenderBox).localToGlobal(Offset.zero).dx,
+    ];
+
+    Future<void> fadesThrough(String root) async {
+      for (var i = 0; i < 5 && rows.evaluate().length < 2; i++) {
+        await tester.pump();
+      }
+      expect(rows, findsNWidgets(2), reason: 'the old tree stays while it fades out');
+      expect((fade(0), fade(1)), (1, 0));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(fade(0), closeTo(0.5, 0.01));
+      expect(fade(1), 0);
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(fade(0), 0, reason: 'the old tree is gone before the new one shows');
+      final at = xs(1);
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(fade(1), closeTo(0.5, 0.01));
+      expect(xs(1), at, reason: 'the new tree fades in where it stands');
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(rows, findsOneWidget);
+      expect(fade(0), 1);
+      expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.stops.first.title, root);
+      await tester.pumpAndSettle();
+    }
+
+    await _key(tester, LogicalKeyboardKey.keyL, meta: true);
+    await fadesThrough('Everything');
+    // [ at a root steps back into the previous tree, which fades through too.
+    await _key(tester, LogicalKeyboardKey.bracketLeft);
+    await fadesThrough('Iona');
+  });
+
   testWidgets('THREAD-1 the followed row is lit and threaded to the next star, and the chip names the trail', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 3);
