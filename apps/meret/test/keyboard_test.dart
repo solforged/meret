@@ -6,7 +6,9 @@ import 'package:meret/core/bridge.dart';
 import 'package:meret/main.dart';
 import 'package:meret/panes/release_pane.dart';
 import 'package:meret/panes/table_pane.dart';
+import 'package:meret/shell/keys_sheet.dart';
 import 'package:meret/shell/query_line.dart';
+import 'package:meret/shell/window_chrome.dart';
 import 'package:meret/theme/light.dart';
 
 void main() {
@@ -178,6 +180,54 @@ void main() {
     }
     expect(core.names, [null, null]);
   });
+
+  testWidgets('KEYS-5 ? opens every key on one page and closes it again; the Help menu opens it too; the query keeps ?', (tester) async {
+    final core = _KeysCore();
+    await _surface(tester, core);
+    final sheet = find.byKey(const ValueKey('keys-sheet'));
+    await _question(tester);
+    expect(sheet, findsOneWidget);
+    for (final (_, keys) in keyGroups) {
+      for (final (key, does) in keys) {
+        expect(find.descendant(of: sheet, matching: find.text(key)), findsOneWidget, reason: key);
+        expect(find.descendant(of: sheet, matching: find.text(does)), findsOneWidget, reason: does);
+      }
+    }
+    // Behind the sheet the surface's keys are dead.
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect([core.backs, core.transports.length], [0, 0]);
+    await _question(tester);
+    expect(sheet, findsNothing);
+
+    WindowChrome.instance.onMenu!('keys');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(sheet, findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(sheet, findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    final handled = await tester.sendKeyEvent(LogicalKeyboardKey.slash, character: '?');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(handled, isFalse, reason: '? must reach text input');
+    expect(sheet, findsNothing);
+  });
+}
+
+/// `?` as a US keyboard sends it: shift and the slash key.
+Future<void> _question(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.sendKeyEvent(LogicalKeyboardKey.slash, character: '?');
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 void _desktop(WidgetTester tester) {

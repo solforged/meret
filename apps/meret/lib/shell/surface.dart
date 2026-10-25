@@ -23,6 +23,7 @@ import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'activity.dart';
 import 'keep_dialog.dart';
+import 'keys_sheet.dart';
 import 'outside.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
@@ -232,6 +233,12 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     }
   }
 
+  /// `?`: every key on one page.
+  void _keys() {
+    final context = _settingsContext;
+    if (!_queryFocus.hasFocus && context != null) showKeysSheet(context);
+  }
+
   /// Same tree, or a different one from the history? Stops never change
   /// target inside a trail, so a clash at any index means another trail.
   static bool _sameTrail(TrailDto a, TrailDto b) {
@@ -336,7 +343,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     await _navigate(by < 0 ? widget.core.trailBack : widget.core.trailForward, frontOnNull: by < 0);
   }
 
-  /// The Go and Controls menus run what their keys run.
+  /// The Go, Controls and Help menus run what their keys run.
   void _menu(String id) {
     if (!mounted) return;
     switch (id) {
@@ -357,6 +364,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       case 'playTree': _report(_playTrail(true));
       case 'now': _toggleNow();
       case 'history': _history();
+      case 'keys': _keys();
     }
   }
 
@@ -564,6 +572,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         SingleActivator(LogicalKeyboardKey.space, shift: true, includeRepeats: false): _PlaySomething(),
         SingleActivator(LogicalKeyboardKey.space, alt: true, includeRepeats: false): _FromStart(),
         SingleActivator(LogicalKeyboardKey.keyH): _History(),
+        CharacterActivator('?'): _Keys(),
         SingleActivator(LogicalKeyboardKey.keyN, includeRepeats: false): _NowPanel(),
         SingleActivator(LogicalKeyboardKey.keyT, includeRepeats: false): _Tree(),
         SingleActivator(LogicalKeyboardKey.escape, includeRepeats: false): _CloseTree(),
@@ -594,6 +603,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           _PlaySomething: CallbackAction<_PlaySomething>(onInvoke: (_) => _report(_playSomething())),
           _FromStart: CallbackAction<_FromStart>(onInvoke: (_) => _fromStart()),
           _History: CallbackAction<_History>(onInvoke: (_) => _history()),
+          _Keys: CallbackAction<_Keys>(onInvoke: (_) => _keys()),
           _NowPanel: CallbackAction<_NowPanel>(onInvoke: (_) => _toggleNow()),
           _Tree: CallbackAction<_Tree>(onInvoke: (_) => _toggleTree()),
           _CloseTree: CallbackAction<_CloseTree>(onInvoke: (_) => _closeTree()),
@@ -821,6 +831,10 @@ class _FromStart extends Intent {
 
 class _History extends Intent {
   const _History();
+}
+
+class _Keys extends Intent {
+  const _Keys();
 }
 
 class _Move extends Intent {

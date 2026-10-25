@@ -158,7 +158,7 @@ shaders/     sky.frag (density), body.frag   (planned)
 - **The body and the playhead repaint without rebuilding.** A `PlayheadClock` ticks on vsync only while playing and extrapolates from the core's anchor. Painters take it as `repaint:`, so nothing above them rebuilds.
 - **Lists are virtual with fixed extents.** Rows come from the core in pages through a small cache. Covers are decoded off the UI thread at the size they're drawn.
 - **The sky is the GPU's job.** Positions arrive once as a `Float32List` and are drawn with `drawRawPoints` or `drawVertices`. A fragment shader draws the density at galaxy zoom, and tiles take over as you zoom in. A lasso is a polygon sent to the core, which returns a selection.
-- **Keyboard first on desktop.** `Shortcuts` and `Actions` carry navigation.md's keys: `/`, `[` `]`, `⌥[` `⌥]`, `⌘↵`, `T`, `M`, `W`, `C`, `⌘S`, Space, `⇧Space`.
+- **Keyboard first on desktop.** `Shortcuts` and `Actions` carry navigation.md's keys: `/`, `[` `]`, `⌥[` `⌥]`, `⌘↵`, `T`, `M`, `W`, `C`, `⌘S`, Space, `⇧Space`. `?` opens a sheet of every key (`keys_sheet.dart`), also under Help ▸ Keys; the query line keeps `?` as text.
 - **Words are labels, data and keys.** No sentence explains what a control does, what a section holds or what is planned; a door that isn't built says "Coming later", and a state gets one short line at most (an absent output: "Using the system default"). Decided 2026-10-18.
 - **Platform glue stays native.** On the Mac: the menu bar item, `MPNowPlayingInfoCenter` and media keys in `macos/Runner/Outside.swift`, the panel in `PanelView.swift`, and window lifetime in `AppDelegate.swift` and `MainFlutterWindow.swift`; `shell/outside.dart` feeds them Now and carries commands to the core. On Android: a planned Media3 `MediaSessionService` in Kotlin that talks to the same Rust engine directly, so playback survives the Flutter engine being torn down.
 
@@ -206,7 +206,7 @@ These are what a spike or a regression test should hold the build to.
 
 ## State of the scaffold
 
-As of 2026-10-25. `cargo test --workspace` runs 225 tests (plus three ignored: a benchmark, and a device listing and an unplug test that need hardware); `flutter test` in `apps/meret` runs 214, ten of them through the real Rust core (parsing and commands, scan to play, Today, search, grouped rows and facets, release and person panes on a trail, device volume, and a pick counted through).
+As of 2026-10-25. `cargo test --workspace` runs 225 tests (plus three ignored: a benchmark, and a device listing and an unplug test that need hardware); `flutter test` in `apps/meret` runs 215, ten of them through the real Rust core (parsing and commands, scan to play, Today, search, grouped rows and facets, release and person panes on a trail, device volume, and a pick counted through).
 
 | Works | Stubbed or missing |
 |---|---|
@@ -313,7 +313,7 @@ Completed steps below record the sequence of development, not necessarily the cu
    - **H** MusicBrainz as jobs: the persistent job runner in the activity indicator, lookups for MBID-tagged recordings, releases and artists, cached; *member of*, *worked with* and other recordings of a work as threads, sourced "MB" (done), then releases without IDs matched by album title and album artist (done).
    - **I** games for scores, from Wikidata rather than VGMdb, which scripts can't reach: the game a soundtrack is of, its developers, platforms, series and composers, a game pane, *soundtrack of*, *scored* and *same series* threads, and `game:` (done).
    - **J** trees in the UI: forks inside panes (⑂, "Forks here"), `⌥[` `⌥]`, prune, and playing the tree (done).
-   - The navigation plates of 2026-10-23 ([navigation.md](navigation.md)): the pane row moving only what changed (done), the top line with the LCD and activity (done), Home and Today in place of the Front and the Now stage (done), threads on pane headers in place of the strip (done), the fade-through for a new tree (done), and the `?` sheet.
+   - The navigation plates of 2026-10-23 ([navigation.md](navigation.md)): the pane row moving only what changed (done), the top line with the LCD and activity (done), Home and Today in place of the Front and the Now stage (done), threads on pane headers in place of the strip (done), the fade-through for a new tree (done), and the `?` sheet (done).
 4. **Analysis and the sky.** Loudness, DR, the body, embeddings, placement, leads. In slices (proposed 2026-10-22):
 
    - **K** analysis as jobs: R128 loudness, true peak, DR and the body summary for every track; DR and LUFS columns, histograms and queries; the body drawn from real data; loudness levelling (done).
