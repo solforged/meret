@@ -4,7 +4,7 @@ import FlutterMacOS
 /// The window has no native title bar: the top line takes its place, with
 /// the window buttons inset at its left. `meret/window` lets the top line
 /// move and zoom the window, tells it when full screen hides the buttons,
-/// and carries the Go and Controls menus' items to the surface.
+/// and carries the Go, Controls and Help menus' items to the surface.
 /// Closing hides the window; the music, the menu bar item and the media
 /// keys go on without it (`AppDelegate`).
 class MainFlutterWindow: NSWindow {
@@ -51,6 +51,9 @@ class MainFlutterWindow: NSWindow {
       ("now", "Now", "n", []),
       ("history", "History", "h", []),
     ]),
+    ("Help", [
+      ("keys", "Keys", "?", []),
+    ]),
   ]
 
   /// "Tree" with "T" in the key column, right-aligned as AppKit draws ⌘ keys.
@@ -68,8 +71,11 @@ class MainFlutterWindow: NSWindow {
     guard let main = NSApp.mainMenu else { return }
     // After Edit, before View, as in the Finder.
     var at = (main.items.firstIndex { $0.submenu?.title == "View" }) ?? max(0, main.items.count - 2)
-    for (title, items) in Self.menus where main.items.first(where: { $0.title == title }) == nil {
-      let menu = NSMenu(title: title)
+    for (title, items) in Self.menus {
+      // Help is AppKit's own menu: its items join it, once.
+      let existing = main.items.first { $0.title == title }?.submenu
+      if existing?.items.contains(where: { $0.representedObject as? String == items.first??.id }) == true { continue }
+      let menu = existing ?? NSMenu(title: title)
       for item in items {
         guard let item else {
           menu.addItem(.separator())
@@ -87,6 +93,7 @@ class MainFlutterWindow: NSWindow {
         entry.target = self
         menu.addItem(entry)
       }
+      if existing != nil { continue }
       let top = NSMenuItem(title: title, action: nil, keyEquivalent: "")
       top.submenu = menu
       main.insertItem(top, at: at)
