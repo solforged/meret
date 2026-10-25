@@ -19,7 +19,9 @@ Desktop, macOS. Every story below happens in one of these, and each place answer
 |---|---|---|---|
 | Query line | Top, doubling as the title bar | "Take me to…", "Do…" | Search, commands (`play`, `want`, `crate add`) |
 | Trail strip | Under the top line | "How did I get here?" | Stops, threads, branches, Keep |
-| Panes | The middle | "What is this?" | The Front, tables, releases, people, works, crates, leads |
+| Home | The left edge: a column, or a rail inside a trail | "Where do I start?" | Today, Pick up, Play something, the library by idiom, crates, trails, leads, wants, Needs you |
+| Today | Home's own page, where Meret opens | "What now?" | Resume, the picks, what's partway, added lately, your week |
+| Panes | The middle | "What is this?" | Tables, releases, people, works, crates, leads |
 | Now | Pinned right, or a bar | "What's playing, and how?" | The body, signal path, transport, queue, history, zones |
 | Activity | Top line, right | "Is everything all right?" | A dot when it is; its popover has every source's state, folders, running jobs, guesses to fix, files to write |
 | Settings | Its own window, `⌘,` | "How is Meret set up?" | Folders, sources, playback, lookups, files, history, devices, the light |
@@ -30,7 +32,7 @@ Desktop, macOS. Every story below happens in one of these, and each place answer
 Decided 2026-10-14.
 
 1. **Configuration lives in a Settings window** (`⌘,`), as on any Mac app. It never becomes a trail stop: the trail holds music. The activity popover shows each source's state and the common fix, and from there its section in Settings (Spotify's dot leads to Settings › Sources › Spotify; a job to its detail).
-2. **First launch is doors, not a wizard.** The empty Front offers the folders Meret finds itself as one-click lines, then "connect a service" and "bring your history" below them. Nothing is required before the first scan. Output and online lookups are asked the first time they matter.
+2. **First launch is doors, not a wizard.** The empty library's Today offers the folders Meret finds itself as one-click lines, then "connect a service" and "bring your history" below them. Nothing is required before the first scan. Output and online lookups are asked the first time they matter.
 3. **Online lookups ask once.** Before matching sends tags or audio fingerprints to MusicBrainz or AcoustID, Meret asks, plainly, with what leaves the Mac. The answer lives in Settings › Lookups.
 4. **Volume stays at the DAC.** Meret's own volume is off by default; turning it on is allowed, and the signal path then says the output is no longer bit-perfect.
 5. **Meret's store is the main database, and changes propagate out to files** (see *Writing back to files*). Like beets: you correct things in Meret, and Meret writes tags and moves files to match.
@@ -47,13 +49,13 @@ Decided 2026-10-14.
 
 | Story | Where | State |
 |---|---|---|
-| I open Meret with nothing in it and see what to do first | The empty Front, shaped like the Front it becomes | Built |
-| Meret finds my music without my hunting for it: `~/Music`, an Apple Music or iTunes library, mounted volumes and NAS shares | The empty Front, one line each, with counts once a quick look has run | Built |
-| I see the scan working, and can start listening before it ends | Activity progress; the Front and table fill as batches commit | Built (progress) |
-| I bring my history | The empty Front's "Bring your history"; Settings › History | Later |
+| I open Meret with nothing in it and see what to do first | The empty library's Today | Built |
+| Meret finds my music without my hunting for it: `~/Music`, an Apple Music or iTunes library, mounted volumes and NAS shares | The empty library's Today, one line each, with counts once a quick look has run | Built |
+| I see the scan working, and can start listening before it ends | Activity progress; Home and the table fill as batches commit | Built (progress) |
+| I bring my history | The empty library's "Bring your history"; Settings › History | Later |
 | I choose where sound goes and whether Meret takes the device exclusively | Asked on the first play, in Now's signal path; Settings › Playback | Settings › Playback built, shared by default so the volume keys work; the first-play question isn't |
 | I decide whether Meret may look my music up online | A line in Needs you before the first lookup, with an activity reminder; Settings › Lookups | Built for MusicBrainz lookups by ID (slice H) |
-| I connect the services I pay for, now or later, without being forced through them | The empty Front's "Connect a service"; Settings › Sources | Doors built; every service says it's coming later |
+| I connect the services I pay for, now or later, without being forced through them | The empty library's "Connect a service"; Settings › Sources | Doors built; every service says it's coming later |
 | macOS asks for folder access and I understand why | Meret says why just before the system dialog | A suggested folder that macOS protects says so; the moment before the dialog isn't built |
 
 ## Every day
@@ -63,7 +65,7 @@ Decided 2026-10-14.
 | I open Meret and carry on where I stopped | Now, paused at the position; `Space` | Built |
 | I want music without choosing | `⇧Space` Play something, with why | Built (from listens and trails; habits and leads later) |
 | I want one specific album, now | `/`, type, `↵` | Built |
-| I browse the whole library as a table | `⌘L` or a Front door | Built |
+| I browse the whole library as a table | `⌘L`, All tracks or an idiom door in Home | Built |
 | I wander from a credit to a person to their other work | Panes and threads; the strip | Built (local credits only) |
 | I see what's next, and change it | Now, Up next | Built (shown; changing the queue isn't built) |
 | I find out what played ten minutes ago | Now, "What was that?"; `H` for history | Built |
@@ -77,9 +79,9 @@ Decided 2026-10-14.
 
 | Story | Where | State |
 |---|---|---|
-| I add or remove a folder, or an external drive comes and goes | Settings › Folders; the Front's Folders list adds | Built (drives coming and going are marked offline) |
-| I see what Meret couldn't read | The Front, Needs you | Built |
-| I fix a release Meret guessed wrong | The `≈` mark where I see it; the Front's Needs you for batches | Placed |
+| I add or remove a folder, or an external drive comes and goes | Settings › Folders; the activity popover lists them | Built (drives coming and going are marked offline) |
+| I see what Meret couldn't read | Home's Needs you | Built |
+| I fix a release Meret guessed wrong | The `≈` mark where I see it; Home's Needs you for batches | Placed |
 | I tell Meret what kind of music a release is (its idiom) | The release pane's header | Placed |
 | Two rips of one album show once, and I pick which plays | The release pane; Needs you, "albums with two editions" | Built (copies show once; picking which plays isn't built) |
 | I correct a title or credit, and my files follow | The release pane, in place for a few fields; an edit sheet for many tracks; see *Writing back to files* | Placed |
@@ -105,15 +107,15 @@ Open: which fields Meret writes (everything it reads, plus MusicBrainz IDs and t
 
 Designed now, built late. The doors exist from the start and say what they'll do once the importers land.
 
-- **Doors.** The empty Front's "Bring your history", and Settings › History, list Apple Music (play counts, ratings, playlists, date added), Last.fm and ListenBrainz (every listen, with times).
+- **Doors.** The empty library's "Bring your history", and Settings › History, list Apple Music (play counts, ratings, playlists, date added), Last.fm and ListenBrainz (every listen, with times).
 - **Flow.** Pick a source, then sign in or point at the library. Meret matches what it finds and shows a preview first: how many plays matched tracks you own, how many are things you don't own (kept as listens of known recordings), and what becomes a crate. Importing is a job in the activity indicator.
-- **Afterwards.** The Front gains most played, dormant and pick up where you left off on the first day. Importing again adds only what's new.
+- **Afterwards.** Today gains most played, dormant and pick up where you left off on the first day. Importing again adds only what's new.
 
 ## Sources and connections
 
 | Story | Where | State |
 |---|---|---|
-| I connect Spotify (sign in through the browser) | Settings › Sources; the empty Front's "Connect a service" | Placed |
+| I connect Spotify (sign in through the browser) | Settings › Sources; the empty library's "Connect a service" | Placed |
 | I connect Music Assistant (found on the network, or a URL) | Settings › Sources | Placed |
 | I let Meret control Roon (authorised inside Roon's own app) | Settings › Sources, which says where to look in Roon | Placed |
 | I connect Bandcamp, YouTube, Qobuz (session-based, no public API) | Settings › Sources | Placed |
@@ -129,10 +131,10 @@ Mostly placed by the plates; listed so the whole set is in one file.
 
 | Story | Where | State |
 |---|---|---|
-| I see what's new for me, and why | The Front, Leads (`L`) | Placed |
-| I mark something I want to own | `W` anywhere; the Front, Wants | Placed |
-| I make a crate by hand, or from a rule | `C` / `⌘K`; the Front, Crates and trails | Placed |
-| I keep a trail and come back to it | `⌘S`; the Front; `[` from a new root | Built |
+| I see what's new for me, and why | Home's Leads (`L`) | Placed |
+| I mark something I want to own | `W` anywhere; Home's Wants | Placed |
+| I make a crate by hand, or from a rule | `C` / `⌘K`; Home's Crates | Placed |
+| I keep a trail and come back to it | `⌘S`; Home's Trails; `[` from a new root | Built |
 | I see my library as a map | `M`, the sky | Placed (plate 05) |
 | I check and refuse a habit | Play something's why → plate 12 | Placed |
 
@@ -148,4 +150,4 @@ Mostly placed by the plates; listed so the whole set is in one file.
 
 1. Moving to a new Mac and backing up trails and notes: a Settings action, a file, or a sync between hubs.
 2. Which fields Meret writes.
-3. Where transport sits on the Front when nothing has played yet.
+3. ~~Where transport sits on the Front when nothing has played yet.~~ The LCD at the top centre, at every width (2026-10-23).

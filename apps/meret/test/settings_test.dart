@@ -5,7 +5,7 @@ import 'package:meret/core/bridge.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
 import 'package:meret/now/zones.dart';
-import 'package:meret/panes/front_pane.dart';
+import 'package:meret/home/today.dart';
 import 'package:meret/settings/settings_window.dart';
 import 'package:meret/theme/light.dart';
 import 'package:meret/theme/tokens.dart';
@@ -29,7 +29,7 @@ void main() {
     await _surface(tester, core);
 
     for (final section in SettingsSection.values) {
-      showSettings(tester.element(find.byType(FrontPane)), section: section);
+      showSettings(tester.element(find.byType(Today)), section: section);
       await _settle(tester);
       expect(find.byKey(ValueKey('settings-section-${section.name}')), findsOneWidget);
       expect(await core.trail(), isNull);
@@ -65,7 +65,7 @@ void main() {
     expect(currentLight().accent, Color(now.light!.light));
     expect(currentLight().wash, Colors.transparent);
 
-    showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.light);
+    showSettings(tester.element(find.byType(Today)), section: SettingsSection.light);
     await _settle(tester);
     await tester.tap(find.byKey(const ValueKey('settings-light-off')));
     await _settle(tester);
@@ -119,7 +119,7 @@ void main() {
     final core = FakeCore();
     final devices = await core.outputDevices();
     await _surface(tester, core);
-    showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.playback);
+    showSettings(tester.element(find.byType(Today)), section: SettingsSection.playback);
     await _settle(tester);
 
     await tester.tap(find.byKey(const ValueKey('settings-output')));
@@ -139,7 +139,7 @@ void main() {
     final core = FakeCore();
     final before = core.settings();
     await _surface(tester, core);
-    showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.playback);
+    showSettings(tester.element(find.byType(Today)), section: SettingsSection.playback);
     await _settle(tester);
     for (final (level, label) in [
       (LevelDto.track, 'Track'), (LevelDto.album, 'Album'), (LevelDto.off, 'Off'),
@@ -185,7 +185,7 @@ void main() {
       await _settle(tester);
       expect(core.settings().outputDevice, 'dac');
 
-      showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.playback);
+      showSettings(tester.element(find.byType(Today)), section: SettingsSection.playback);
       await _settle(tester);
       await tester.tap(find.byKey(const ValueKey('settings-output')));
       await _settle(tester);
@@ -218,7 +218,7 @@ void main() {
 
   testWidgets('Sources and future sections do not offer unavailable actions', (tester) async {
     await _surface(tester, FakeCore());
-    showSettings(tester.element(find.byType(FrontPane)), section: SettingsSection.sources);
+    showSettings(tester.element(find.byType(Today)), section: SettingsSection.sources);
     await _settle(tester);
     for (final name in ['This Mac', 'MusicBrainz', 'Spotify', 'Music Assistant', 'Roon', 'Bandcamp', 'YouTube', 'Qobuz', 'ListenBrainz', 'Last.fm']) {
       expect(find.text(name), findsWidgets);

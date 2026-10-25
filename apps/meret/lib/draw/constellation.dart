@@ -42,7 +42,7 @@ class _NoTrailStripState extends State<NoTrailStrip> {
     child: Row(children: [
       Container(width: 9, height: 9, decoration: const BoxDecoration(shape: BoxShape.circle, color: Tok.gold)),
       const SizedBox(width: 8),
-      Text('Front', style: Tok.body.copyWith(color: Tok.gold)),
+      Text('Today', style: Tok.body.copyWith(color: Tok.gold)),
       const SizedBox(width: 20),
       Expanded(child: FutureBuilder<List<TrailSummaryDto>>(
         future: _history,
@@ -74,7 +74,7 @@ class _NoTrailStripState extends State<NoTrailStrip> {
   );
 }
 
-/// The resume line is a quiet door like a Front row: hand cursor and a panel tint on hover.
+/// The resume line is a quiet door like a Today row: hand cursor and a panel tint on hover.
 class _ResumeDoor extends StatefulWidget {
   const _ResumeDoor({required this.child, this.onTap});
   final Widget child;

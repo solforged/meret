@@ -186,7 +186,7 @@ void main() {
     expect(tester.widget<TrailStrip>(find.byType(TrailStrip)).trail.kept, isFalse);
   });
 
-  testWidgets('command 1 shows the Front over the trail, which stays open and keepable', (tester) async {
+  testWidgets('command 1 twice shows Today over the trail, which stays open and keepable', (tester) async {
     _desktop(tester);
     final core = _KeepingCore();
     await tester.pumpWidget(MeretApp(core: core));
@@ -194,10 +194,11 @@ void main() {
     await _command(tester, LogicalKeyboardKey.keyL);
     expect(find.byType(TrailStrip), findsOneWidget);
     await _command(tester, LogicalKeyboardKey.digit1);
-    expect(find.byType(TrailStrip), findsOneWidget, reason: 'the Front does not end a trail');
+    await _command(tester, LogicalKeyboardKey.digit1);
+    expect(find.byType(TrailStrip), findsOneWidget, reason: 'Today does not end a trail');
     expect(find.byType(NoTrailStrip), findsNothing);
-    expect(find.byKey(const ValueKey('front-over-trail')), findsOneWidget);
-    expect(find.text('Front · ⌘1 or ] back to Everything'), findsOneWidget);
+    expect(find.byKey(const ValueKey('today')), findsOneWidget);
+    expect(find.text('] back to Everything'), findsOneWidget);
     await _command(tester, LogicalKeyboardKey.keyS);
     expect(find.byKey(const ValueKey('keep-trail-dialog')), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);

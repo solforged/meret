@@ -45,7 +45,7 @@ class _ActivityState extends State<Activity> {
     super.dispose();
   }
 
-  /// Folders come from the Front's summary; read again when the library changes.
+  /// Folders come from the core's library summary; read again when the library changes.
   Future<void> _readRoots() async {
     final version = widget.status?.libraryVersion;
     _rootsVersion = version;

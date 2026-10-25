@@ -43,7 +43,7 @@ abstract interface class CoreBridge {
   Future<int> playTrail(bool whole);
   Future<List<TrailSummaryDto>> trailHistory(int limit);
   Future<TrailDto> keepTrail({String? name});
-  /// A trail from the Front's history becomes active at the stop it was left on.
+  /// A trail from Home's Trails becomes active at the stop it was left on.
   Future<TrailDto> openTrail(String uid);
   Future<void> runCommand(String input);
   QueryDto parse(String input);

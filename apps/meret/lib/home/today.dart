@@ -3,28 +3,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
+import '../core/playhead.dart';
+import '../now/now_pane.dart';
+import '../now/picks.dart';
+import '../panes/add_folder.dart';
+import '../panes/pane.dart';
 import '../theme/tokens.dart';
-import 'add_folder.dart';
-import 'front_memory.dart';
-import 'pane.dart';
+import 'resume.dart';
+import 'week.dart';
 
-/// The Front is a flat set of doors the library can actually answer.
-class FrontPane extends StatefulWidget {
-  const FrontPane({super.key, required this.core, required this.memoryVersion, required this.onQuery, this.onTrail, this.onRelease, this.libraryVersion, this.jobs = const []});
+/// Home's own page, where Meret opens (navigation.md, "Home"; plate 01):
+/// Resume first, then Play something with its reasons, what's partway
+/// through, what's new and your week. It is not a stop on a trail; with an
+/// empty library it is the first run instead.
+class Today extends StatefulWidget {
+  const Today({
+    super.key, required this.core, required this.memoryVersion, this.now, this.clock,
+    this.onToggle, this.onRelease, this.libraryVersion, this.jobs = const [], this.trailName,
+  });
 
   final CoreBridge core;
   final int memoryVersion;
-  final ValueChanged<String> onQuery;
-  final Future<void> Function(String)? onTrail;
+  final NowDto? now;
+  /// Resume shows only with a clock to drive it.
+  final PlayheadClock? clock;
+  final VoidCallback? onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
   final BigInt? libraryVersion;
   final List<JobDto> jobs;
 
+  /// The open trail Today lies over, which `]` returns to.
+  final String? trailName;
+
   @override
-  State<FrontPane> createState() => _FrontPaneState();
+  State<Today> createState() => _TodayState();
 }
 
-class _FrontPaneState extends State<FrontPane> {
+class _TodayState extends State<Today> {
   FrontDto? _front;
   List<FolderSuggestionDto>? _suggestions;
 
@@ -47,7 +62,7 @@ class _FrontPaneState extends State<FrontPane> {
   }
 
   @override
-  void didUpdateWidget(FrontPane old) {
+  void didUpdateWidget(Today old) {
     super.didUpdateWidget(old);
     if (old.core != widget.core) {
       _suggestions = null;
@@ -121,17 +136,6 @@ class _FrontPaneState extends State<FrontPane> {
     return 'Just added';
   }
 
-  Widget _bar(double share, {double width = 64}) => SizedBox(
-    width: width,
-    height: 5,
-    child: Align(alignment: Alignment.centerLeft, child: FractionallySizedBox(widthFactor: share, heightFactor: 1, child: const ColoredBox(color: Tok.gold2))),
-  );
-
-  Widget _door({String? query, required Widget child}) => FrontDoor(
-    onTap: query == null ? null : () => widget.onQuery(query),
-    child: child,
-  );
-
   Widget _section(String title, List<Widget> lines) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     Container(
       padding: const EdgeInsets.only(bottom: 6),
@@ -141,44 +145,9 @@ class _FrontPaneState extends State<FrontPane> {
     ...lines,
   ]);
 
-  Widget _collection(FrontDto front) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    Text('Collection · ${_count(front.tracks, 'track')}', style: Tok.body.copyWith(fontSize: 18, fontWeight: FontWeight.w600)),
-    const SizedBox(height: 12),
-    for (final idiom in front.idioms)
-      _door(query: idiom.query, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(child: Text(idiom.label, style: Tok.body.copyWith(fontWeight: FontWeight.w600))),
-          Text(_count(idiom.releases, 'release'), style: Tok.monoSmall),
-        ]),
-        const SizedBox(height: 3),
-        Row(children: [
-          Expanded(child: Text(_count(idiom.tracks, 'track'), style: Tok.label)),
-          _bar(_share(idiom.tracks, front.tracks)),
-        ]),
-      ])),
-  ]);
-
-  Widget _formats(FrontDto front) {
-    // A track kept in two formats counts in both; shares are of the sum.
-    final total = front.formats.fold(BigInt.zero, (sum, format) => sum + format.count);
-    return _section('By format', [
-      for (final format in front.formats)
-        _door(query: format.query, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Row(children: [
-            Expanded(child: Text(format.label, style: Tok.body.copyWith(color: Tok.muted))),
-            const SizedBox(width: 8),
-            Text(_n(format.count), style: Tok.monoSmall),
-          ]),
-          if (format.note.isNotEmpty) Text(format.note, style: Tok.label),
-          const SizedBox(height: 6),
-          _bar(_share(format.count, total), width: double.infinity),
-        ])),
-    ]);
-  }
-
   Widget _recent(FrontDto front) => _section('Added lately', [
     for (final recent in front.addedLately)
-      FrontDoor(onTap: widget.onRelease == null ? null : () async {
+      TodayDoor(onTap: widget.onRelease == null ? null : () async {
         try {
           await widget.onRelease!(recent.releaseId);
         } catch (error) {
@@ -190,75 +159,32 @@ class _FrontPaneState extends State<FrontPane> {
       ])),
   ]);
 
-  /// The Lookups prompt is a Front question until it is answered or deferred.
-  LookupStatusDto? _lookupsPrompt(FrontDto front) => _lookupsDeferred ? null : front.lookups;
-
-  bool _hasNeeds(FrontDto front) => front.needsYou.isNotEmpty || _lookupsPrompt(front) != null;
-
-  Widget _needs(FrontDto front) => _section('Needs you', [
-    if (_lookupsPrompt(front) case final lookups?)
-      _door(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Text('Lookups', style: Tok.body),
-        Text([
-          'Sends IDs, album titles and album artists to MusicBrainz, album titles to Wikidata',
-          if (lookups.releases > BigInt.zero) _count(lookups.releases, 'release'),
-          if (lookups.recordings > BigInt.zero) _count(lookups.recordings, 'track'),
-          if (lookups.people > BigInt.zero) '${_n(lookups.people)} ${lookups.people == BigInt.one ? 'person' : 'people'}',
-          if (lookups.unidentified > BigInt.zero) '${_n(lookups.unidentified)} to match by name',
-        ].join(' · '), style: Tok.label),
-        const SizedBox(height: 6),
-        PaneActions(
-          primary: 'Allow', onPrimary: _answeringLookups ? null : () => _setLookups(LookupsDto.allowed),
-          secondary: 'Not now', onSecondary: _answeringLookups ? null : () => setState(() => _lookupsDeferred = true),
-        ),
-      ])),
-    for (final need in front.needsYou)
-      _door(query: need.query, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(child: Text(need.label, style: Tok.body)),
-          const SizedBox(width: 8),
-          Text(_n(need.count), style: Tok.monoSmall.copyWith(color: Tok.warn)),
-        ]),
-        if (need.note.isNotEmpty) Text(need.note, style: Tok.label),
-      ])),
+  /// The one question Today asks, until it is answered or deferred; the
+  /// guesses themselves are Home's Needs you door.
+  Widget _lookups(LookupStatusDto lookups) => _section('Needs you', [
+    TodayDoor(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Text('Lookups', style: Tok.body),
+      Text([
+        'Sends IDs, album titles and album artists to MusicBrainz, album titles to Wikidata',
+        if (lookups.releases > BigInt.zero) _count(lookups.releases, 'release'),
+        if (lookups.recordings > BigInt.zero) _count(lookups.recordings, 'track'),
+        if (lookups.people > BigInt.zero) '${_n(lookups.people)} ${lookups.people == BigInt.one ? 'person' : 'people'}',
+        if (lookups.unidentified > BigInt.zero) '${_n(lookups.unidentified)} to match by name',
+      ].join(' · '), style: Tok.label),
+      const SizedBox(height: 6),
+      PaneActions(
+        primary: 'Allow', onPrimary: _answeringLookups ? null : () => _setLookups(LookupsDto.allowed),
+        secondary: 'Not now', onSecondary: _answeringLookups ? null : () => setState(() => _lookupsDeferred = true),
+      ),
+    ])),
   ]);
-
-  Widget _folders(FrontDto front) => _section('Folders', [
-    for (final root in front.roots)
-      _door(child: Row(children: [
-        Semantics(
-          label: root.online ? 'Online' : 'Offline',
-          child: Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: root.online ? Tok.ok : Tok.warn)),
-        ),
-        const SizedBox(width: 8),
-        Expanded(child: Text(root.path, style: Tok.monoSmall)),
-      ])),
-    // Found places not yet added; the list may predate the newest root.
-    for (final suggestion in _suggestions ?? const <FolderSuggestionDto>[])
-      if (!front.roots.any((root) => suggestion.path == root.path || suggestion.path.startsWith('${root.path}/')))
-        _suggestion(suggestion),
-    Align(alignment: Alignment.centerLeft, child: TextButton(onPressed: _adding ? null : _addFolder, child: const Text('+ Add folder', style: Tok.label))),
-  ]);
-
-  Widget _column(List<Widget> sections, {bool last = false}) => Expanded(
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      decoration: BoxDecoration(border: last ? null : const Border(right: BorderSide(color: Tok.line))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        for (var i = 0; i < sections.length; i++) ...[
-          if (i > 0) const SizedBox(height: 18),
-          sections[i],
-        ],
-      ]),
-    ),
-  );
 
   Widget _suggestion(FolderSuggestionDto suggestion) {
     final files = suggestion.audioFiles;
     final detail = suggestion.asksPermission ? 'macOS will ask for access'
       : files == null ? null
       : '${suggestion.more ? 'At least ' : ''}${_count(files, 'audio file')}';
-    return FrontDoor(
+    return TodayDoor(
       onTap: _adding ? null : () => _addFolder(suggestion.path),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
@@ -285,7 +211,7 @@ class _FrontPaneState extends State<FrontPane> {
       Text('Collection', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600)),
       const SizedBox(height: 12),
       for (final suggestion in _suggestions ?? <FolderSuggestionDto>[]) _suggestion(suggestion),
-      FrontDoor(
+      TodayDoor(
         onTap: _adding ? null : _addFolder,
         child: Row(children: [
           const Expanded(child: Text('Choose a folder…', style: Tok.body)),
@@ -348,30 +274,6 @@ class _FrontPaneState extends State<FrontPane> {
     _quietLine('Where you stopped'),
   ]);
 
-  Widget _quietLeadsAndCrates() => _quietPanel([
-    Text('Leads', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
-    _quietLine('Music to follow'),
-    const Divider(height: 1, color: Tok.line),
-    _quietLine('Wants'),
-    const Divider(height: 1, color: Tok.line),
-    const SizedBox(height: 16),
-    Text('Crates', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
-    _quietLine('Sets you make'),
-  ]);
-
-  Widget _memory() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    FrontMemory(
-      key: const ValueKey('front-memory'),
-      core: widget.core,
-      memoryVersion: widget.memoryVersion,
-      libraryVersion: widget.libraryVersion,
-      onTrail: widget.onTrail,
-      onRelease: widget.onRelease,
-    ),
-    const SizedBox(height: 24),
-    _quietLeadsAndCrates(),
-  ]);
-
   /// The headline waits for the disk look; only places with a counted file
   /// total are "found", a volume that still needs permission is not.
   String _welcome() {
@@ -387,7 +289,7 @@ class _FrontPaneState extends State<FrontPane> {
         padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Front', style: Tok.label),
+          const Text('Today', style: Tok.label),
           const SizedBox(height: 10),
           Text(_welcome(), style: Tok.title),
         ]),
@@ -423,17 +325,50 @@ class _FrontPaneState extends State<FrontPane> {
     ]);
   }
 
+  Widget _header() => Padding(
+    padding: const EdgeInsets.fromLTRB(28, 18, 28, 0),
+    child: Row(children: [
+      const Expanded(child: Text('Today', style: Tok.label)),
+      if (widget.trailName case final name?)
+        Flexible(child: Text('] back to $name', key: const ValueKey('today-back'), style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+    ]),
+  );
+
+  /// Resume, then the picks, then what's partway through.
+  Widget _listen() => NowMemory(
+    core: widget.core, now: widget.now, resumeLimit: 6, historyLimit: 0, onRelease: widget.onRelease,
+    header: (points) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if ((widget.now, widget.clock) case (final now?, final clock?) when now.anchor != null)
+        ResumeHeader(core: widget.core, now: now, clock: clock, onToggle: widget.onToggle ?? () {}, points: points),
+      PlaySomething(core: widget.core, now: widget.now),
+      const SizedBox(height: 22),
+    ]),
+  );
+
+  Widget _since(FrontDto front) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    if (front.addedLately.isNotEmpty) ...[_recent(front), const SizedBox(height: 18)],
+    TodayWeek(
+      key: const ValueKey('today-week'),
+      core: widget.core,
+      memoryVersion: widget.memoryVersion,
+      libraryVersion: widget.libraryVersion,
+      onRelease: widget.onRelease,
+    ),
+  ]);
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
-    if (box.maxWidth < 60) return const Pane(kind: 'FRONT', title: 'Front');
     final front = _front;
     final scans = widget.jobs.where((job) => job.isScan);
-    return Container(
-      decoration: const BoxDecoration(color: Tok.sky, border: Border(right: BorderSide(color: Tok.line))),
-      child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    final lookups = front == null || _lookupsDeferred ? null : front.lookups;
+    final gutter = box.maxWidth < 500 ? 18.0 : 28.0;
+    return ColoredBox(
+      color: Tok.sky,
+      child: SingleChildScrollView(key: const ValueKey('today-scroll'), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (front?.roots.isNotEmpty ?? true) _header(),
         for (final job in scans)
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            padding: EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text('${job.verb[0].toUpperCase()}${job.verb.substring(1)} · ${_n(job.done)} of ${_n(job.total)}', style: Tok.label.copyWith(color: Tok.gold)),
               const SizedBox(height: 6),
@@ -441,26 +376,26 @@ class _FrontPaneState extends State<FrontPane> {
             ]),
           ),
         if (_error != null)
-          Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 0), child: Text(_error!, style: Tok.body.copyWith(color: Tok.ox))),
+          Padding(padding: EdgeInsets.fromLTRB(gutter, 16, gutter, 0), child: Text(_error!, style: Tok.body.copyWith(color: Tok.ox))),
         if (front == null)
-          const Padding(padding: EdgeInsets.all(20), child: Text('Reading collection…', style: Tok.label))
+          Padding(padding: EdgeInsets.all(gutter), child: const Text('Reading collection…', style: Tok.label))
         else if (front.roots.isEmpty)
           _emptyFront(box.maxWidth)
         else
-          // Three columns once each gets 400 px; beside a pinned Now that is a 1600 px window.
-          // Stretched so every column rule runs the page.
-          IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: box.maxWidth >= 1200 ? [
-            _column([_collection(front), _formats(front)]),
-            _column([_recent(front), if (_hasNeeds(front)) _needs(front), _folders(front)]),
-            _column([_memory()], last: true),
-          ] : box.maxWidth >= 620 ? [
-            _column([_collection(front), _formats(front)]),
-            _column([_recent(front), if (_hasNeeds(front)) _needs(front), _folders(front), _memory()], last: true),
-          ] : [
-            _column([_collection(front), _formats(front), _recent(front), if (_hasNeeds(front)) _needs(front), _folders(front), _memory()], last: true),
-          ])),
+          Padding(
+            padding: EdgeInsets.fromLTRB(gutter, 18, gutter, 28),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (lookups != null) ...[_lookups(lookups), const SizedBox(height: 22)],
+              if (box.maxWidth >= 900)
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(flex: 6, child: _listen()),
+                  const SizedBox(width: 36),
+                  Expanded(flex: 5, child: _since(front)),
+                ])
+              else ...[_listen(), const SizedBox(height: 4), _since(front)],
+            ]),
+          ),
       ])),
     );
   });
 }
-

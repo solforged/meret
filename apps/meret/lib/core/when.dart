@@ -1,4 +1,4 @@
-/// How Meret says when something happened. One voice for the Front, Now
+/// How Meret says when something happened. One voice for Today, Now
 /// and the strip: "Tuesday", "yesterday", "23:14", "just now", "2y".
 library;
 

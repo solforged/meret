@@ -91,7 +91,7 @@ class NowPane extends StatelessWidget {
   }
 }
 
-/// The bare dial shared by the stage and the pinned pane.
+/// The bare dial shared by Today's Resume and the pinned pane.
 class NowDial extends StatelessWidget {
   const NowDial({super.key, required this.now, required this.clock, this.onToggle});
   final NowDto? now;
@@ -213,7 +213,7 @@ class NowFacts extends StatelessWidget {
   ].join(' · '), style: Tok.monoSmall.copyWith(color: Tok.muted));
 }
 
-/// Recent listening belongs to Now in both its stage and compact forms.
+/// Recent listening belongs to Now, on Today and in the pinned pane.
 class NowMemory extends StatefulWidget {
   const NowMemory({
     super.key, required this.core, required this.now, required this.resumeLimit,
@@ -341,7 +341,7 @@ class _NowMemoryState extends State<NowMemory> {
 String positionOf(int positionMs, int? lengthMs) =>
   '${clockLength(positionMs)} of ${lengthMs == null ? '–:––' : clockLength(lengthMs)}';
 
-/// The idiom's resume rule as the Pick up rows and the stage say it:
+/// The idiom's resume rule as the Pick up rows and Today's Resume say it:
 /// "Album · from the top of the track", "Score · the cue where it stopped".
 String resumeRule(String? idiom) {
   final rule = switch (idiom) {

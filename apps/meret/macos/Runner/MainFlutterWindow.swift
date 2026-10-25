@@ -28,7 +28,7 @@ class MainFlutterWindow: NSWindow {
   /// left to the surface.
   private static let menus: [(String, [(id: String, title: String, key: String, mods: NSEvent.ModifierFlags)?])] = [
     ("Go", [
-      ("front", "Front", "1", .command),
+      ("home", "Home", "1", .command),
       ("table", "Library Table", "l", .command),
       ("search", "Search", "/", []),
       nil,
