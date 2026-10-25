@@ -37,7 +37,7 @@ Decided 2026-10-14.
 4. **Volume stays at the DAC.** Meret's own volume is off by default; turning it on is allowed, and the signal path then says the output is no longer bit-perfect.
 5. **Meret's store is the main database, and changes propagate out to files** (see *Writing back to files*). Like beets: you correct things in Meret, and Meret writes tags and moves files to match.
 6. **History import is designed now and built late.** Its doors and flow are placed (see *Bringing your history*); the importers come after the providers.
-7. **The picks from the setup plates** ([`design/2026-10-14-setup/`](../design/2026-10-14-setup/index.html)):
+7. **The picks from the setup plates** (`design/2026-10-14-setup/`; see [plates.md](plates.md#setup-2026-10-14)):
    - The empty Front is the Front's own shape (plate f3): the doors fill the Collection column, and Leads, Crates and trails, and Pick up sit beside it as quiet outlines saying what will fill them.
    - The lookup question is a line in Needs you, with a reminder in the activity indicator (f6). Matching waits until you answer; nothing interrupts.
    - Settings is one window with a section list on the left (s2).
