@@ -9,7 +9,7 @@ import 'package:meret/panes/front_pane.dart';
 import 'package:meret/panes/front_memory.dart';
 import 'package:meret/panes/person_pane.dart';
 import 'package:meret/settings/settings_window.dart';
-import 'package:meret/shell/status_line.dart';
+import 'package:meret/shell/activity.dart';
 import 'package:meret/theme/tokens.dart';
 
 void main() {
@@ -186,63 +186,55 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('This Mac popover shows folder state and opens Folders', (tester) async {
-    await _statusLine(tester, _status(const [SourceDto(key: 'local', name: 'My collection', detail: '0', ok: true)]));
-    await tester.tap(find.byKey(const ValueKey('status-source-local')));
-    await _settleOverlay(tester);
+  testWidgets('activity is a dot while all is fine, a ring while a job runs, amber when something needs you', (tester) async {
+    await _activity(tester, _status(const [SourceDto(key: 'local', name: 'This Mac', detail: '844', ok: true)]));
+    expect(find.byKey(const ValueKey('activity-dot')), findsOneWidget);
+    expect(find.byKey(const ValueKey('activity-words')), findsNothing, reason: 'silent when everything is fine');
 
-    expect(find.text('0 tracks in 0 folders.'), findsOneWidget);
-    await tester.tap(find.text('Open in Settings'));
-    await _settleOverlay(tester);
+    final job = JobDto(verb: 'looking up', done: BigInt.from(368), total: BigInt.from(844));
+    await _activity(tester, _status(const [], jobs: [job]));
+    expect(find.byKey(const ValueKey('activity-ring')), findsOneWidget);
+    expect(find.text('looking up 368 / 844'), findsOneWidget);
 
-    _expectSection(tester, 'Folders');
-    expect(find.text('0 tracks in 0 folders.'), findsNothing);
+    await _activity(tester, _status(const [SourceDto(key: 'musicbrainz', name: 'MusicBrainz', detail: 'unreachable', ok: false)], guessed: 41));
+    expect(find.text('MusicBrainz unreachable · ≈ 41 to identify'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('activity-words'))).style!.color, Tok.warn);
   });
 
-  testWidgets('MusicBrainz popover uses the source key and opens Lookups', (tester) async {
-    await _statusLine(tester, _status(const [SourceDto(key: 'musicbrainz', name: 'Online catalog', detail: 'not used yet', ok: true)]));
-    await tester.tap(find.byKey(const ValueKey('status-source-musicbrainz')));
-    await _settleOverlay(tester);
-
-    expect(find.text('not used yet'), findsNWidgets(2));
-    await tester.tap(find.text('Open in Settings'));
-    await _settleOverlay(tester);
-
-    _expectSection(tester, 'Lookups');
-  });
-
-  testWidgets('a scan popover shows its phase and progress and opens Folders', (tester) async {
+  testWidgets('the activity popover lists sources and jobs, and each opens its Settings section', (tester) async {
     final job = JobDto(verb: 'reading tags', done: BigInt.from(12), total: BigInt.from(30));
-    await _statusLine(tester, _status(const [], jobs: [job]));
-    await tester.tap(find.byKey(const ValueKey('status-job-0')));
-    await _settleOverlay(tester);
-
-    expect(find.text('Folder scan'), findsOneWidget);
-    expect(find.text('Phase · reading tags'), findsOneWidget);
-    expect(find.text('12 of 30'), findsOneWidget);
-    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, 0.4);
-    await tester.tap(find.text('Open in Settings'));
-    await _settleOverlay(tester);
-
-    _expectSection(tester, 'Folders');
+    final status = _status(const [
+      SourceDto(key: 'local', name: 'This Mac', detail: '0', ok: true),
+      SourceDto(key: 'musicbrainz', name: 'MusicBrainz', detail: 'not used yet', ok: true),
+    ], jobs: [job]);
+    for (final (row, section) in [('activity-source-local', 'Folders'), ('activity-source-musicbrainz', 'Lookups'), ('activity-job-0', 'Folders'), ('activity-settings', 'Folders')]) {
+      await _activity(tester, status);
+      await tester.tap(find.byKey(const ValueKey('activity')));
+      await _settleOverlay(tester);
+      expect(find.text('12 of 30'), findsOneWidget);
+      expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, 0.4);
+      await tester.tap(find.byKey(ValueKey(row)));
+      await _settleOverlay(tester);
+      _expectSection(tester, section);
+    }
   });
 
-  testWidgets('Escape and clicking outside dismiss a status popover', (tester) async {
-    await _statusLine(tester, _status(const [SourceDto(key: 'musicbrainz', name: 'MusicBrainz', detail: 'not used yet', ok: true)]));
-    final source = find.byKey(const ValueKey('status-source-musicbrainz'));
-    await tester.tap(source);
+  testWidgets('Escape and clicking outside dismiss the activity popover', (tester) async {
+    await _activity(tester, _status(const [SourceDto(key: 'musicbrainz', name: 'MusicBrainz', detail: 'not used yet', ok: true)]));
+    final activity = find.byKey(const ValueKey('activity'));
+    await tester.tap(activity);
     await _settleOverlay(tester);
-    expect(find.text('Open in Settings'), findsOneWidget);
+    expect(find.text('Folders and sources in Settings…'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await _settleOverlay(tester);
-    expect(find.text('Open in Settings'), findsNothing);
+    expect(find.text('Folders and sources in Settings…'), findsNothing);
 
-    await tester.tap(source);
+    await tester.tap(activity);
     await _settleOverlay(tester);
-    await tester.tapAt(const Offset(900, 200));
+    await tester.tapAt(const Offset(200, 600));
     await _settleOverlay(tester);
-    expect(find.text('Open in Settings'), findsNothing);
+    expect(find.text('Folders and sources in Settings…'), findsNothing);
   });
 }
 
@@ -259,14 +251,16 @@ Future<void> _surface(WidgetTester tester, CoreBridge core) async {
   await tester.pump();
 }
 
-Future<void> _statusLine(WidgetTester tester, StatusDto status) async {
+Future<void> _activity(WidgetTester tester, StatusDto status) async {
   _size(tester, const Size(1200, 800));
   final core = FakeCore.empty();
+  await tester.pumpWidget(const SizedBox());
   await tester.pumpWidget(MaterialApp(home: SettingsScope(
     core: core,
     onChanged: (_) {},
-    child: Scaffold(body: Align(alignment: Alignment.bottomCenter, child: StatusLine(core: core, status: status, keys: const []))),
+    child: Scaffold(body: Align(alignment: Alignment.topRight, child: Activity(core: core, status: status))),
   )));
+  await tester.pump();
   await tester.pump();
 }
 
@@ -280,10 +274,10 @@ void _expectSection(WidgetTester tester, String name) {
   expect(find.byKey(ValueKey('settings-section-${name.toLowerCase()}')), findsOneWidget);
 }
 
-StatusDto _status(List<SourceDto> sources, {List<JobDto> jobs = const []}) => StatusDto(
+StatusDto _status(List<SourceDto> sources, {List<JobDto> jobs = const [], int guessed = 0}) => StatusDto(
   sources: sources,
   jobs: jobs,
-  guessed: BigInt.zero,
+  guessed: BigInt.from(guessed),
   newLeads: BigInt.zero,
   tracks: BigInt.zero,
   libraryVersion: BigInt.one,

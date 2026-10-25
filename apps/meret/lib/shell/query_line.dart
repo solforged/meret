@@ -5,13 +5,10 @@ import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
 import '../theme/tokens.dart';
-import 'window_chrome.dart';
 
 /// `/`: searches everything you own, can stream or have found, and takes
-/// commands. Running a search starts a new trail.
-///
-/// On macOS it is also the window's title bar: the window buttons sit at
-/// its left, and the space around the field moves the window.
+/// commands. Running a search starts a new trail. It sits in the top line,
+/// whose empty space moves the window.
 class QueryLine extends StatefulWidget {
   const QueryLine({super.key, required this.core, required this.focus, this.onSubmit, this.onSearch});
 
@@ -228,88 +225,84 @@ class _QueryLineState extends State<QueryLine> {
       QueryKind.command => '↵ to run',
       QueryKind.search => '↵ as a table',
     };
-    return ValueListenableBuilder(
-      valueListenable: WindowChrome.instance.fullScreen,
-      builder: (context, _, _) => Container(
-        height: 38,
-        decoration: const BoxDecoration(color: Tok.panel, border: Border(bottom: BorderSide(color: Tok.line))),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          WindowDragArea(
-            child: Container(
-              alignment: Alignment.centerLeft,
-              padding: EdgeInsets.only(left: 12 + WindowChrome.instance.buttonsInset, right: 10),
-              child: Text('/', style: Tok.monoSmall.copyWith(color: Tok.gold)),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: LayoutBuilder(builder: (context, box) => OverlayPortal(
-              controller: _overlay,
-              overlayChildBuilder: (_) => Positioned(
-                width: math.min(520, box.maxWidth),
-                child: CompositedTransformFollower(
-                  link: _link,
-                  showWhenUnlinked: false,
-                  targetAnchor: Alignment.bottomLeft,
-                  followerAnchor: Alignment.topLeft,
-                  child: _hits == null ? const SizedBox() : TextFieldTapRegion(child: _dropdown(_hits!)),
-                ),
-              ),
-              child: CompositedTransformTarget(
-                link: _link,
-                child: Center(
-                  child: CallbackShortcuts(
-                    bindings: {
-                      const SingleActivator(LogicalKeyboardKey.arrowDown): () => _move(1),
-                      const SingleActivator(LogicalKeyboardKey.arrowUp): () => _move(-1),
-                      const SingleActivator(LogicalKeyboardKey.escape): _escape,
-                      const SingleActivator(LogicalKeyboardKey.enter): _submit,
-                    },
-                    child: Shortcuts(
-                      shortcuts: const {
-                        SingleActivator(LogicalKeyboardKey.slash): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.bracketLeft): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.bracketRight): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.bracketLeft, alt: true): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.bracketRight, alt: true): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.backspace, meta: true): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.keyH): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.keyT): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.space): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.space, shift: true): DoNothingAndStopPropagationTextIntent(),
-                        SingleActivator(LogicalKeyboardKey.space, alt: true): DoNothingAndStopPropagationTextIntent(),
-                      },
-                      child: TextField(
-                        controller: _text,
-                        focusNode: widget.focus,
-                        style: Tok.monoSmall.copyWith(color: Tok.ink, fontSize: 12.5),
-                        cursorColor: Tok.gold,
-                        decoration: const InputDecoration.collapsed(hintText: ''),
-                        onChanged: _changed,
-                        onEditingComplete: () {},
-                        onSubmitted: (_) => _submit(),
-                      ),
-                    ),
+    final warn = _submitError != null || (widget.focus.hasFocus && p?.kind == QueryKind.invalid);
+    final empty = _text.text.isEmpty;
+    return OverlayPortal(
+      controller: _overlay,
+      overlayChildBuilder: (_) => Positioned(
+        width: 520,
+        child: CompositedTransformFollower(
+          link: _link,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.bottomLeft,
+          followerAnchor: Alignment.topLeft,
+          offset: const Offset(0, 4),
+          child: _hits == null ? const SizedBox() : TextFieldTapRegion(child: _dropdown(_hits!)),
+        ),
+      ),
+      child: CompositedTransformTarget(
+        link: _link,
+        child: Container(
+          height: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(color: const Color(0xFF040713), border: Border.all(color: widget.focus.hasFocus ? Tok.gold3 : Tok.rule)),
+          child: Row(children: [
+            Text('⌕', style: Tok.body.copyWith(color: Tok.faint, fontSize: 13)),
+            const SizedBox(width: 8),
+            Expanded(child: Stack(alignment: Alignment.centerLeft, children: [
+              // The hint stands in for the words until there are some.
+              if (empty)
+                IgnorePointer(child: Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: Tok.body.copyWith(fontSize: 12.5, color: warn ? Tok.ox : Tok.faint))),
+              CallbackShortcuts(
+                bindings: {
+                  const SingleActivator(LogicalKeyboardKey.arrowDown): () => _move(1),
+                  const SingleActivator(LogicalKeyboardKey.arrowUp): () => _move(-1),
+                  const SingleActivator(LogicalKeyboardKey.escape): _escape,
+                  const SingleActivator(LogicalKeyboardKey.enter): _submit,
+                },
+                child: Shortcuts(
+                  shortcuts: const {
+                    SingleActivator(LogicalKeyboardKey.slash): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.bracketLeft): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.bracketRight): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.bracketLeft, alt: true): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.bracketRight, alt: true): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.backspace, meta: true): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.keyH): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.keyN): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.keyT): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.space): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.space, shift: true): DoNothingAndStopPropagationTextIntent(),
+                    SingleActivator(LogicalKeyboardKey.space, alt: true): DoNothingAndStopPropagationTextIntent(),
+                  },
+                  child: TextField(
+                    controller: _text,
+                    focusNode: widget.focus,
+                    style: Tok.monoSmall.copyWith(color: Tok.ink, fontSize: 12.5),
+                    cursorColor: Tok.gold,
+                    decoration: const InputDecoration.collapsed(hintText: ''),
+                    onChanged: _changed,
+                    onEditingComplete: () {},
+                    onSubmitted: (_) => _submit(),
                   ),
                 ),
               ),
-            )),
-          ),
-          Expanded(
-            child: WindowDragArea(
-              child: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 12),
-                child: Text(
-                  hint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Tok.label.copyWith(color: _submitError != null || (widget.focus.hasFocus && p?.kind == QueryKind.invalid) ? Tok.ox : Tok.faint),
-                ),
+            ])),
+            if (!empty) ...[
+              const SizedBox(width: 8),
+              Flexible(child: Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: Tok.label.copyWith(color: warn ? Tok.ox : Tok.faint))),
+            ] else if (!widget.focus.hasFocus) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(border: Border.all(color: Tok.gold3)),
+                child: Text('/', style: Tok.label.copyWith(color: Tok.gold, letterSpacing: 0)),
               ),
-            ),
-          ),
-        ]),
+            ],
+          ]),
+        ),
       ),
     );
   }

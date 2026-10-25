@@ -51,9 +51,10 @@ void main() {
     expect(_rowColour(tester, 33), Colors.transparent);
   });
 
-  testWidgets('WIDTH-4 pinned Now keeps its scroll offset across the bar breakpoint', (tester) async {
+  testWidgets('WIDTH-4 pinned Now keeps its scroll offset across the pin breakpoint', (tester) async {
     final core = _NowSubscriptionCore();
     await _surface(tester, core);
+    await _resize(tester, 1900);
     tester.widget<NowStage>(find.byType(NowStage)).onLeave();
     await tester.pumpAndSettle();
     final details = find.descendant(of: find.byType(NowPane), matching: find.byType(SingleChildScrollView));
@@ -66,11 +67,11 @@ void main() {
 
     await _resize(tester, 1300);
     expect(find.byType(NowPane), findsNothing);
-    expect(find.byType(NowBar), findsOneWidget);
+    expect(find.byType(NowBar), findsNothing, reason: 'the LCD carries the transport');
     final hidden = find.byType(NowPane, skipOffstage: false);
     expect(hidden, findsOneWidget);
     expect(TickerMode.valuesOf(tester.element(hidden)).enabled, isFalse);
-    await _resize(tester, 1728);
+    await _resize(tester, 1900);
     expect(tester.state<ScrollableState>(scrollable).position.pixels, offset);
     expect(core.nowSubscriptions, 1);
   });

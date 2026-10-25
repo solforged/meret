@@ -4,8 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 /// The macOS window has no native title bar (`MainFlutterWindow.swift`);
-/// the query line stands in for it. This moves and zooms the window and
-/// knows when full screen hides the window buttons.
+/// the top line stands in for it. This moves and zooms the window, knows
+/// when full screen hides the window buttons, and hands on the Go and
+/// Controls menus' items.
 class WindowChrome {
   WindowChrome._() {
     if (!Platform.isMacOS) return;
@@ -13,6 +14,7 @@ class WindowChrome {
       if (call.method == 'fullScreen') fullScreen.value = call.arguments as bool;
       if (call.method == 'showSettings') onSettings?.call();
       if (call.method == 'closeSettings') onCloseSettings?.call();
+      if (call.method == 'menu') onMenu?.call(call.arguments as String);
     });
     _channel.invokeMethod<bool>('fullScreen').then((v) => fullScreen.value = v ?? false, onError: (_) {});
   }
@@ -23,6 +25,9 @@ class WindowChrome {
   final fullScreen = ValueNotifier(false);
   VoidCallback? onSettings;
   VoidCallback? onCloseSettings;
+
+  /// A menu item's id: `back`, `toggle`, `keep`… (`MainFlutterWindow.menus`).
+  void Function(String id)? onMenu;
 
   void setSettingsVisible(bool visible) {
     if (Platform.isMacOS) _channel.invokeMethod<void>('settingsVisible', visible).catchError((_) {});

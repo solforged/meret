@@ -8,13 +8,11 @@ enum WidthClass {
   /// Two panes: where you came from, where you are.
   foldable(panes: 2, nowWidth: null),
 
-  /// Two or three panes; Now as a bar.
+  /// Two or three panes; Now opens on `N` or a click on the LCD.
   laptop(panes: 3, nowWidth: null),
 
-  /// Two or three panes and Now pinned at the right (decided 2026-10-23: pin
-  /// from 1560, so the Front keeps three columns and a branch three panes
-  /// beside the 360 px Now; 1400 lost both).
-  desk(panes: 3, nowWidth: 360),
+  /// Three panes; Now opens beside them on `N` or a click on the LCD.
+  desk(panes: 3, nowWidth: null),
 
   /// Four or five panes plus spines, and Now pinned at the right.
   large(panes: 5, nowWidth: 380);
@@ -22,9 +20,11 @@ enum WidthClass {
   const WidthClass({required this.panes, required this.nowWidth});
   final int panes;
 
-  /// The pinned Now pane's width; null when Now is a bar.
+  /// The Now panel's width when it's pinned by default (decided
+  /// 2026-10-23: from 1800 pt); null when it opens on `N`, at [panel].
   final double? nowWidth;
   bool get pinnedNow => nowWidth != null;
+  static const panel = 360.0;
 
   static WidthClass of(double width) => switch (width) {
         < 600 => phone,
