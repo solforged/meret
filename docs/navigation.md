@@ -2,7 +2,7 @@
 
 > **Design specification.** This document includes planned behavior as well as implemented navigation. For what is built and what is missing, see [Architecture](architecture.md#state-of-the-scaffold).
 
-Draft, 2026-10-13. Sol: "this is it" for the trail model. Plates: [`design/2026-10-13-trails/`](../design/2026-10-13-trails/index.html) (01 trail, 02 Front, 03 phone and foldable, 04 table, 05 sky, 06–08 forks, 09–11 press play and resume, 12 habits). Revised 2026-10-23 after driving the build: Home, the pane row and the chrome. Plates: [`design/2026-10-23-navigation/`](../design/2026-10-23-navigation/index.html) (01 Home, 02 a trail with its threads drawn, 03 and 09 motion demos, 04 chrome, 06 Home's states and doors, 07 a day of trails, 08 every move).
+Draft, 2026-10-13. Sol: "this is it" for the trail model. Plates: `design/2026-10-13-trails/` (01 trail, 02 Front, 03 phone and foldable, 04 table, 05 sky, 06–08 forks, 09–11 press play and resume, 12 habits). Revised 2026-10-23 after driving the build: Home, the pane row and the chrome. Plates: `design/2026-10-23-navigation/` (01 Home, 02 a trail with its threads drawn, 03 and 09 motion demos, 04 chrome, 06 Home's states and doors, 07 a day of trails, 08 every move). Renders of both sets are in [plates.md](plates.md).
 
 ## What was wrong
 

@@ -4,7 +4,7 @@
 
 First pass, 2026-10-13. Most of this is still open. The name is **Meret**, the Egyptian goddess of song and rejoicing, "the beloved", who in some creation accounts sets the cosmos in order with music. It was "Clio" until 2026-10-13.
 
-Plates are in `design/`. Serve with `python3 -m http.server -d design`, or use the `plates` entry in `.claude/launch.json`.
+Plates are in `design/`, which stays local; renders of the main ones are in [plates.md](plates.md). Serve them with `python3 -m http.server -d design`, or use the `plates` entry in `.claude/launch.json`.
 
 ## What it is
 
@@ -21,7 +21,7 @@ Meret borrows a few ideas from Tessera and none of its look. The ideas:
 
 ### Leading direction: the listening sky (2026-10-13)
 
-Sol liked B's planetary system as a starting point, though not its name (orrery belongs to Tessera), its thin type or its density. A and C read as too skeuomorphic. Plates: [`design/2026-10-13-spheres/`](../design/2026-10-13-spheres/index.html).
+Sol liked B's planetary system as a starting point, though not its name (orrery belongs to Tessera), its thin type or its density. A and C read as too skeuomorphic. Plates: `design/2026-10-13-spheres/`.
 
 The idea is a notebook of observed sound. Leonardo drew things to find out how they worked; music's counterpart is the tradition of seeing sound (Kepler's *Harmonices Mundi*, Chladni's figures, Fludd's monochord). Meret, who orders the cosmos with music, is the same idea told as myth.
 
@@ -35,7 +35,7 @@ Navigation (2026-10-13): trails of panes joined by threads, with one top line (q
 
 Earlier candidates, kept for reference:
 
-The look comes from objects that belong to music rather than to reading. Three candidates, each drawn on the same Outer Wilds screen in [`design/2026-10-13-directions/`](../design/2026-10-13-directions/index.html):
+The look comes from objects that belong to music rather than to reading. Three candidates, each drawn on the same Outer Wilds screen in `design/2026-10-13-directions/`:
 
 | Direction | Form taken from | Type | Where the album's colour goes |
 |---|---|---|---|

@@ -4,7 +4,7 @@
 
 Draft, 2026-10-13. How Meret treats different kinds of music without flattening them into one shape.
 
-Plates: [`design/2026-10-13-idioms/`](../design/2026-10-13-idioms/index.html), one release page per idiom on a shared shell.
+Plates: `design/2026-10-13-idioms/`, one release page per idiom on a shared shell. Renders of the Work and Score pages are in [plates.md](plates.md#idioms-2026-10-13).
 
 ## The problem
 

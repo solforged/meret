@@ -1,6 +1,6 @@
 # Architecture
 
-Draft, 2026-10-13. Decided: Flutter over a Rust core, macOS first, Android second, Windows and Linux later. Built for the trails plates ([`design/2026-10-13-trails/`](../design/2026-10-13-trails/index.html)) and the model in [direction.md](direction.md), [idioms.md](idioms.md) and [navigation.md](navigation.md).
+Draft, 2026-10-13. Decided: Flutter over a Rust core, macOS first, Android second, Windows and Linux later. Built for the trails plates (`design/2026-10-13-trails/`, rendered in [plates.md](plates.md)) and the model in [direction.md](direction.md), [idioms.md](idioms.md) and [navigation.md](navigation.md).
 
 ## What it has to carry
 
