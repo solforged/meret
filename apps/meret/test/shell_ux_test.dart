@@ -9,7 +9,7 @@ import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
 import 'package:meret/now/history_sheet.dart';
-import 'package:meret/now/now_stage.dart';
+import 'package:meret/home/resume.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/person_pane.dart';
 import 'package:meret/panes/release_pane.dart';
@@ -17,6 +17,7 @@ import 'package:meret/panes/table_pane.dart';
 import 'package:meret/panes/tree_pane.dart';
 import 'package:meret/shell/pane_row.dart';
 import 'package:meret/shell/query_line.dart';
+import 'package:meret/theme/tokens.dart';
 
 void main() {
   testWidgets('ANIM-A1 [ within the window moves no pane and dims the stop ahead over 120 ms', (tester) async {
@@ -64,7 +65,7 @@ void main() {
     expect(_paneXs(tester), xs);
   });
 
-  testWidgets('ANIM-A3 a search from the Now stage fades the stage through and does not slide', (tester) async {
+  testWidgets('ANIM-A3 a search from Today fades Today through and does not slide', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
     await tester.sendKeyEvent(LogicalKeyboardKey.slash);
@@ -77,18 +78,18 @@ void main() {
     final xs = _paneXs(tester);
     for (final ms in [0, 50, 100, 150, 200]) {
       if (ms > 0) await tester.pump(const Duration(milliseconds: 50));
-      final stage = find.byKey(const ValueKey('stage-now'));
-      final outgoing = stage.evaluate().isEmpty ? 0.0 : _fadeOver(tester, stage);
-      final incoming = _fadeOver(tester, find.byKey(const ValueKey('stage-trail')));
+      final today = find.byKey(const ValueKey('today'));
+      final outgoing = today.evaluate().isEmpty ? 0.0 : _fadeOver(tester, today);
+      final incoming = _fadeOver(tester, find.byKey(const ValueKey('panes')));
       expect(outgoing > 0.5 && incoming > 0.5, isFalse, reason: 'two pages visible at $ms ms');
       expect(_paneXs(tester), xs, reason: 'a new tree arrives whole; nothing slides');
     }
     await tester.pump(const Duration(milliseconds: 1));
-    expect(find.byKey(const ValueKey('stage-now')), findsNothing);
+    expect(find.byKey(const ValueKey('today')), findsNothing);
     expect(find.byType(TablePane), findsOneWidget);
   });
 
-  testWidgets('ANIM-A6 [ at the root, ], command 1, T and Escape all fade the page through, never slide', (tester) async {
+  testWidgets('ANIM-A6 [ at the root, ], command 1 twice, T and Escape all fade the page through, never slide', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 2);
     await _surface(tester, core);
@@ -129,12 +130,18 @@ void main() {
       expect(tester.state(find.byType(TablePane)), same(table));
     }
 
-    await fadesIn(LogicalKeyboardKey.bracketLeft, 'front-over-trail');
-    expect(find.text('Front · ⌘1 or ] back to Everything'), findsOneWidget);
+    await fadesIn(LogicalKeyboardKey.bracketLeft, 'today');
+    expect(find.text('] back to Everything'), findsOneWidget);
     expect(find.byType(TrailStrip), findsOneWidget);
-    await fadesOut(LogicalKeyboardKey.bracketRight, 'front-over-trail');
-    await fadesIn(LogicalKeyboardKey.digit1, 'front-over-trail', meta: true);
-    await fadesOut(LogicalKeyboardKey.digit1, 'front-over-trail', meta: true);
+    await fadesOut(LogicalKeyboardKey.bracketRight, 'today');
+    // The first ⌘1 lays the Home column over the trail; the second shows Today.
+    await _key(tester, LogicalKeyboardKey.digit1, meta: true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-column')), findsOneWidget);
+    expect(_rowCovered(tester), isTrue);
+    expect(_paneXs(tester, offstage: true), xs, reason: 'the panes never move for Home');
+    await fadesIn(LogicalKeyboardKey.digit1, 'today', meta: true);
+    await fadesOut(LogicalKeyboardKey.bracketRight, 'today');
     await fadesIn(LogicalKeyboardKey.keyT, 'tree');
     expect(find.byType(TreePane), findsOneWidget);
     await fadesOut(LogicalKeyboardKey.escape, 'tree');
@@ -210,15 +217,90 @@ void main() {
     final state = tester.state<ScrollableState>(scrollable);
     state.position.jumpTo(80);
     await tester.pumpAndSettle();
+    for (final presses in [1, 2]) {
+      for (var i = 0; i < presses; i++) {
+        await _key(tester, LogicalKeyboardKey.digit1, meta: true);
+        await tester.pumpAndSettle();
+      }
+      expect(find.byKey(const ValueKey('today')), presses == 2 ? findsOneWidget : findsNothing);
+      expect(find.byKey(const ValueKey('home-column')), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('today')), findsNothing);
+      expect(find.byKey(const ValueKey('home-rail')), findsOneWidget);
+      expect(tester.state<ScrollableState>(scrollable), same(state));
+      expect(state.position.pixels, 80);
+      expect(find.text('Reading release…'), findsNothing);
+    }
+  });
+
+  testWidgets('HOME-1 the rail lights the door the trail started from, and its glyphs name their doors', (tester) async {
+    final core = FakeCore();
+    await core.startTrail(const TargetDto.search(query: 'idiom:score'));
+    await _surface(tester, core);
+    await _showTrail(tester);
+    expect(find.byKey(const ValueKey('home-rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-column')), findsNothing);
+    BoxDecoration fill(String id) => tester.widget<Container>(find.descendant(of: find.byKey(ValueKey('rail-$id')), matching: find.byType(Container)).first).decoration! as BoxDecoration;
+    expect(fill('idiom-idiom:score').color, Tok.panel2, reason: 'Scores started this trail');
+    expect(fill('idiom-idiom:album').color, isNull);
+    expect(fill('today').color, isNull);
+    final tip = tester.widget<Tooltip>(find.ancestor(of: find.byKey(const ValueKey('rail-idiom-idiom:score')), matching: find.byType(Tooltip)).first);
+    expect(tip.message, startsWith('Scores · 212 · ⌘'));
+  });
+
+  testWidgets('HOME-2 the column over the trail dims the panes and Escape, ] or a click closes it', (tester) async {
+    final core = FakeCore();
+    await _seedTrail(core, stops: 2);
+    await _surface(tester, core);
+    await _showTrail(tester);
+    final xs = _paneXs(tester, offstage: true);
+    Future<void> open(Future<void> Function() how) async {
+      await how();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home-column')), findsOneWidget);
+      expect(_rowCovered(tester), isTrue);
+      expect(tester.widget<AnimatedOpacity>(find.ancestor(of: find.byType(PaneRow), matching: find.byType(AnimatedOpacity)).first).opacity, lessThan(1));
+      expect(_paneXs(tester, offstage: true), xs, reason: 'the panes never move for Home');
+    }
+    Future<void> closed() async {
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('home-rail')), findsOneWidget);
+      expect(_rowCovered(tester), isFalse);
+      expect((await core.trail())!.current, 1, reason: 'closing Home never moves along the trail');
+    }
+    await open(() => tester.tap(find.byKey(const ValueKey('rail-today'))));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await closed();
+    await open(() => _key(tester, LogicalKeyboardKey.digit1, meta: true));
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await closed();
+    await open(() => _key(tester, LogicalKeyboardKey.digit1, meta: true));
+    await tester.tapAt(tester.getCenter(find.byType(PaneRow)));
+    await closed();
+  });
+
+  testWidgets('HOME-3 a door starts a new tree and the old one moves to Trails; command 3 is the first Library door', (tester) async {
+    final core = FakeCore();
+    await _seedTrail(core, stops: 2);
+    await _surface(tester, core);
+    await _showTrail(tester);
+    await tester.tap(find.byKey(const ValueKey('rail-idiom-idiom:score')));
+    await tester.pumpAndSettle();
+    final trail = (await core.trail())!;
+    expect(trail.rootQuery, 'idiom:score');
+    expect(trail.stops, hasLength(1), reason: 'a door never forks the current tree');
     await _key(tester, LogicalKeyboardKey.digit1, meta: true);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('front-over-trail')), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    expect(find.descendant(of: find.byKey(const ValueKey('home-column')), matching: find.textContaining('Everything')), findsOneWidget, reason: 'the old tree is in Trails');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('front-over-trail')), findsNothing);
-    expect(tester.state<ScrollableState>(scrollable), same(state));
-    expect(state.position.pixels, 80);
-    expect(find.text('Reading release…'), findsNothing);
+
+    // ⌘1 Today, ⌘2 Pick up, ⌘3 All tracks.
+    await _key(tester, LogicalKeyboardKey.digit3, meta: true);
+    await tester.pumpAndSettle();
+    expect((await core.trail())!.rootQuery, '');
+    expect(find.byType(TablePane), findsOneWidget);
   });
 
   testWidgets('NAV-N2 the parked set keeps the last six stops and empties for another trail', (tester) async {
@@ -378,11 +460,11 @@ void main() {
     expect(find.byType(NoTrailStrip), findsNothing);
     expect(find.byType(TrailStrip), findsNothing);
     expect(find.text('no trail yet'), findsNothing);
-    expect(find.byType(NowStage), findsNothing);
+    expect(find.byType(ResumeHeader), findsNothing);
     core.gate.complete();
     await tester.pump();
     await tester.pump();
-    expect(find.byType(NowStage), findsOneWidget);
+    expect(find.byType(ResumeHeader), findsOneWidget);
     expect(find.byType(NowBar), findsNothing);
   });
 }
@@ -407,7 +489,6 @@ Future<void> _surface(WidgetTester tester, FakeCore core, {double width = 1728, 
 }
 
 Future<void> _showTrail(WidgetTester tester) async {
-  tester.widget<NowStage>(find.byType(NowStage)).onLeave();
   await tester.pumpAndSettle();
   await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
   await tester.pumpAndSettle();

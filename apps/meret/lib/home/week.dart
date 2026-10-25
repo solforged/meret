@@ -18,23 +18,21 @@ List<int> listeningByWeekday(List<ListenDto> history, {DateTime? now}) {
   return days;
 }
 
-/// The Front's memory is independent of the collection's scan snapshot.
-class FrontMemory extends StatefulWidget {
-  const FrontMemory({super.key, required this.core, required this.memoryVersion, this.libraryVersion, this.onTrail, this.onRelease});
+/// Today's week: what you listened to, played most and left alone. It
+/// is independent of the collection's scan snapshot.
+class TodayWeek extends StatefulWidget {
+  const TodayWeek({super.key, required this.core, required this.memoryVersion, this.libraryVersion, this.onRelease});
 
   final CoreBridge core;
   final int memoryVersion;
   final BigInt? libraryVersion;
-  final Future<void> Function(String)? onTrail;
   final Future<void> Function(PlatformInt64)? onRelease;
 
   @override
-  State<FrontMemory> createState() => _FrontMemoryState();
+  State<TodayWeek> createState() => _TodayWeekState();
 }
 
-class _FrontMemoryState extends State<FrontMemory> {
-  List<TrailSummaryDto> _trails = [];
-  List<ResumeDto> _resumes = [];
+class _TodayWeekState extends State<TodayWeek> {
   List<ListenDto> _history = [];
   List<PlayedDto> _mostPlayed = [];
   List<DormantDto> _dormant = [];
@@ -49,7 +47,7 @@ class _FrontMemoryState extends State<FrontMemory> {
   }
 
   @override
-  void didUpdateWidget(FrontMemory old) {
+  void didUpdateWidget(TodayWeek old) {
     super.didUpdateWidget(old);
     if (old.core != widget.core || old.memoryVersion != widget.memoryVersion || old.libraryVersion != widget.libraryVersion) _load();
   }
@@ -58,19 +56,15 @@ class _FrontMemoryState extends State<FrontMemory> {
     final generation = ++_generation;
     try {
       final memory = await Future.wait<Object>([
-        widget.core.trailHistory(20),
-        widget.core.resumePoints(4),
         widget.core.history(500),
         widget.core.mostPlayed(7, 3),
         widget.core.dormant(3),
       ]);
       if (!mounted || generation != _generation) return;
       setState(() {
-        _trails = memory[0] as List<TrailSummaryDto>;
-        _resumes = memory[1] as List<ResumeDto>;
-        _history = memory[2] as List<ListenDto>;
-        _mostPlayed = memory[3] as List<PlayedDto>;
-        _dormant = memory[4] as List<DormantDto>;
+        _history = memory[0] as List<ListenDto>;
+        _mostPlayed = memory[1] as List<PlayedDto>;
+        _dormant = memory[2] as List<DormantDto>;
         _loaded = true;
         _error = null;
       });
@@ -102,65 +96,11 @@ class _FrontMemoryState extends State<FrontMemory> {
     ],
   );
 
-  Widget _trailSection(DateTime now) {
-    final kept = _trails.where((trail) => trail.kept).toList();
-    final rows = kept.isNotEmpty ? kept : _trails.take(4);
-    return _section(kept.isEmpty && _trails.isNotEmpty ? 'Trails' : 'Kept trails', [
-      for (final trail in rows)
-        FrontDoor(
-          key: ValueKey('front-trail-${trail.uid}'),
-          onTap: widget.onTrail == null ? null : () => _report(widget.onTrail!(trail.uid)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              Expanded(child: Text(trail.name ?? trail.title, style: Tok.body)),
-              const SizedBox(width: 8),
-              Text('${trail.stops} ${trail.stops == 1 ? 'stop' : 'stops'}', style: Tok.monoSmall),
-            ]),
-            const SizedBox(height: 3),
-            Text([
-              dayWord(trail.whenMs.toInt(), now: now),
-              '${trail.branches} ${trail.branches == 1 ? 'branch' : 'branches'}',
-              if (trail.kept) 'kept',
-            ].join(' · '), style: Tok.label),
-          ]),
-        ),
-      if (_trails.isEmpty)
-        const Padding(padding: EdgeInsets.only(top: 10), child: Text('No trails yet', style: Tok.label)),
-      if (kept.isEmpty && _trails.isNotEmpty)
-        const Padding(padding: EdgeInsets.only(top: 8), child: Text('⌘S keeps a trail', style: Tok.label)),
-    ]);
-  }
-
-  Widget _pickUp(DateTime now) => _section('Pick up', [
-    for (final resume in _resumes)
-      FrontDoor(
-        key: ValueKey('front-pick-up-${resume.releaseId}'),
-        onTap: () => _report(widget.core.pickUp(resume.releaseId)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(resume.recordingTitle, style: Tok.body),
-          const SizedBox(height: 3),
-          Text([resume.title, if (resume.credit?.isNotEmpty ?? false) resume.credit!].join(' · '), style: Tok.label),
-          const SizedBox(height: 7),
-          LinearProgressIndicator(
-            value: resume.lengthMs != null && resume.lengthMs! > BigInt.zero ? (resume.positionMs.toDouble() / resume.lengthMs!.toDouble()).clamp(0, 1) : 0,
-            minHeight: 3,
-            color: Tok.gold2,
-            backgroundColor: Tok.line,
-          ),
-          const SizedBox(height: 5),
-          Row(children: [
-            Expanded(child: Text('${clockLength(resume.positionMs.toInt())}${resume.lengthMs == null ? '' : ' of ${clockLength(resume.lengthMs!.toInt())}'}', style: Tok.monoSmall)),
-            Text(dayWord(resume.updatedAt.toInt(), now: now), style: Tok.label),
-          ]),
-        ]),
-      ),
-  ]);
-
   Widget _log(List<int> days, DateTime now) {
     const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final total = days.fold<int>(0, (sum, day) => sum + day);
     final peak = days.fold<int>(1, (max, day) => day > max ? day : max);
-    return _section('Your log', [
+    return _section('Your week', [
       const SizedBox(height: 10),
       Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         for (var i = 0; i < days.length; i++)
@@ -174,7 +114,7 @@ class _FrontMemoryState extends State<FrontMemory> {
                 SizedBox(height: 48, child: Align(
                   alignment: Alignment.bottomCenter,
                   child: Container(
-                    key: ValueKey('front-log-${i + 1}'),
+                    key: ValueKey('today-log-${i + 1}'),
                     width: 18,
                     height: days[i] == 0 ? 1 : 48 * days[i] / peak,
                     color: now.weekday == i + 1 ? Tok.gold : Tok.gold2,
@@ -191,8 +131,8 @@ class _FrontMemoryState extends State<FrontMemory> {
 
   Widget _played() => _section('Most played this week', [
     for (final played in _mostPlayed)
-      FrontDoor(
-        key: ValueKey('front-most-played-${played.trackId}'),
+      TodayDoor(
+        key: ValueKey('today-most-played-${played.trackId}'),
         onTap: widget.onRelease == null ? null : () => _report(widget.onRelease!(played.releaseId)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
@@ -207,8 +147,8 @@ class _FrontMemoryState extends State<FrontMemory> {
 
   Widget _dormantSection(DateTime now) => _section('Dormant', [
     for (final release in _dormant)
-      FrontDoor(
-        key: ValueKey('front-dormant-${release.releaseId}'),
+      TodayDoor(
+        key: ValueKey('today-dormant-${release.releaseId}'),
         onTap: widget.onRelease == null ? null : () => _report(widget.onRelease!(release.releaseId)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
@@ -232,13 +172,11 @@ class _FrontMemoryState extends State<FrontMemory> {
     final sections = [
       if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
       if (_loaded) ...[
-        _trailSection(now),
-        if (_resumes.isNotEmpty) _pickUp(now),
         if (hasLog) _log(days, now),
         if (_mostPlayed.isNotEmpty) _played(),
         if (_dormant.isNotEmpty) _dormantSection(now),
       ] else if (_error == null)
-        const Text('Reading your memory…', style: Tok.label),
+        const Text('Reading your week…', style: Tok.label),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       for (var i = 0; i < sections.length; i++) ...[
@@ -249,17 +187,17 @@ class _FrontMemoryState extends State<FrontMemory> {
   }
 }
 
-/// A Front row is a quiet door until you point at it.
-class FrontDoor extends StatefulWidget {
-  const FrontDoor({super.key, required this.child, this.onTap});
+/// A Today row is a quiet door until you point at it.
+class TodayDoor extends StatefulWidget {
+  const TodayDoor({super.key, required this.child, this.onTap});
   final Widget child;
   final VoidCallback? onTap;
 
   @override
-  State<FrontDoor> createState() => _FrontDoorState();
+  State<TodayDoor> createState() => _TodayDoorState();
 }
 
-class _FrontDoorState extends State<FrontDoor> {
+class _TodayDoorState extends State<TodayDoor> {
   bool _hover = false;
   bool _pressed = false;
 

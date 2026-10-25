@@ -6,7 +6,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 import 'package:meret/core/bridge.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
-import 'package:meret/now/now_stage.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/table_pane.dart';
 import 'package:meret/shell/pane_row.dart';
@@ -55,7 +54,6 @@ void main() {
     final core = _NowSubscriptionCore();
     await _surface(tester, core);
     await _resize(tester, 1900);
-    tester.widget<NowStage>(find.byType(NowStage)).onLeave();
     await tester.pumpAndSettle();
     final details = find.descendant(of: find.byType(NowPane), matching: find.byType(SingleChildScrollView));
     final scrollable = find.descendant(of: details, matching: find.byType(Scrollable));
@@ -124,34 +122,34 @@ void main() {
     expect(_paneXs(tester), xs);
   });
 
-  testWidgets('ANIM-1 leaving Now fades through over 200ms without restarting on Now updates', (tester) async {
+  testWidgets('ANIM-1 leaving Today fades through over 200ms without restarting on Now updates', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
-    tester.widget<NowStage>(find.byType(NowStage)).onLeave();
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('home-all')));
+    for (var i = 0; i < 5 && find.byKey(const ValueKey('panes')).evaluate().isEmpty; i++) {
+      await tester.pump();
+    }
     final switcher = find.byWidgetPredicate((widget) => widget is AnimatedSwitcher &&
-      widget.child?.key == const ValueKey('stage-trail'));
+      widget.child?.key == const ValueKey('panes'));
     expect(switcher, findsOneWidget);
-    expect(_pageOpacity(tester, 'stage-now'), 1);
-    expect(_pageOpacity(tester, 'stage-trail'), 0);
+    expect(_pageOpacity(tester, 'today'), 1);
+    expect(_pageOpacity(tester, 'panes'), 0);
     await tester.pump(const Duration(milliseconds: 50));
-    expect(_pageOpacity(tester, 'stage-now'), closeTo(0.5, 0.01));
-    expect(_pageOpacity(tester, 'stage-trail'), 0);
+    expect(_pageOpacity(tester, 'today'), closeTo(0.5, 0.01));
+    expect(_pageOpacity(tester, 'panes'), 0);
     await tester.pump(const Duration(milliseconds: 50));
-    expect(_pageOpacity(tester, 'stage-now'), 0, reason: 'the stage is gone before the trail shows');
-    expect(_pageOpacity(tester, 'stage-trail'), 0);
+    expect(_pageOpacity(tester, 'today'), 0, reason: 'Today is gone before the trail shows');
+    expect(_pageOpacity(tester, 'panes'), 0);
     await core.transport(TransportDto.seek(ms: BigInt.from(227000)));
     await tester.pump();
-    expect(_pageOpacity(tester, 'stage-trail'), 0, reason: 'a Now update does not restart the fade');
+    expect(_pageOpacity(tester, 'panes'), 0, reason: 'a Now update does not restart the fade');
     await tester.pump(const Duration(milliseconds: 50));
-    expect(_pageOpacity(tester, 'stage-now'), 0);
-    expect(_pageOpacity(tester, 'stage-trail'), closeTo(0.5, 0.01));
+    expect(_pageOpacity(tester, 'today'), 0);
+    expect(_pageOpacity(tester, 'panes'), closeTo(0.5, 0.01));
     await tester.pump(const Duration(milliseconds: 50));
-    expect(_pageOpacity(tester, 'stage-now'), 0);
     await tester.pump(const Duration(milliseconds: 1));
-    expect(find.byKey(const ValueKey('stage-now')), findsNothing);
-    expect(_pageOpacity(tester, 'stage-trail'), 1);
-    expect(tester.getSize(switcher), tester.getSize(find.byKey(const ValueKey('stage-trail'))));
+    expect(find.byKey(const ValueKey('today')), findsNothing);
+    expect(_pageOpacity(tester, 'panes'), 1);
   });
 }
 
@@ -177,7 +175,6 @@ Future<void> _surface(WidgetTester tester, FakeCore core) async {
 }
 
 Future<void> _showTrail(WidgetTester tester) async {
-  tester.widget<NowStage>(find.byType(NowStage)).onLeave();
   await tester.pumpAndSettle();
   await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
   await tester.pumpAndSettle();

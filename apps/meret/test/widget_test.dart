@@ -12,10 +12,11 @@ import 'package:meret/draw/body_painter.dart';
 import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
-import 'package:meret/now/now_stage.dart';
+import 'package:meret/home/home.dart';
+import 'package:meret/home/resume.dart';
 import 'package:meret/now/picks.dart';
 import 'package:meret/now/zones.dart';
-import 'package:meret/panes/front_pane.dart';
+import 'package:meret/home/today.dart';
 import 'package:meret/panes/game_pane.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/search_pane.dart';
@@ -74,7 +75,7 @@ void main() {
     expect((await core.now().first).anchor!.item, before.anchor!.item);
     expect(await core.trail(), isNull);
     expect(find.byType(TrailStrip), findsNothing);
-    expect(find.byType(NowStage), findsOneWidget);
+    expect(find.byType(ResumeHeader), findsOneWidget);
   });
 
   testWidgets('Play on draws the shared-mode verdict verbatim for both devices', (tester) async {
@@ -251,40 +252,41 @@ void main() {
     expect(find.byType(NowPane), findsOneWidget);
   });
 
-  testWidgets('opens to the Now stage when the fake Now is loaded', (tester) async {
+  testWidgets('opens to Today with Resume first when the fake Now is loaded', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
 
-    expect(find.byType(NowStage), findsOneWidget);
-    expect(find.byType(FrontPane), findsOneWidget);
-    expect(find.byType(PaneRow), findsNothing);
-    expect(find.byType(NowPane), findsNothing);
+    expect(find.byType(ResumeHeader), findsOneWidget);
+    expect(find.byType(Today), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-column')), findsOneWidget);
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, isEmpty);
+    expect(tester.getTopLeft(find.byType(ResumeHeader)).dy, lessThan(tester.getTopLeft(_inToday(find.byType(PlaySomething))).dy));
     expect(find.byType(NowBar), findsNothing);
     expect(await core.trail(), isNull);
   });
 
-  testWidgets('opens to the Front when nothing is loaded and decides only once', (tester) async {
+  testWidgets('opens to Today without Resume when nothing is loaded, and Resume follows what plays', (tester) async {
     final core = FakeCore.empty();
     await _surface(tester, core);
-    expect(find.byType(NowStage), findsNothing);
-    expect(find.byType(FrontPane), findsOneWidget);
+    expect(find.byType(ResumeHeader), findsNothing);
+    expect(find.byType(Today), findsOneWidget);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, isEmpty);
     await core.addRoot('/New music');
     await core.playResults('', _libraryView, 0);
-    await tester.pump();
-    await tester.pump();
-    expect(find.byType(NowStage), findsNothing);
+    for (var i = 0; i < 6; i++) {
+      await tester.pump();
+    }
+    expect(find.byType(ResumeHeader), findsOneWidget);
+    expect(await core.trail(), isNull, reason: 'playing never opens a trail');
   });
 
-  testWidgets('Command-1 leaves the Now stage and later playback never re-enters it', (tester) async {
+  testWidgets('Command-1 on Today with no trail stays on Today', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.digit1);
-    expect(find.byType(NowStage), findsNothing);
+    expect(find.byType(Today), findsOneWidget);
+    expect(find.byType(ResumeHeader), findsOneWidget);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, isEmpty);
-    await core.playResults('', _libraryView, 0);
-    await tester.pump();
-    expect(find.byType(NowStage), findsNothing);
   });
 
   testWidgets('Shift-Space plays the first pick and Now says the core why without opening a trail', (tester) async {
@@ -293,19 +295,18 @@ void main() {
     await _shiftSpace(tester);
     expect(core.playSomethingCalls, 1);
     expect(core.transports, isEmpty);
-    final why = tester.widget<Text>(find.byKey(const ValueKey('now-why')));
+    final why = tester.widget<Text>(_inToday(find.byKey(const ValueKey('now-why'))));
     expect(why.data, 'Dormant · 2 years · 96 plays, then nothing for 2 years');
     expect(why.style!.color, Tok.gold);
     expect(why.maxLines, 1);
     expect(why.overflow, TextOverflow.ellipsis);
-    expect(find.byType(NowStage), findsOneWidget);
-    expect(find.byType(FrontPane), findsOneWidget);
+    expect(find.byType(ResumeHeader), findsOneWidget);
+    expect(find.byType(Today), findsOneWidget);
     expect(find.byType(TrailStrip), findsNothing);
     expect(await core.trail(), isNull);
 
-    await _commandKey(tester, LogicalKeyboardKey.digit1);
-    expect(find.descendant(of: find.byType(NowPane), matching: find.byKey(const ValueKey('now-why'))), findsOneWidget);
-    expect(tester.widget<Text>(find.byKey(const ValueKey('now-why'))).data, why.data);
+    final pinned = find.descendant(of: find.byType(NowPane), matching: find.byKey(const ValueKey('now-why')));
+    expect(tester.widget<Text>(pinned).data, why.data);
   });
 
   testWidgets('Space with no anchor asks for a pick and with an anchor still pauses and resumes', (tester) async {
@@ -325,8 +326,7 @@ void main() {
     await tester.pump();
     expect(core.playSomethingCalls, 2);
     expect((await core.now().first).anchor?.rate, 1);
-    expect(find.byType(NowStage), findsNothing, reason: 'playing a pick leaves the Front alone');
-    expect(find.byType(FrontPane), findsOneWidget);
+    expect(find.byType(Today), findsOneWidget, reason: 'playing a pick leaves Today alone');
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pump();
     expect(core.transports, [const TransportDto.pause()]);
@@ -354,7 +354,7 @@ void main() {
     });
   }
 
-  testWidgets('the stage draws three core-ordered picks and marks only the first in gold', (tester) async {
+  testWidgets('Today draws three core-ordered picks and marks only the first in gold', (tester) async {
     final core = _RecordingCore();
     final picks = await core.picks(3);
     core.pickLimits.clear();
@@ -362,44 +362,44 @@ void main() {
     await tester.pump();
     expect(core.pickLimits, isNotEmpty);
     expect(core.pickLimits, everyElement(3));
-    final section = find.descendant(of: find.byType(NowStage), matching: find.byType(PlaySomething));
+    final section = _inToday(find.byType(PlaySomething));
     expect(tester.widgetList<NowDoor>(find.descendant(of: section, matching: find.byType(NowDoor))).map((door) => door.key),
       picks.map((pick) => ValueKey('now-pick-${pick.releaseId}')));
     for (final (index, pick) in picks.indexed) {
-      final row = find.byKey(ValueKey('now-pick-${pick.releaseId}'));
+      final row = _inToday(find.byKey(ValueKey('now-pick-${pick.releaseId}')));
       expect(find.descendant(of: row, matching: find.text(pick.title)), findsOneWidget);
       expect(find.descendant(of: row, matching: find.text(pick.reason)), findsOneWidget);
       expect(find.descendant(of: row, matching: find.text(pick.plan)), findsOneWidget);
       expect(find.descendant(of: row, matching: find.text(pick.meta)), findsOneWidget);
       final label = tester.widget<Text>(find.descendant(of: row, matching: find.text(pick.label.toUpperCase())));
       expect(label.style!.color, index == 0 ? Tok.gold : Tok.faint);
-      final cell = tester.widget<Container>(find.byKey(ValueKey('now-pick-cell-${pick.releaseId}')));
+      final cell = tester.widget<Container>(_inToday(find.byKey(ValueKey('now-pick-cell-${pick.releaseId}'))));
       final decoration = cell.decoration! as BoxDecoration;
       expect(decoration.color, Tok.panel2);
       expect((decoration.border! as Border).top, BorderSide(color: index == 0 ? Tok.gold : Tok.line, width: index == 0 ? 2 : 1));
       expect(find.descendant(of: row, matching: find.text('Play ⇧Space')), index == 0 ? findsOneWidget : findsNothing);
     }
-    expect(tester.getTopLeft(find.byKey(ValueKey('now-pick-${picks[0].releaseId}'))).dy,
-      lessThan(tester.getTopLeft(find.byKey(ValueKey('now-pick-${picks[1].releaseId}'))).dy));
-    expect(tester.getTopLeft(find.byKey(ValueKey('now-pick-${picks[1].releaseId}'))).dy,
-      lessThan(tester.getTopLeft(find.byKey(ValueKey('now-pick-${picks[2].releaseId}'))).dy));
+    expect(tester.getTopLeft(_inToday(find.byKey(ValueKey('now-pick-${picks[0].releaseId}')))).dy,
+      lessThan(tester.getTopLeft(_inToday(find.byKey(ValueKey('now-pick-${picks[1].releaseId}')))).dy));
+    expect(tester.getTopLeft(_inToday(find.byKey(ValueKey('now-pick-${picks[1].releaseId}')))).dy,
+      lessThan(tester.getTopLeft(_inToday(find.byKey(ValueKey('now-pick-${picks[2].releaseId}')))).dy));
   });
 
-  testWidgets('pick clicks play that release with its why, refresh, and never change the stage or trail', (tester) async {
+  testWidgets('pick clicks play that release with its why, refresh, and never change Today or the trail', (tester) async {
     final core = _RecordingCore();
     final picks = await core.picks(3);
     await _surface(tester, core);
     await tester.pump();
-    final first = find.byKey(ValueKey('now-pick-${picks.first.releaseId}'));
+    final first = _inToday(find.byKey(ValueKey('now-pick-${picks.first.releaseId}')));
     await tester.ensureVisible(first);
     await tester.tap(first);
     await tester.pump();
     await tester.pump();
     expect(core.picksPlayed, [picks.first.releaseId]);
     expect(core.playSomethingCalls, 0);
-    expect(tester.widget<Text>(find.byKey(const ValueKey('now-why'))).data, 'Dormant · 2 years · 96 plays, then nothing for 2 years');
+    expect(tester.widget<Text>(_inToday(find.byKey(const ValueKey('now-why')))).data, 'Dormant · 2 years · 96 plays, then nothing for 2 years');
     core.pickLimits.clear();
-    final second = find.byKey(ValueKey('now-pick-${picks[1].releaseId}'));
+    final second = _inToday(find.byKey(ValueKey('now-pick-${picks[1].releaseId}')));
     await tester.ensureVisible(second);
     await tester.tap(second);
     await tester.pump();
@@ -407,12 +407,12 @@ void main() {
     expect(core.picksPlayed, [picks.first.releaseId, picks[1].releaseId]);
     expect(core.releasesPlayed, isEmpty);
     expect((await core.now().first).releaseId, picks[1].releaseId);
-    expect(tester.widget<Text>(find.byKey(const ValueKey('now-why'))).data, startsWith('From your latest trail · '));
+    expect(tester.widget<Text>(_inToday(find.byKey(const ValueKey('now-why')))).data, startsWith('From your latest trail · '));
     expect(core.pickLimits, isNotEmpty);
     expect(core.pickLimits, everyElement(3));
     expect(core.started, isEmpty);
-    expect(find.byType(NowStage), findsOneWidget);
-    expect(find.byType(FrontPane), findsOneWidget);
+    expect(find.byType(ResumeHeader), findsOneWidget);
+    expect(find.byType(Today), findsOneWidget);
     expect(find.byType(TrailStrip), findsNothing);
     expect(await core.trail(), isNull);
   });
@@ -447,7 +447,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
     await tester.pump();
     expect(core.transports.single, const TransportDto.fromStart());
-    expect(find.byType(NowStage), findsOneWidget);
+    expect(find.byType(ResumeHeader), findsOneWidget);
     expect(await core.trail(), isNull);
     await tester.tap(find.byType(TextField));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
@@ -470,7 +470,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(core.started.single, TargetDto.release(id: listen.releaseId!));
     expect(find.byKey(const ValueKey('history-sheet')), findsNothing);
-    expect(find.byType(NowStage), findsNothing);
+    expect(find.byType(ResumeHeader), findsNothing);
     expect(tester.widget<ReleasePane>(find.byType(ReleasePane)).id, listen.releaseId);
   });
 
@@ -491,17 +491,17 @@ void main() {
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'h');
   });
 
-  testWidgets('a stage Pick up row resumes its release without changing a trail', (tester) async {
+  testWidgets('a Pick up row on Today resumes its release without changing a trail', (tester) async {
     final core = _RecordingCore();
     final point = await _pickUpPoint(core, 6);
     await _surface(tester, core);
     await tester.pump();
-    final row = find.byKey(ValueKey('now-pick-up-${point.releaseId}'));
+    final row = _inToday(find.byKey(ValueKey('now-pick-up-${point.releaseId}')));
     await tester.ensureVisible(row);
     await tester.tap(row);
     await tester.pump();
     expect(core.pickedUp, [point.releaseId]);
-    expect(find.byType(NowStage), findsOneWidget);
+    expect(find.byType(ResumeHeader), findsOneWidget);
     expect(await core.trail(), isNull);
   });
 
@@ -517,7 +517,7 @@ void main() {
     expect(find.descendant(of: pane, matching: find.text('Pick up')), findsOneWidget);
     expect(find.descendant(of: pane, matching: find.byType(PlaySomething)), findsOneWidget);
     expect(find.descendant(of: pane, matching: find.text('What was that?')), findsOneWidget);
-    final memory = tester.widget<NowMemory>(find.byType(NowMemory));
+    final memory = tester.widget<NowMemory>(find.descendant(of: pane, matching: find.byType(NowMemory)));
     expect(memory.resumeLimit, 3);
     expect(memory.historyLimit, 3);
     final volume = find.byKey(const ValueKey('now-volume'));
@@ -526,7 +526,7 @@ void main() {
     expect(volume.hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
     final point = await _pickUpPoint(core, 3);
-    final pickUp = find.byKey(ValueKey('now-pick-up-${point.releaseId}'));
+    final pickUp = find.descendant(of: pane, matching: find.byKey(ValueKey('now-pick-up-${point.releaseId}')));
     await tester.ensureVisible(pickUp);
     await tester.tap(pickUp);
     await tester.pump();
@@ -546,18 +546,16 @@ void main() {
     expect(find.descendant(of: older, matching: find.textContaining('skipped at 0:02')), findsOneWidget);
   });
 
-  testWidgets('the stage stands alone below 1000 and its Front doors leave it', (tester) async {
+  testWidgets('Today sits beside the Home column, and a Library door leaves it for a new trail', (tester) async {
     await _surface(tester, FakeCore(), size: const Size(960, 900));
-    expect(find.byType(FrontPane), findsNothing);
-    expect(find.byType(NowStage), findsOneWidget);
-    tester.view.physicalSize = const Size(1200, 900);
-    await tester.pump();
-    await tester.pump();
-    expect(tester.getSize(find.byType(FrontPane)).width, 480);
-    await tester.tap(find.text('Scores'));
+    expect(find.byType(ResumeHeader), findsOneWidget);
+    expect(tester.getSize(find.byType(Today)).width, 960 - Home.column);
+    expect(tester.getTopLeft(find.byType(Today)).dx, Home.column);
+    await tester.tap(find.byKey(const ValueKey('home-idiom-idiom:score')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(NowStage), findsNothing);
+    expect(find.byType(Today), findsNothing);
+    expect(find.byKey(const ValueKey('home-rail')), findsOneWidget);
     expect(tester.widget<TablePane>(find.byType(TablePane)).query, 'idiom:score');
   });
 
@@ -590,8 +588,11 @@ void main() {
     expect(light.dim, Color(now.light!.dim));
     expect(light.track, now.trackId!.toInt());
     expect(light.release, now.releaseId!.toInt());
-    final body = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((paint) => paint.painter).whereType<BodyPainter>().single;
-    expect(body.light, light.accent);
+    final bodies = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((paint) => paint.painter).whereType<BodyPainter>();
+    expect(bodies, isNotEmpty);
+    for (final body in bodies) {
+      expect(body.light, light.accent);
+    }
     await core.transport(const TransportDto.pause());
     await tester.pump();
     expect(tester.widget<LightScope>(find.byType(LightScope)).light, light);
@@ -625,7 +626,7 @@ void main() {
     final now = await core.now().first;
     await core.startTrail(TargetDto.release(id: now.releaseId!));
     await _surface(tester, core);
-    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(now.releaseId!);
+    await tester.widget<Today>(find.byType(Today)).onRelease!(now.releaseId!);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -662,7 +663,7 @@ void main() {
     ));
     await core.startTrail(TargetDto.release(id: core.state.releaseId!));
     await _surface(tester, core);
-    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(core.state.releaseId!);
+    await tester.widget<Today>(find.byType(Today)).onRelease!(core.state.releaseId!);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -677,15 +678,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the Front shows the fake idiom doors and Scores opens its table', (tester) async {
+  testWidgets('Home lists the idiom doors by how much you own, and Scores opens its table', (tester) async {
     await _surface(tester, FakeCore());
-    await _commandKey(tester, LogicalKeyboardKey.digit1);
-
-    for (final label in ['Albums', 'Songs', 'Works', 'Sessions', 'Scores', 'Sets', 'Spoken']) {
-      expect(find.text(label), findsOneWidget);
+    final column = find.byKey(const ValueKey('home-column'));
+    final order = ['All tracks', 'Albums', 'Works', 'Sessions', 'Songs', 'Sets', 'Scores', 'Spoken'];
+    final ys = [for (final label in order) tester.getTopLeft(find.descendant(of: column, matching: find.text(label))).dy];
+    expect([...ys]..sort(), ys, reason: 'All tracks, then by tracks owned');
+    final scores = find.byKey(const ValueKey('home-idiom-idiom:score'));
+    expect(find.descendant(of: scores, matching: find.text('212')), findsOneWidget);
+    for (final section in ['LISTEN', 'LIBRARY', 'CRATES', 'TRAILS', 'OUT THERE']) {
+      expect(find.descendant(of: column, matching: find.text(section)), findsOneWidget, reason: section);
     }
-    expect(find.text('212 releases'), findsOneWidget);
-    await tester.tap(find.text('Scores'));
+    for (final plumbing in ['Folders', 'Sources', 'Unmatched']) {
+      expect(find.descendant(of: column, matching: find.text(plumbing)), findsNothing, reason: 'plumbing never gets a door');
+    }
+    await tester.tap(scores);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -707,9 +714,9 @@ void main() {
     await core.addRoot('/New music');
     await tester.pump();
     await tester.pump();
+    await tester.pump();
     expect(find.text('Choose a folder…'), findsNothing);
-    expect(find.text('/New music'), findsOneWidget);
-    expect(find.text('Scores'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('home-column')), matching: find.text('Scores')), findsOneWidget);
   });
 
   testWidgets('Enter opens the canonical search pane and roots its trail', (tester) async {
@@ -911,42 +918,46 @@ void main() {
     expect(error, findsNothing);
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect(tester.widget<NowStage>(find.byType(NowStage)).now.title, 'The Beginning and the End');
+    expect(tester.widget<ResumeHeader>(find.byType(ResumeHeader)).now.title, 'The Beginning and the End');
     expect(find.byType(TablePane), findsNothing);
   });
 
-  testWidgets('Command-L roots Everything; Command-1 shows the Front over the trail and ] returns', (tester) async {
+  testWidgets('Command-L roots Everything; Command-1 twice shows Today over the trail and ] returns', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
-    expect(find.byType(FrontPane), findsNothing, reason: 'the Front is not a pane beside a trail');
+    expect(find.byType(Today), findsNothing, reason: 'Today is not a pane beside a trail');
     expect(tester.widget<TablePane>(find.byType(TablePane)).query, '');
     final trail = await core.trail();
     expect(trail!.stops.single.target, const TargetDto.search(query: ''));
 
     await _commandKey(tester, LogicalKeyboardKey.digit1);
-    expect(find.byType(FrontPane), findsOneWidget);
-    expect(_rowCovered(tester), isTrue, reason: 'the table stays mounted under the Front, out of reach');
+    expect(find.byType(Today), findsNothing, reason: 'the first press lays the Home column over the trail');
+    expect(_rowCovered(tester), isTrue);
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    expect(find.byType(Today), findsOneWidget);
+    expect(_rowCovered(tester), isTrue, reason: 'the table stays mounted under Today, out of reach');
     expect(find.textContaining('back to Everything'), findsOneWidget);
-    expect(find.byType(TrailStrip), findsOneWidget, reason: 'the trail stays open behind the Front');
+    expect(find.byType(TrailStrip), findsOneWidget, reason: 'the trail stays open behind Today');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(TablePane), findsOneWidget);
-    expect(find.byType(FrontPane), findsNothing);
+    expect(find.byType(Today), findsNothing);
     expect(await core.trail(), same(trail));
 
     await _commandKey(tester, LogicalKeyboardKey.digit1);
-    expect(find.byType(FrontPane), findsOneWidget);
     await _commandKey(tester, LogicalKeyboardKey.digit1);
-    expect(find.byType(FrontPane), findsNothing, reason: 'Command-1 toggles');
-    expect(tester.widget<TablePane>(find.byType(TablePane)).query, '');
+    expect(find.byType(Today), findsOneWidget);
+    await _commandKey(tester, LogicalKeyboardKey.digit1);
+    expect(find.byType(Today), findsOneWidget, reason: 'Command-1 always comes back here');
+    expect(tester.widget<TablePane>(find.byType(TablePane, skipOffstage: false)).query, '');
   });
 
-  testWidgets('the Front reloads on a library revision but not on an unchanged one', (tester) async {
+  testWidgets('Today reloads on a library revision but not on an unchanged one', (tester) async {
     final core = _RecordingCore();
-    Widget front(BigInt version) => MaterialApp(home: Scaffold(body: FrontPane(core: core, memoryVersion: 0, libraryVersion: version, onQuery: (_) {})));
+    Widget front(BigInt version) => MaterialApp(home: Scaffold(body: Today(core: core, memoryVersion: 0, libraryVersion: version)));
     await tester.pumpWidget(front(BigInt.one));
     await tester.pumpAndSettle();
     await tester.pumpWidget(front(BigInt.one));
@@ -957,12 +968,11 @@ void main() {
     expect(core.frontCalls, 2);
   });
 
-  testWidgets('scan progress is visible on the empty Front', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: FrontPane(
+  testWidgets('scan progress is visible on the empty Today', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Today(
       core: FakeCore.empty(),
       memoryVersion: 0,
       jobs: [JobDto(verb: 'reading tags', done: BigInt.from(5), total: BigInt.from(10))],
-      onQuery: (_) {},
     ))));
     await tester.pumpAndSettle();
     expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, 0.5);
@@ -1211,7 +1221,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
     expect(_paneTitles(tester), hasLength(1));
-    expect(find.byType(FrontPane), findsOneWidget);
+    expect(find.byType(Today), findsOneWidget);
   });
 
   testWidgets('a release row and Enter play the release from that index', (tester) async {
@@ -1219,7 +1229,7 @@ void main() {
     final row = await _firstTrack(core);
     await core.startTrail(TargetDto.release(id: row.releaseId));
     await _surface(tester, core);
-    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(row.releaseId);
+    await tester.widget<Today>(find.byType(Today)).onRelease!(row.releaseId);
     await tester.pump();
     final credit = (await core.release(row.releaseId)).credits.first;
     await tester.widget<ReleasePane>(find.byType(ReleasePane)).onFollow(credit.to, credit.kind, credit.provider);
@@ -1245,7 +1255,7 @@ void main() {
     final game = await core.game(gameId);
     await core.startTrail(TargetDto.release(id: release.id));
     await _surface(tester, core);
-    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(release.id);
+    await tester.widget<Today>(find.byType(Today)).onRelease!(release.id);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -1297,7 +1307,7 @@ void main() {
     final workId = (workThread.to as TargetDto_Work).id;
     await core.startTrail(TargetDto.release(id: release.id));
     await _surface(tester, core);
-    await tester.widget<FrontPane>(find.byType(FrontPane)).onRelease!(release.id);
+    await tester.widget<Today>(find.byType(Today)).onRelease!(release.id);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -1385,7 +1395,12 @@ Future<void> _surface(WidgetTester tester, CoreBridge core, {Size size = const S
   await tester.pumpWidget(MeretApp(core: core));
   await tester.pump();
   await tester.pump();
+  // Today reads the Front before its Now sections load theirs.
+  await tester.pump();
 }
+
+/// [finder] inside Today, not the pinned Now panel beside it.
+Finder _inToday(Finder finder) => find.descendant(of: find.byType(Today), matching: finder);
 
 /// The path's panes, root first; the stops ahead of it are [_aheadTitles].
 List<String> _paneTitles(WidgetTester tester) =>

@@ -45,7 +45,7 @@ Widget paneReading(String? title, String line, {bool error = false}) => Column(c
 ]);
 
 /// A row or button that is a door: the pointer tints it `Tok.panel2`, as
-/// FrontDoor and NowDoor do, so every door in the app answers a hover alike.
+/// TodayDoor and NowDoor do, so every door in the app answers a hover alike.
 class Door extends StatefulWidget {
   const Door({super.key, required this.builder, this.enabled = true});
 

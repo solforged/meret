@@ -7,7 +7,8 @@ import 'package:meret/core/when.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/history_sheet.dart';
 import 'package:meret/now/now_pane.dart';
-import 'package:meret/now/now_stage.dart';
+import 'package:meret/home/resume.dart';
+import 'package:meret/home/today.dart';
 import 'package:meret/now/signal_path.dart';
 
 void main() {
@@ -36,35 +37,36 @@ void main() {
     expect(signalVerdict(const NowDto(title: '', subtitle: '', path: [])), isNull);
   });
 
-  testWidgets('the stage says where Resume starts, when it stopped, and never repeats the loaded release in Pick up', (tester) async {
+  testWidgets('Today says where Resume starts, when it stopped, and never repeats the loaded release in Pick up', (tester) async {
     final core = FakeCore();
     final loaded = await core.now().first;
     final points = await core.resumePoints(6);
     final mine = points.firstWhere((point) => point.releaseId == loaded.releaseId);
     final other = points.firstWhere((point) => point.releaseId != loaded.releaseId);
     await _app(tester, core);
-    expect(find.byType(NowStage), findsOneWidget);
-    expect(find.byKey(ValueKey('now-pick-up-${mine.releaseId}')), findsNothing);
-    expect(find.byKey(ValueKey('now-pick-up-${other.releaseId}')), findsOneWidget);
+    await tester.pump();
+    final today = find.byType(Today);
+    expect(find.byType(ResumeHeader), findsOneWidget);
+    expect(find.descendant(of: today, matching: find.byKey(ValueKey('now-pick-up-${mine.releaseId}'))), findsNothing);
+    expect(find.descendant(of: today, matching: find.byKey(ValueKey('now-pick-up-${other.releaseId}'))), findsOneWidget);
 
-    final rule = tester.widget<Text>(find.byKey(const ValueKey('now-stage-rule')));
+    final rule = tester.widget<Text>(find.byKey(const ValueKey('resume-rule')));
     expect(rule.data, resumeRule(mine.idiom));
-    expect(tester.getTopLeft(find.byKey(const ValueKey('now-stage-rule'))).dy,
-      greaterThan(tester.getBottomLeft(find.byKey(const ValueKey('now-stage-resume'))).dy));
-    final where = tester.widget<Text>(find.byKey(const ValueKey('now-stage-where'))).data!;
+    expect(tester.getTopLeft(find.byKey(const ValueKey('resume-rule'))).dy,
+      greaterThan(tester.getBottomLeft(find.byKey(const ValueKey('resume-toggle'))).dy));
+    final where = tester.widget<Text>(find.byKey(const ValueKey('resume-where'))).data!;
     expect(where, startsWith('Playing at '));
     expect(where, contains(' of ${clockLength(loaded.lengthMs!.toInt())}'));
     await core.transport(const TransportDto.pause());
     await tester.pump();
-    expect(tester.widget<Text>(find.byKey(const ValueKey('now-stage-where'))).data,
+    expect(tester.widget<Text>(find.byKey(const ValueKey('resume-where'))).data,
       startsWith('Paused ${dayAndTime(mine.updatedAt.toInt())} at '));
-    final row = find.byKey(ValueKey('now-pick-up-${other.releaseId}'));
+    final row = find.descendant(of: today, matching: find.byKey(ValueKey('now-pick-up-${other.releaseId}')));
     expect(find.descendant(of: row, matching: find.text(dayAndTime(other.updatedAt.toInt()))), findsOneWidget);
     expect(find.descendant(of: row, matching: find.text(positionOf(other.positionMs.toInt(), other.lengthMs?.toInt()))), findsOneWidget);
     expect(find.descendant(of: row, matching: find.textContaining(' / ')), findsNothing);
 
-    await _commandKey(tester, LogicalKeyboardKey.digit1);
-    await tester.pump();
+    // The Now panel, pinned at this width, says the same.
     final pane = find.byType(NowPane);
     expect(pane, findsOneWidget);
     expect(find.descendant(of: pane, matching: find.byKey(ValueKey('now-pick-up-${mine.releaseId}'))), findsNothing);
@@ -73,7 +75,7 @@ void main() {
     expect(find.descendant(of: pane, matching: find.text('UP NEXT')), findsNothing);
   });
 
-  testWidgets('the stage dial never shrinks when the window grows', (tester) async {
+  testWidgets('the Resume dial never shrinks when the window grows', (tester) async {
     final core = FakeCore();
     await _app(tester, core, size: const Size(1400, 900));
     final at1400 = tester.getSize(find.byType(NowDial)).width;
@@ -200,14 +202,6 @@ Future<void> _app(WidgetTester tester, CoreBridge core, {Size size = const Size(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MeretApp(core: core));
-  await tester.pump();
-  await tester.pump();
-}
-
-Future<void> _commandKey(WidgetTester tester, LogicalKeyboardKey key) async {
-  await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-  await tester.sendKeyEvent(key);
-  await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
   await tester.pump();
   await tester.pump();
 }

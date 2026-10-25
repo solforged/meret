@@ -6,11 +6,11 @@ import 'package:flutter/services.dart';
 import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../draw/constellation.dart';
+import '../home/home.dart';
+import '../home/today.dart';
 import '../now/history_sheet.dart';
 import '../now/lcd.dart';
 import '../now/now_pane.dart';
-import '../now/now_stage.dart';
-import '../panes/front_pane.dart';
 import '../panes/game_pane.dart';
 import '../panes/pane.dart';
 import '../panes/person_pane.dart';
@@ -30,8 +30,8 @@ import 'top_line.dart';
 import 'width_class.dart';
 import 'window_chrome.dart';
 
-/// The one surface: top line, trail strip, panes, Now.
-/// No tabs, no sidebar, no destinations.
+/// The one surface: top line, Home, trail strip, panes, Now.
+/// No tabs and no destinations: Home's entries are doors.
 class Surface extends StatefulWidget {
   const Surface({super.key, required this.core});
   final CoreBridge core;
@@ -39,8 +39,6 @@ class Surface extends StatefulWidget {
   @override
   State<Surface> createState() => _SurfaceState();
 }
-
-enum _Stage { undecided, now, front }
 
 /// One pane per stop of the open trail; the key follows the stop off the
 /// path and back, so its State does.
@@ -85,9 +83,17 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   /// Counts trees; a new one gets a new row, which arrives whole instead of
   /// pane by pane.
   int _tree = 0;
+  /// Today over the trail (or alone, with no trail open).
   bool _frontOnly = true;
   bool _treeOnly = false;
-  _Stage _stage = _Stage.undecided;
+
+  /// The Home column laid over the trail (plate 06 C); the panes dim and never move.
+  bool _homeOver = false;
+  final _doors = HomeDoors();
+
+  /// Nothing draws until the first Now, so the opening never flickers.
+  bool _decided = false;
+  bool _phone = false;
   int _navigationVersion = 0;
   int _memoryVersion = 0;
   String? _navigationError;
@@ -118,7 +124,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         if (_now?.anchor?.item != n.anchor?.item) _memoryVersion++;
         if (n.anchor != null) _nothingToPlay = false;
         _now = n;
-        if (_stage == _Stage.undecided) _stage = n.anchor == null ? _Stage.front : _Stage.now;
+        _decided = true;
       });
     });
     _statusSub = widget.core.status().listen((s) {
@@ -142,6 +148,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _queryFocus.dispose();
     _surfaceFocus.dispose();
     _settingsChanges.dispose();
+    _doors.dispose();
     WindowChrome.instance.onSettings = null;
     WindowChrome.instance.onMenu = null;
     _outside.dispose();
@@ -219,10 +226,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     }
   }
 
-  void _leaveStage() {
-    if (_stage != _Stage.front) setState(() => _stage = _Stage.front);
-  }
-
   /// Same tree, or a different one from the history? Stops never change
   /// target inside a trail, so a clash at any index means another trail.
   static bool _sameTrail(TrailDto a, TrailDto b) {
@@ -254,12 +257,12 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   /// Panes move themselves: the row animates whatever changed in it.
   Future<void> _navigate(Future<TrailDto?> Function() call, {bool frontOnNull = false, int swap = 0, bool closeTree = true}) async {
-    _leaveStage();
     final version = ++_navigationVersion;
     final trail = await call();
     if (!mounted || version != _navigationVersion) return;
     setState(() {
       _navigationError = null;
+      _homeOver = false;
       if (closeTree) _treeOnly = false;
       if (trail != null) {
         _memoryVersion++;
@@ -314,8 +317,12 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   Future<void> _move(int by) async {
     if (_editing) return;
+    if (by > 0 && _homeOver) {
+      _closeHome();
+      return;
+    }
     if (by > 0 && _frontOnly) {
-      // `]` from the Front over an open trail returns to it where it was.
+      // `]` from Today over an open trail returns to it where it was.
       if (_trail != null) _showTrail();
       return;
     }
@@ -326,7 +333,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   void _menu(String id) {
     if (!mounted) return;
     switch (id) {
-      case 'front': _showFront();
+      case 'home': _showHome();
       case 'table': _report(_start(const TargetDto.search(query: '')));
       case 'search': _queryFocus.requestFocus();
       case 'back': _report(_move(-1));
@@ -344,26 +351,51 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     }
   }
 
-  /// `N`: the Now panel beside the panes. The Now stage is Now already.
-  void _toggleNow() {
-    if (_stage != _Stage.front) return;
-    setState(() => _nowPanel = !_nowShown);
-  }
+  /// `N`: the Now panel beside the panes.
+  void _toggleNow() => setState(() => _nowPanel = !_nowShown);
 
-  /// `⌘1`: the Front over the trail, and back again. The trail stays open.
-  void _showFront() {
-    if (_frontOnly && _trail != null && _stage != _Stage.now) {
-      _showTrail();
+  /// `⌘1`: inside a trail, the Home column over it; again, Today. The
+  /// trail stays open under both, and `]` returns to it.
+  void _showHome() {
+    if (_trail != null && !_frontOnly && !_treeOnly && !_homeOver && !_phone) {
+      setState(() => _homeOver = true);
       return;
     }
+    _showToday();
+  }
+
+  void _showToday() {
     _navigationVersion++;
     setState(() {
-      _stage = _Stage.front;
       _frontOnly = true;
       _treeOnly = false;
+      _homeOver = false;
       _navigationError = null;
     });
     _reclaimFocusAfterFrame();
+  }
+
+  /// Escape, `]` or a click on the dimmed panes.
+  void _closeHome() {
+    if (_homeOver) setState(() => _homeOver = false);
+  }
+
+  /// A Home door: Today, a play, or a new tree, as a search starts one.
+  void _door(HomeDoor door) {
+    switch (door.kind) {
+      // TODO(home): Pick up roots a trail at its own list once the core has that target.
+      case DoorKind.today || DoorKind.pickUp: _showToday();
+      case DoorKind.playSomething: _report(_playSomething());
+      case DoorKind.query: _report(_start(TargetDto.search(query: door.query!)));
+      case DoorKind.trail: _report(_navigate(() => widget.core.openTrail(door.uid!)));
+      case DoorKind.later: break;
+    }
+  }
+
+  /// `⌘2`–`⌘9`; `⌘1` is [_showHome].
+  void _numbered(int n) {
+    final doors = _doors.numbered;
+    if (n <= doors.length) _door(doors[n - 1]);
   }
 
   /// The page over the row fades out; the row is where it was, so nothing slides.
@@ -372,6 +404,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     setState(() {
       _frontOnly = false;
       _treeOnly = false;
+      _homeOver = false;
       _navigationError = null;
     });
   }
@@ -380,17 +413,22 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     if (_editing || _trail == null) return;
     _navigationVersion++;
     setState(() {
-      _stage = _Stage.front;
       _frontOnly = false;
+      _homeOver = false;
       _treeOnly = !_treeOnly;
       _navigationError = null;
     });
     _reclaimFocusAfterFrame();
   }
 
+  /// Escape closes the Home column first, then the tree view.
   void _closeTree() {
-    if (_editing || !_treeOnly) return;
-    setState(() => _treeOnly = false);
+    if (_editing) return;
+    if (_homeOver) {
+      _closeHome();
+    } else if (_treeOnly) {
+      setState(() => _treeOnly = false);
+    }
   }
 
   Future<void> _start(TargetDto to) => _navigate(() => widget.core.startTrail(to));
@@ -410,7 +448,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   };
 
   Future<void> _search(SearchDto search, HitDto? hit) async {
-    _leaveStage();
     if (hit?.kind == HitKind.track) {
       final index = hit!.index;
       if (index == null) throw 'This track has no result index';
@@ -424,6 +461,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       _setTrail(trail);
       _frontOnly = false;
       _treeOnly = false;
+      _homeOver = false;
       _navigationError = null;
     });
     if (hit != null) {
@@ -521,7 +559,15 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         SingleActivator(LogicalKeyboardKey.bracketLeft, alt: true): _Sibling(-1),
         SingleActivator(LogicalKeyboardKey.bracketRight, alt: true): _Sibling(1),
         SingleActivator(LogicalKeyboardKey.backspace, meta: true, includeRepeats: false): _Prune(),
-        SingleActivator(LogicalKeyboardKey.digit1, meta: true): _Front(),
+        SingleActivator(LogicalKeyboardKey.digit1, meta: true): _Home(),
+        SingleActivator(LogicalKeyboardKey.digit2, meta: true): _Door(2),
+        SingleActivator(LogicalKeyboardKey.digit3, meta: true): _Door(3),
+        SingleActivator(LogicalKeyboardKey.digit4, meta: true): _Door(4),
+        SingleActivator(LogicalKeyboardKey.digit5, meta: true): _Door(5),
+        SingleActivator(LogicalKeyboardKey.digit6, meta: true): _Door(6),
+        SingleActivator(LogicalKeyboardKey.digit7, meta: true): _Door(7),
+        SingleActivator(LogicalKeyboardKey.digit8, meta: true): _Door(8),
+        SingleActivator(LogicalKeyboardKey.digit9, meta: true): _Door(9),
         SingleActivator(LogicalKeyboardKey.keyL, meta: true): _Table(),
         SingleActivator(LogicalKeyboardKey.keyS, meta: true): _Keep(),
         SingleActivator(LogicalKeyboardKey.comma, meta: true): _Settings(),
@@ -541,7 +587,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
           _Sibling: CallbackAction<_Sibling>(onInvoke: (i) => _report(_sibling(i.step))),
           _Prune: CallbackAction<_Prune>(onInvoke: (_) => _report(_pruneNewest())),
-          _Front: CallbackAction<_Front>(onInvoke: (_) => _showFront()),
+          _Home: CallbackAction<_Home>(onInvoke: (_) => _showHome()),
+          _Door: CallbackAction<_Door>(onInvoke: (i) => _numbered(i.n)),
           _Table: CallbackAction<_Table>(onInvoke: (_) => _report(_start(const TargetDto.search(query: '')))),
           _Keep: CallbackAction<_Keep>(onInvoke: (_) => _report(_keep())),
           _Settings: CallbackAction<_Settings>(onInvoke: (_) => _openSettings()),
@@ -554,16 +601,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
             child: LayoutBuilder(builder: (context, box) {
               _settingsContext = context;
               final wc = WidthClass.of(box.maxWidth);
-              final front = FrontPane(
-                key: const ValueKey('front'),
-                core: widget.core,
-                libraryVersion: _status?.libraryVersion,
-                memoryVersion: _memoryVersion,
-                jobs: _status?.jobs ?? const [],
-                onQuery: (query) => _report(_start(TargetDto.search(query: query))),
-                onRelease: (id) => _report(_start(TargetDto.release(id: id))),
-                onTrail: (uid) => _report(_navigate(() => widget.core.openTrail(uid))),
-              );
               final trail = _trail;
               final path = trail == null ? const <StopDto>[] : _path(trail);
               final along = trail == null ? const <StopDto>[] : _row(trail);
@@ -582,9 +619,23 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 parked: [for (final key in _parked) _pane(stops[key.index]!, aheadStops: aheadStops)],
                 children: [for (var i = 0; i < along.length; i++) _pane(along[i], ahead: i >= path.length, aheadStops: aheadStops)],
               );
-              // Plate 01: the Front is a page of its own, never a pane beside a trail.
-              final Widget? page = trail == null
-                  ? front
+              final phone = wc == WidthClass.phone;
+              _phone = phone;
+              _doors.load(widget.core, libraryVersion: _status?.libraryVersion, memoryVersion: _memoryVersion);
+              final today = Today(
+                key: const ValueKey('today'),
+                core: widget.core,
+                memoryVersion: _memoryVersion,
+                libraryVersion: _status?.libraryVersion,
+                jobs: _status?.jobs ?? const [],
+                now: _now, clock: _clock, onToggle: _toggle,
+                onRelease: (id) => _report(_start(TargetDto.release(id: id))),
+                trailName: trail == null ? null : trail.name ?? path.first.title,
+              );
+              // Plate 01: Today is Home's own page, never a pane beside a trail.
+              final showToday = trail == null || (_frontOnly && !_treeOnly);
+              final Widget? page = showToday
+                  ? today
                   : _treeOnly
                       ? TreePane(
                           key: const ValueKey('tree'),
@@ -594,96 +645,89 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                           onKeep: () => _report(_keep()),
                           onPlay: (whole) => _report(_playTrail(whole)),
                         )
-                      : _frontOnly
-                          ? Column(key: const ValueKey('front-over-trail'), crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                              Container(
-                                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                                color: Tok.sky,
-                                child: Text('Front · ⌘1 or ] back to ${trail.name ?? path.first.title}', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                              ),
-                              Expanded(child: front),
-                            ])
-                          : null;
-              final phone = wc == WidthClass.phone;
-              _nowShown = !phone && _stage == _Stage.front && (_nowPanel ?? wc.pinnedNow);
+                      : null;
+              _nowShown = !phone && (_nowPanel ?? wc.pinnedNow);
+              // Plate 06: the column beside Today, the rail inside a trail, and
+              // the column over the rail on ⌘1. The panes never move for Home.
+              final homeWidth = phone ? 0.0 : showToday ? Home.column : Home.rail;
+              final homeOpen = showToday || _homeOver;
+              final covered = page != null || _homeOver;
               return Column(children: [
                 TopLine(
                   query: QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
                   lcd: Lcd(
                     core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
-                    open: _nowShown, onOpen: _stage == _Stage.front && !phone ? _toggleNow : null,
+                    open: _nowShown, onOpen: phone ? null : _toggleNow,
                   ),
                   activity: Activity(core: widget.core, status: _status),
-                  onBack: trail == null || _stage != _Stage.front ? null : () => _report(_move(-1)),
+                  onBack: trail == null ? null : () => _report(_move(-1)),
                   onForward: trail == null || (!_frontOnly && along.length == path.length) ? null : () => _report(_move(1)),
-                  onNow: _stage == _Stage.front && !phone ? _toggleNow : null,
+                  onNow: phone ? null : _toggleNow,
                   nowOpen: _nowShown,
                 ),
-                SizedBox(
-                  height: wc == WidthClass.phone ? 44 : 64,
-                  // Nothing until the first Now says which stage opens.
-                  child: _stage == _Stage.undecided
-                      ? null
-                      : trail == null
-                          ? NoTrailStrip(core: widget.core, memoryVersion: _memoryVersion, onResume: () => _report(_move(-1)))
-                          : TrailStrip(
-                              trail: trail,
-                              onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop))),
-                              onPlay: (whole) => _report(_playTrail(whole)),
-                            ),
-                ),
-                if (_navigationError != null)
-                  Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
-                Expanded(
-                  // Install after the initial Now snapshot, without a launch transition.
-                  child: _stage == _Stage.undecided ? const SizedBox.expand() : AnimatedSwitcher(
-                    duration: kMotion,
-                    transitionBuilder: _fadeThrough,
-                    layoutBuilder: _stacked,
-                    child: _stage == _Stage.now
-                    ? Row(key: const ValueKey('stage-now'), children: [
-                        if (box.maxWidth >= 1000)
-                          SizedBox(
-                            width: (box.maxWidth * 0.4).clamp(0.0, 560.0),
-                            child: Opacity(opacity: 0.8, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                              Container(
-                                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                                color: Tok.sky,
-                                child: const Text('Front', style: Tok.label),
-                              ),
-                              Expanded(child: front),
-                            ])),
-                          ),
-                        Expanded(child: NowStage(
-                          core: widget.core, now: _now!, clock: _clock, onToggle: _toggle,
-                          settingsChanges: _settingsChanges,
-                          onRelease: (id) => _report(_start(TargetDto.release(id: id))), onLeave: _showFront,
-                        )),
-                      ])
-                    : Row(key: const ValueKey('stage-trail'), children: [
-                        Expanded(child: Stack(fit: StackFit.expand, children: [
-                          ExcludeFocus(excluding: page != null, child: IgnorePointer(ignoring: page != null, child: row)),
-                          AnimatedSwitcher(
-                            duration: kMotion,
-                            transitionBuilder: _fadeThrough,
-                            layoutBuilder: _stacked,
-                            child: page ?? const SizedBox.shrink(key: ValueKey('panes')),
-                          ),
-                        ])),
-                        // Retain loaded details: async remounts clamp a restored scroll offset.
-                        Visibility(
-                          visible: _nowShown, maintainState: true, maintainAnimation: false, maintainSize: false,
-                          child: SizedBox(width: wc.nowWidth ?? WidthClass.panel, child: NowPane(
-                            core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
-                            settingsChanges: _settingsChanges,
-                            onRelease: (id) => _report(_start(TargetDto.release(id: id))),
+                Expanded(child: Row(children: [
+                  Expanded(child: Stack(fit: StackFit.expand, children: [
+                    Padding(padding: EdgeInsets.only(left: homeWidth), child: Column(children: [
+                      SizedBox(
+                        height: phone ? 44 : 64,
+                        // Nothing until the first Now, so the opening never flickers.
+                        child: !_decided
+                            ? null
+                            : trail == null
+                                ? NoTrailStrip(core: widget.core, memoryVersion: _memoryVersion, onResume: () => _report(_move(-1)))
+                                : TrailStrip(
+                                    trail: trail,
+                                    onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop))),
+                                    onPlay: (whole) => _report(_playTrail(whole)),
+                                  ),
+                      ),
+                      if (_navigationError != null)
+                        Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
+                      Expanded(child: !_decided ? const SizedBox.expand() : Stack(fit: StackFit.expand, clipBehavior: Clip.none, children: [
+                        // The row keeps the rail's inset under any page, so Today
+                        // beside the column never makes it reflow.
+                        Positioned(top: 0, bottom: 0, right: 0, left: phone ? 0 : Home.rail - homeWidth, child: ExcludeFocus(
+                          excluding: covered,
+                          child: IgnorePointer(ignoring: covered, child: AnimatedOpacity(
+                            opacity: _homeOver && page == null ? 0.35 : 1, duration: kMotion, child: row,
                           )),
+                        )),
+                        AnimatedSwitcher(
+                          duration: kMotion,
+                          transitionBuilder: _fadeThrough,
+                          layoutBuilder: _stacked,
+                          child: page ?? const SizedBox.shrink(key: ValueKey('panes')),
                         ),
-                      ]),
+                      ])),
+                    ])),
+                    // A click on the dimmed panes closes the column over them.
+                    if (_homeOver && page == null)
+                      Positioned.fill(left: Home.rail, child: GestureDetector(key: const ValueKey('home-scrim'), behavior: HitTestBehavior.opaque, onTap: _closeHome)),
+                    if (!phone && _decided)
+                      Positioned(left: 0, top: 0, bottom: 0, child: AnimatedContainer(
+                        duration: kMotion,
+                        curve: Curves.easeOut,
+                        width: homeOpen ? Home.column : Home.rail,
+                        child: Home(
+                          doors: _doors, open: homeOpen, onDoor: _door,
+                          onOpen: () => setState(() => _homeOver = true),
+                          litQuery: showToday ? null : trail.rootQuery,
+                          todayLit: showToday,
+                        ),
+                      )),
+                  ])),
+                  // Retain loaded details: async remounts clamp a restored scroll offset.
+                  Visibility(
+                    visible: _nowShown, maintainState: true, maintainAnimation: false, maintainSize: false,
+                    child: SizedBox(width: wc.nowWidth ?? WidthClass.panel, child: NowPane(
+                      core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
+                      settingsChanges: _settingsChanges,
+                      onRelease: (id) => _report(_start(TargetDto.release(id: id))),
+                    )),
                   ),
-                ),
+                ])),
                 // Phones keep a player bar under the thumb; desktops have the LCD.
-                if (_stage == _Stage.front && phone) NowBar(
+                if (phone) NowBar(
                   core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
                   settingsChanges: _settingsChanges,
                   onRelease: (id) => _report(_start(TargetDto.release(id: id))),
@@ -740,8 +784,13 @@ class _Settings extends Intent {
   const _Settings();
 }
 
-class _Front extends Intent {
-  const _Front();
+class _Home extends Intent {
+  const _Home();
+}
+
+class _Door extends Intent {
+  const _Door(this.n);
+  final int n;
 }
 
 class _Table extends Intent {

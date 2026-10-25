@@ -5,19 +5,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meret/core/bridge.dart';
 import 'package:meret/main.dart';
-import 'package:meret/panes/front_pane.dart';
-import 'package:meret/panes/front_memory.dart';
+import 'package:meret/home/today.dart';
+import 'package:meret/home/week.dart';
 import 'package:meret/panes/person_pane.dart';
 import 'package:meret/settings/settings_window.dart';
 import 'package:meret/shell/activity.dart';
 import 'package:meret/theme/tokens.dart';
 
 void main() {
-  testWidgets('Allow answers the Front question and membership follows its provider', (tester) async {
+  testWidgets('Allow answers the question on Today and membership follows its provider', (tester) async {
     final core = _LookupCore();
     _size(tester, const Size(1400, 1100));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: FrontPane(
-      core: core, memoryVersion: 0, onQuery: (_) {},
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Today(
+      core: core, memoryVersion: 0,
     ))));
     await tester.pump();
     await tester.pump();
@@ -53,8 +53,8 @@ void main() {
   testWidgets('Not now defers the Lookups question for this run only', (tester) async {
     final core = _LookupCore();
     _size(tester, const Size(1400, 1100));
-    Widget front() => MaterialApp(home: Scaffold(body: FrontPane(
-      key: UniqueKey(), core: core, memoryVersion: 0, onQuery: (_) {},
+    Widget front() => MaterialApp(home: Scaffold(body: Today(
+      key: UniqueKey(), core: core, memoryVersion: 0,
     )));
     await tester.pumpWidget(front());
     await tester.pump();
@@ -67,7 +67,7 @@ void main() {
     await tester.pump();
     expect(core.answers, isEmpty);
     expect(find.text('Lookups'), findsNothing);
-    expect(find.text('Albums with two editions'), findsOneWidget);
+    expect(find.text('Added lately'), findsOneWidget);
 
     await tester.pumpWidget(front());
     await tester.pump();
@@ -76,25 +76,7 @@ void main() {
     expect((await core.lookups()).setting, LookupsDto.unasked);
   });
 
-  testWidgets('format bars share the sum of the format counts', (tester) async {
-    final core = _CopiesCore();
-    _size(tester, const Size(1400, 1100));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: FrontPane(
-      core: core, memoryVersion: 0, onQuery: (_) {},
-    ))));
-    await tester.pump();
-    await tester.pump();
-
-    for (final label in ['Lossless', 'Lossy']) {
-      final bar = find.descendant(
-        of: find.ancestor(of: find.text(label), matching: find.byType(FrontDoor)),
-        matching: find.byType(FractionallySizedBox),
-      );
-      expect(tester.widget<FractionallySizedBox>(bar).widthFactor, 0.5, reason: label);
-    }
-  });
-
-  testWidgets('an empty Front shows suggestions and adds the selected path', (tester) async {
+  testWidgets('an empty Today shows suggestions and adds the selected path', (tester) async {
     final core = _RecordingEmptyCore();
     final suggestions = await core.suggestFolders();
     await _surface(tester, core);
@@ -110,7 +92,7 @@ void main() {
     expect(find.text('macOS will ask for access'), findsWidgets);
     expect(find.text('Bring your history'), findsOneWidget);
     expect(find.text('Connect a service'), findsOneWidget);
-    expect(find.ancestor(of: find.text('Connect a service'), matching: find.byType(FrontDoor)), findsNothing);
+    expect(find.ancestor(of: find.text('Connect a service'), matching: find.byType(TodayDoor)), findsNothing);
 
     await tester.tap(find.text(suggestions.first.label));
     await tester.pump();
@@ -119,7 +101,7 @@ void main() {
     expect(core.addedPaths, [suggestions.first.path]);
     expect((await core.front()).roots.single.path, suggestions.first.path);
     expect(find.text('Choose a folder…'), findsNothing);
-    expect(find.text('+ Add folder'), findsOneWidget);
+    expect(find.descendant(of: find.byType(Today), matching: find.text('Or play something')), findsOneWidget, reason: 'the library has music, so Today is Today');
   });
 
   testWidgets('the welcome headline waits for the folder look', (tester) async {
@@ -128,7 +110,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: SettingsScope(
       core: core,
       onChanged: (_) {},
-      child: Scaffold(body: FrontPane(core: core, memoryVersion: 0, onQuery: (_) {})),
+      child: Scaffold(body: Today(core: core, memoryVersion: 0)),
     )));
     await tester.pump();
     await tester.pump();
@@ -145,18 +127,18 @@ void main() {
     expect(find.text('Start with a music folder'), findsOneWidget);
   });
 
-  testWidgets('a Front door tints one step deeper while pressed', (tester) async {
+  testWidgets('a Today door tints one step deeper while pressed', (tester) async {
     final core = FakeCore.empty();
     _size(tester, const Size(1400, 1100));
     await tester.pumpWidget(MaterialApp(home: SettingsScope(
       core: core,
       onChanged: (_) {},
-      child: Scaffold(body: FrontPane(core: core, memoryVersion: 0, onQuery: (_) {})),
+      child: Scaffold(body: Today(core: core, memoryVersion: 0)),
     )));
     await tester.pump();
     await tester.pump();
 
-    final door = find.ancestor(of: find.text('Choose a folder…'), matching: find.byType(FrontDoor));
+    final door = find.ancestor(of: find.text('Choose a folder…'), matching: find.byType(TodayDoor));
     Color fill() => (tester.widget<Container>(find.descendant(of: door, matching: find.byType(Container)).first).decoration! as BoxDecoration).color!;
     expect(fill(), Tok.sky);
 
@@ -169,13 +151,13 @@ void main() {
     expect(fill(), Tok.sky);
   });
 
-  testWidgets('the empty Front stacks its columns on a narrow window', (tester) async {
+  testWidgets('the empty Today stacks its columns on a narrow window', (tester) async {
     final core = FakeCore.empty();
     _size(tester, const Size(400, 1000));
     await tester.pumpWidget(MaterialApp(home: SettingsScope(
       core: core,
       onChanged: (_) {},
-      child: Scaffold(body: FrontPane(core: core, memoryVersion: 0, onQuery: (_) {})),
+      child: Scaffold(body: Today(core: core, memoryVersion: 0)),
     )));
     await tester.pump();
     await tester.pump();
@@ -303,27 +285,6 @@ class _SlowSuggestionsCore extends FakeCore {
 
   @override
   Future<List<FolderSuggestionDto>> suggestFolders() => found.future;
-}
-
-/// One album kept as FLAC and MP3: 43 tracks, 43 of each format.
-class _CopiesCore extends FakeCore {
-  @override
-  Future<FrontDto> front() async {
-    final front = await super.front();
-    return FrontDto(
-      tracks: BigInt.from(43),
-      releases: BigInt.one,
-      lookups: front.lookups,
-      idioms: front.idioms,
-      formats: [
-        for (final label in ['Lossless', 'Lossy'])
-          FrontLineDto(label: label, count: BigInt.from(43), note: '', query: 'format:$label'),
-      ],
-      addedLately: front.addedLately,
-      needsYou: front.needsYou,
-      roots: front.roots,
-    );
-  }
 }
 
 class _LookupCore extends FakeCore {
