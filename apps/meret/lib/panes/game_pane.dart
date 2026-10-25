@@ -147,10 +147,10 @@ class _GamePaneState extends State<GamePane> {
                       kind: ThreadKind.soundtrack, label: 'soundtrack', source: 'Wikidata', provider: 'wikidata',
                       to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
                     )),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    child: TrailRow(target: TargetDto.release(id: row.releaseId), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(row.album, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
                       TrailThreadMark(target: TargetDto.release(id: row.releaseId)),
-                    ]),
+                    ])),
                   ),
                 ),
               ])),

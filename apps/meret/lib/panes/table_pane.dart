@@ -11,6 +11,7 @@ import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'add_folder.dart';
 import 'facet_browser.dart';
+import 'pane.dart';
 
 /// iTunes' one big table as a pane (plate 04). The core orders and groups
 /// rows; the fixed-extent list fetches pages as they scroll into view.
@@ -431,18 +432,18 @@ class _TablePaneState extends State<TablePane> {
                 ? const ColoredBox(color: Tok.rule)
                 : Image.file(File(group.cover!), cacheWidth: (18 * MediaQuery.devicePixelRatioOf(context)).ceil(), fit: BoxFit.cover)),
             const SizedBox(width: 10),
-            Expanded(child: _cell(group.title, Tok.body.copyWith(fontWeight: FontWeight.w600),
-              key: ValueKey('table-release-${group.releaseId}'), onTap: widget.onFollow == null ? null : () => _follow(item))),
+            Expanded(child: TrailRow(target: TargetDto.release(id: group.releaseId), child: _cell(group.title, Tok.body.copyWith(fontWeight: FontWeight.w600),
+              key: ValueKey('table-release-${group.releaseId}'), onTap: widget.onFollow == null ? null : () => _follow(item)))),
             _cell(_count(group.tracks, 'track'), Tok.label),
           ]);
     return Row(children: [
       SizedBox(width: 40, child: _cell(group != null || row!.number == 0 ? '' : row.disc > 1 ? '${row.disc}-${row.number}' : '${row.number}', Tok.monoSmall)),
       Expanded(flex: 4, child: title),
-      Expanded(flex: 3, child: _cell(artist, Tok.body.copyWith(color: Tok.muted),
+      Expanded(flex: 3, child: _went(person == null || artist.isEmpty ? null : TargetDto.person(id: person), _cell(artist, Tok.body.copyWith(color: Tok.muted),
         key: group != null ? ValueKey('table-group-artist-${group.releaseId}') : ValueKey('table-artist-${row!.trackId}'),
-        onTap: widget.onFollow == null || person == null || artist.isEmpty ? null : () => _follow(item, artist: true))),
-      if (!_view.group) Expanded(flex: 4, child: _cell(row!.album, Tok.body.copyWith(color: Tok.muted),
-        key: ValueKey('table-album-${row.trackId}'), onTap: widget.onFollow == null ? null : () => _follow(item))),
+        onTap: widget.onFollow == null || person == null || artist.isEmpty ? null : () => _follow(item, artist: true)))),
+      if (!_view.group) Expanded(flex: 4, child: TrailRow(target: TargetDto.release(id: row!.releaseId), child: _cell(row.album, Tok.body.copyWith(color: Tok.muted),
+        key: ValueKey('table-album-${row.trackId}'), onTap: widget.onFollow == null ? null : () => _follow(item)))),
       SizedBox(width: 60, child: _cell(group != null ? '${group.year ?? ''}' : _view.group ? '' : '${row!.year ?? ''}', Tok.monoSmall)),
       SizedBox(width: 72, child: _cell(_length(group?.lengthMs ?? row?.lengthMs), Tok.monoSmall)),
       SizedBox(width: 120, child: _cell(group?.format ?? row!.format, Tok.monoSmall)),
@@ -450,6 +451,8 @@ class _TablePaneState extends State<TablePane> {
       SizedBox(width: 64, child: _cell(row?.loudness?.toStringAsFixed(1) ?? '', Tok.monoSmall)),
     ]);
   }
+
+  Widget _went(TargetDto? target, Widget cell) => target == null ? cell : TrailRow(target: target, child: cell);
 
   /// Keeps a brushed range in this pane's local query.
   void _brush(String key, (double, double)? r, double lo, double hi) {

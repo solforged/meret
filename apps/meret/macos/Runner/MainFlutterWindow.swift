@@ -45,6 +45,8 @@ class MainFlutterWindow: NSWindow {
       ("toggle", "Play or Pause", " ", []),
       ("playSomething", "Play Something", " ", .shift),
       ("fromStart", "From the Start", " ", .option),
+      ("playBranch", "Play This Branch", "", []),
+      ("playTree", "Play the Whole Tree", "", []),
       nil,
       ("now", "Now", "n", []),
       ("history", "History", "h", []),

@@ -18,7 +18,7 @@ Desktop, macOS. Every story below happens in one of these, and each place answer
 | Place | Where | Answers | Holds |
 |---|---|---|---|
 | Query line | Top, doubling as the title bar | "Take me to…", "Do…" | Search, commands (`play`, `want`, `crate add`) |
-| Trail strip | Under the top line | "How did I get here?" | Stops, threads, branches, Keep |
+| Trail chip and threads | The top line; the pane headers | "How did I get here?" | The trail's name and counts, the threads drawn between panes, the tree on `T`, Keep |
 | Home | The left edge: a column, or a rail inside a trail | "Where do I start?" | Today, Pick up, Play something, the library by idiom, crates, trails, leads, wants, Needs you |
 | Today | Home's own page, where Meret opens | "What now?" | Resume, the picks, what's partway, added lately, your week |
 | Panes | The middle | "What is this?" | Tables, releases, people, works, crates, leads |
@@ -66,7 +66,7 @@ Decided 2026-10-14.
 | I want music without choosing | `⇧Space` Play something, with why | Built (from listens and trails; habits and leads later) |
 | I want one specific album, now | `/`, type, `↵` | Built |
 | I browse the whole library as a table | `⌘L`, All tracks or an idiom door in Home | Built |
-| I wander from a credit to a person to their other work | Panes and threads; the strip | Built (local credits only) |
+| I wander from a credit to a person to their other work | Panes, and the threads drawn between them | Built (local credits only) |
 | I see what's next, and change it | Now, Up next | Built (shown; changing the queue isn't built) |
 | I find out what played ten minutes ago | Now, "What was that?"; `H` for history | Built |
 | I play on another speaker | Now, Play on | Built for this Mac's outputs; other zones later |

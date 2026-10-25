@@ -4,7 +4,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 
 import '../core/bridge.dart';
 import '../core/when.dart';
+import '../theme/light.dart';
 import '../theme/tokens.dart';
+import 'threads.dart';
 
 /// "212 plays · last Tuesday", "1 play · today", "no plays yet".
 String playsFact(BigInt plays, PlatformInt64? lastPlayedMs) {
@@ -109,12 +111,14 @@ class PaneActionButton extends StatelessWidget {
   }
 }
 
-/// What every pane shows at the top: the thread that brought you, the kind
-/// of thing, its name. Folds to a vertical spine when narrow.
+/// What every pane shows at the top: a header that is its star on the
+/// trail (plate 02), with the kind of thing, the thread that brought you
+/// and who said so, then its name. Folds to a vertical spine when narrow.
 class Pane extends StatefulWidget {
   const Pane({
     super.key, required this.kind, required this.title, this.via, this.source, this.body,
     this.showTitle = true, this.compact = false, this.onSpineTap, this.ahead = false,
+    this.current = false, this.forks = 0, this.anchors, this.stop,
   });
 
   /// "PERSON · COMPOSER", "SCORE · 1998", "GROUP · NOT OWNED".
@@ -139,6 +143,17 @@ class Pane extends StatefulWidget {
   /// click anywhere on it goes there; nothing inside takes the click.
   final bool ahead;
 
+  /// The stop you're at: its star is lit and its header carries a gold edge.
+  final bool current;
+
+  /// Branches leaving this stop, shown as `⑂ n` in the header.
+  final int forks;
+
+  /// Where this pane's thread ends register, so the row can draw them.
+  final ThreadAnchors? anchors;
+  final int? stop;
+
+  static const header = 34.0;
   static const aheadOpacity = 0.42;
   static const dimming = Duration(milliseconds: 120);
 
@@ -177,7 +192,30 @@ class _PaneState extends State<Pane> {
         _folded = folded;
       }
       if (!folded) _fullWidth = box.maxWidth;
-      final Pane(:kind, :title, :via, :source, :body, :compact, :showTitle, :onSpineTap, :ahead) = widget;
+      final Pane(:kind, :title, :via, :source, :body, :compact, :showTitle, :onSpineTap, :ahead, :current, :anchors, :stop) = widget;
+      Widget pane = Focus(
+        focusNode: _focus, canRequestFocus: false, descendantsAreFocusable: !folded && !ahead,
+        child: AnimatedContainer(
+          duration: Pane.dimming,
+          decoration: BoxDecoration(color: current ? Tok.panel : Tok.sky, border: const Border(right: BorderSide(color: Tok.line))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _header(context),
+            Expanded(child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SizedBox(height: compact ? 8 : 12),
+                if (compact)
+                  Text(title, style: Tok.body.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)
+                else if (showTitle)
+                  Text(title, style: Tok.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                SizedBox(height: compact ? 8 : showTitle ? 12 : 0),
+                Expanded(child: body ?? const SizedBox()),
+              ]),
+            )),
+          ]),
+        ),
+      );
+      if (anchors != null && stop != null) pane = ThreadAnchor(anchors: anchors, end: ThreadEnd.pane, stop: stop, on: !folded, child: pane);
       return AnimatedOpacity(
         opacity: ahead ? Pane.aheadOpacity : 1, duration: Pane.dimming,
         child: Stack(fit: StackFit.expand, children: [
@@ -186,38 +224,7 @@ class _PaneState extends State<Pane> {
           // Keep a hidden body at its last full width, not the spine's 46 px.
           child: OverflowBox(
             alignment: Alignment.topLeft, minWidth: _fullWidth, maxWidth: _fullWidth,
-            child: Focus(
-              focusNode: _focus, canRequestFocus: false, descendantsAreFocusable: !folded && !ahead,
-              child: Container(
-                decoration: const BoxDecoration(color: Tok.sky, border: Border(right: BorderSide(color: Tok.line))),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  if (via != null)
-                    Row(children: [
-                      Text(via, style: Tok.label.copyWith(color: Tok.gold, fontStyle: FontStyle.italic, letterSpacing: 0)),
-                      const SizedBox(width: 12),
-                      if (source != null)
-                        Expanded(
-                          child: Text(source, style: Tok.label, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ),
-                    ]),
-                  SizedBox(height: compact ? 6 : 10),
-                  if (compact)
-                    Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
-                      Text(kind, style: Tok.label),
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(title, style: Tok.body.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                    ])
-                  else ...[
-                    Text(kind, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    if (showTitle) Text(title, style: Tok.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  ],
-                  SizedBox(height: compact ? 8 : 12),
-                  Expanded(child: body ?? const SizedBox()),
-                ]),
-              ),
-            ),
+            child: pane,
           ),
         ),
         if (folded) PaneSpine(title: title, meta: via ?? kind, onTap: onSpineTap)
@@ -231,6 +238,56 @@ class _PaneState extends State<Pane> {
           ),
       ]));
     });
+  }
+
+  /// Plate 02: the star, the kind, the thread that brought you in gold
+  /// italic, and who said so or how many branches leave here.
+  Widget _header(BuildContext context) {
+    final Pane(:kind, :via, :source, :current, :forks, :anchors, :stop) = widget;
+    final light = Light.of(context).accent;
+    Widget star = AnimatedContainer(
+      key: const ValueKey('pane-star'),
+      duration: Pane.dimming,
+      width: current ? 10 : 8, height: current ? 10 : 8,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: current ? light : Tok.muted,
+        boxShadow: current ? [BoxShadow(color: light.withValues(alpha: 0.09), spreadRadius: 4), BoxShadow(color: light, blurRadius: 10)] : const [],
+      ),
+    );
+    if (anchors != null && stop != null) star = ThreadAnchor(anchors: anchors, end: ThreadEnd.star, stop: stop, child: star);
+    return AnimatedContainer(
+      key: const ValueKey('pane-header'),
+      duration: Pane.dimming,
+      height: Pane.header,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(border: Border(
+        top: BorderSide(color: current ? Tok.gold : Colors.transparent, width: 2),
+        bottom: const BorderSide(color: Tok.line),
+      )),
+      child: Row(children: [
+        SizedBox(width: 10, height: 10, child: Center(child: star)),
+        const SizedBox(width: 9),
+        Text(kind.toUpperCase(), style: Tok.label.copyWith(fontWeight: FontWeight.w500), maxLines: 1),
+        if (via != null) ...[
+          const SizedBox(width: 9),
+          Flexible(child: Text(via, style: Tok.body.copyWith(fontSize: 12, fontStyle: FontStyle.italic, fontWeight: FontWeight.w500, color: Tok.gold2), maxLines: 1, overflow: TextOverflow.ellipsis)),
+        ],
+        const Spacer(),
+        if (forks > 0)
+          Tooltip(
+            message: forks == 1 ? 'One branch leaves here' : '$forks branches leave here',
+            child: Container(
+              key: const ValueKey('pane-forks'),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(border: Border.all(color: Tok.gold3)),
+              child: Text('⑂ $forks', style: Tok.label.copyWith(color: Tok.gold, letterSpacing: 0)),
+            ),
+          )
+        else if (source != null)
+          Flexible(child: Text(source, style: Tok.label.copyWith(fontSize: 10, color: Tok.dim, letterSpacing: 0), maxLines: 1, overflow: TextOverflow.ellipsis)),
+      ]),
+    );
   }
 }
 
@@ -273,9 +330,12 @@ class PaneSpine extends StatelessWidget {
 
 /// The tree around one pane, shared by its fork rows and thread marks.
 class TrailPaneScope extends InheritedWidget {
-  const TrailPaneScope({super.key, required this.trail, required this.stop, required this.onGo, required this.onPrune, this.ahead = const {}, required super.child});
+  const TrailPaneScope({super.key, required this.trail, required this.stop, required this.onGo, required this.onPrune, this.ahead = const {}, this.anchors, required super.child});
   final TrailDto trail;
   final StopDto stop;
+
+  /// Where the row you followed registers, so its thread can be drawn.
+  final ThreadAnchors? anchors;
 
   /// The stops ahead on the row; they show as dimmed panes, not as marks.
   final Set<int> ahead;
@@ -283,6 +343,18 @@ class TrailPaneScope extends InheritedWidget {
   final ValueChanged<int> onPrune;
 
   static TrailPaneScope? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<TrailPaneScope>();
+
+  /// The next pane on the row, when this stop's thread led there.
+  StopDto? get next => trail.stops.where((node) => node.parent == stop.index && !node.isPeek && (node.onPath || ahead.contains(node.index))).firstOrNull;
+
+  /// How [target] stands on this trail, for the arrow at the end of its row.
+  ThreadWay way(TargetDto target) {
+    if (next?.target == target) return ThreadWay.went;
+    final parent = trail.stops.where((node) => node.index == stop.parent).firstOrNull;
+    if (parent?.target == target) return ThreadWay.came;
+    if (trail.stops.any((node) => (node.onPath || ahead.contains(node.index)) && node.target == target)) return ThreadWay.onTrail;
+    return ThreadWay.open;
+  }
 
   String? followedLeaf(TargetDto target) {
     final stops = {for (final node in trail.stops) node.index: node};
@@ -300,7 +372,53 @@ class TrailPaneScope extends InheritedWidget {
   }
 
   @override
-  bool updateShouldNotify(TrailPaneScope oldWidget) => trail != oldWidget.trail || stop != oldWidget.stop || !setEquals(ahead, oldWidget.ahead);
+  bool updateShouldNotify(TrailPaneScope oldWidget) =>
+      trail != oldWidget.trail || stop != oldWidget.stop || anchors != oldWidget.anchors || !setEquals(ahead, oldWidget.ahead);
+}
+
+/// Where a thread stands on the trail: followed to the next pane, the one
+/// you came from, elsewhere on the trail, or not taken.
+enum ThreadWay { went, came, onTrail, open }
+
+/// The end of a followable row (plate 02): `→` follows, `←` is where you
+/// came from, `○` is already on this trail. The followed row's is gold.
+class ThreadArrow extends StatelessWidget {
+  const ThreadArrow({super.key, required this.target, this.hover = false});
+  final TargetDto target;
+  final bool hover;
+
+  @override
+  Widget build(BuildContext context) {
+    final way = TrailPaneScope.of(context)?.way(target) ?? ThreadWay.open;
+    final (glyph, colour) = switch (way) {
+      ThreadWay.went => ('→', Tok.gold),
+      ThreadWay.came => ('←', Tok.faint),
+      ThreadWay.onTrail => ('○', Tok.dim),
+      ThreadWay.open => ('→', hover ? Tok.ink : Tok.dim),
+    };
+    return SizedBox(width: 14, child: Text(glyph, key: ValueKey('arrow-${way.name}'), style: Tok.body.copyWith(color: colour), textAlign: TextAlign.right));
+  }
+}
+
+/// A followable row: lit gold when it's the thread that led to the next
+/// pane, and the start of that thread's line.
+class TrailRow extends StatelessWidget {
+  const TrailRow({super.key, required this.target, required this.child});
+  final TargetDto target;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = TrailPaneScope.of(context);
+    if (scope == null || scope.way(target) != ThreadWay.went) return child;
+    final lit = DecoratedBox(
+      key: const ValueKey('thread-went'),
+      decoration: const BoxDecoration(color: Color(0x1AD2A64E), border: Border(left: BorderSide(color: Tok.gold, width: 2))),
+      child: Padding(padding: const EdgeInsets.only(left: 6), child: child),
+    );
+    final anchors = scope.anchors;
+    return anchors == null ? lit : ThreadAnchor(anchors: anchors, end: ThreadEnd.went, stop: scope.stop.index, child: lit);
+  }
 }
 
 /// Appended to a followed thread without changing its destination or action.

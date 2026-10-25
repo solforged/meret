@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
 import '../core/playhead.dart';
-import '../draw/constellation.dart';
 import '../home/home.dart';
 import '../home/today.dart';
 import '../now/history_sheet.dart';
@@ -16,6 +15,7 @@ import '../panes/pane.dart';
 import '../panes/person_pane.dart';
 import '../panes/release_pane.dart';
 import '../panes/search_pane.dart';
+import '../panes/threads.dart';
 import '../panes/tree_pane.dart';
 import '../panes/work_pane.dart';
 import '../settings/settings_window.dart';
@@ -27,6 +27,7 @@ import 'outside.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
 import 'top_line.dart';
+import 'trail_chip.dart';
 import 'width_class.dart';
 import 'window_chrome.dart';
 
@@ -90,6 +91,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   /// The Home column laid over the trail (plate 06 C); the panes dim and never move.
   bool _homeOver = false;
   final _doors = HomeDoors();
+  final _anchors = ThreadAnchors();
 
   /// Nothing draws until the first Now, so the opening never flickers.
   bool _decided = false;
@@ -149,6 +151,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _surfaceFocus.dispose();
     _settingsChanges.dispose();
     _doors.dispose();
+    _anchors.dispose();
     WindowChrome.instance.onSettings = null;
     WindowChrome.instance.onMenu = null;
     _outside.dispose();
@@ -346,6 +349,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       case 'toggle': _toggle();
       case 'playSomething': _report(_playSomething());
       case 'fromStart': _fromStart();
+      case 'playBranch': _report(_playTrail(false));
+      case 'playTree': _report(_playTrail(true));
       case 'now': _toggleNow();
       case 'history': _history();
     }
@@ -509,8 +514,12 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       title: stop.title,
       via: stop.via,
       source: stop.viaSource,
+      current: stop.index == _trail!.current,
+      forks: _trail!.branches.where((branch) => branch.fork == stop.index).length,
+      anchors: _anchors,
+      stop: stop.index,
       body: TrailPaneScope(
-        trail: _trail!, stop: stop, ahead: aheadStops,
+        trail: _trail!, stop: stop, ahead: aheadStops, anchors: _anchors,
         onGo: (leaf) => _report(_navigate(() => widget.core.trailGo(leaf))),
         onPrune: (leaf) => _report(_prune(leaf)),
         child: body,
@@ -608,7 +617,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               final aheadStops = {for (final stop in along.skip(path.length)) stop.index};
               // The row holds the trail's path, the stops ahead and the parked
               // stops whatever page lies over it, so nothing is thrown away by a page.
-              final row = PaneRow(
+              final row = ThreadLines(anchors: _anchors, stops: [for (final stop in along) stop.index], path: path.length, child: PaneRow(
                 key: ValueKey(('row', _tree)),
                 focus: path.length - 1,
                 swap: _swap,
@@ -618,7 +627,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 ghost: const PaneGhost(),
                 parked: [for (final key in _parked) _pane(stops[key.index]!, aheadStops: aheadStops)],
                 children: [for (var i = 0; i < along.length; i++) _pane(along[i], ahead: i >= path.length, aheadStops: aheadStops)],
-              );
+              ));
               final phone = wc == WidthClass.phone;
               _phone = phone;
               _doors.load(widget.core, libraryVersion: _status?.libraryVersion, memoryVersion: _memoryVersion);
@@ -664,23 +673,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   onForward: trail == null || (!_frontOnly && along.length == path.length) ? null : () => _report(_move(1)),
                   onNow: phone ? null : _toggleNow,
                   nowOpen: _nowShown,
+                  chip: trail == null || !_decided ? null : ({compact = false, star = false}) => TrailChip(trail: trail, onTree: _toggleTree, compact: compact, star: star),
                 ),
                 Expanded(child: Row(children: [
                   Expanded(child: Stack(fit: StackFit.expand, children: [
                     Padding(padding: EdgeInsets.only(left: homeWidth), child: Column(children: [
-                      SizedBox(
-                        height: phone ? 44 : 64,
-                        // Nothing until the first Now, so the opening never flickers.
-                        child: !_decided
-                            ? null
-                            : trail == null
-                                ? NoTrailStrip(core: widget.core, memoryVersion: _memoryVersion, onResume: () => _report(_move(-1)))
-                                : TrailStrip(
-                                    trail: trail,
-                                    onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop))),
-                                    onPlay: (whole) => _report(_playTrail(whole)),
-                                  ),
-                      ),
                       if (_navigationError != null)
                         Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
                       Expanded(child: !_decided ? const SizedBox.expand() : Stack(fit: StackFit.expand, clipBehavior: Clip.none, children: [

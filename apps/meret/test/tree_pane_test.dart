@@ -13,14 +13,15 @@ import 'package:meret/now/now_pane.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/tree_pane.dart';
 import 'package:meret/shell/pane_row.dart';
+import 'package:meret/shell/trail_chip.dart';
 import 'package:meret/theme/tokens.dart';
 
 void main() {
-  testWidgets('T toggles the open trail and Escape restores panes with strip and Now retained', (tester) async {
+  testWidgets('T toggles the open trail and Escape restores panes with the chip and Now retained', (tester) async {
     await _surface(tester, size: const Size(1900, 1000));
     await _key(tester, LogicalKeyboardKey.keyT);
     expect(find.byType(TreePane), findsOneWidget);
-    expect(find.byType(TrailStrip), findsOneWidget);
+    expect(find.byType(TrailChip), findsOneWidget);
     expect(find.byType(NowPane), findsOneWidget);
     expect(_rowCovered(tester), isTrue, reason: 'the panes stay under the tree, out of reach');
     await _key(tester, LogicalKeyboardKey.keyT);
@@ -47,7 +48,7 @@ void main() {
     await tester.pumpAndSettle();
     await _key(tester, LogicalKeyboardKey.keyT);
     expect(find.byType(TreePane), findsNothing);
-    expect(find.byType(NoTrailStrip), findsOneWidget);
+    expect(find.byType(TrailChip), findsNothing);
   });
 
   testWidgets('a branch row opens its leaf and restores that path of panes', (tester) async {
@@ -100,10 +101,9 @@ void main() {
     expect(find.byType(TreePane), findsOneWidget);
     expect(find.byKey(const ValueKey('tree-branch-5')), findsNothing);
     expect(find.byKey(const ValueKey('tree-stop-5')), findsNothing);
-    expect(find.byKey(const ValueKey('trail-stop-5')), findsNothing);
     facts = tester.widget<TreePaneFacts>(find.byType(TreePaneFacts));
     expect((facts.stops, facts.branches, facts.peeks), (5, 2, 1));
-    expect(tester.widget<TrailStrip>(find.byType(TrailStrip)).trail.stops, hasLength(5));
+    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.stops, hasLength(5));
   });
 
   testWidgets('playback stays in the tree and naming and Keep share the keep dialog', (tester) async {
@@ -137,14 +137,12 @@ void main() {
     await _key(tester, LogicalKeyboardKey.escape);
   });
 
-  test('strip and large tree share depth columns while only the large tree includes peeks', () {
+  test('the tree lays stops out in depth columns, peeks included', () {
     final trail = _fixture();
-    final large = ConstellationPainter(trail, expanded: true);
+    final large = ConstellationPainter(trail);
     final size = Size(large.contentWidth(1200), large.contentHeight);
     final positions = large.layoutPositions(size);
-    final compact = ConstellationPainter(trail).layoutPositions(const Size(1000, 64));
     expect(positions.keys, containsAll([0, 1, 2, 3, 4, 5]));
-    expect(compact, isNot(contains(4)));
     expect(positions[2]!.dx, positions[3]!.dx);
     expect(positions[0]!.dx, lessThan(positions[1]!.dx));
     expect(positions[1]!.dx, lessThan(positions[3]!.dx));
@@ -162,7 +160,7 @@ void main() {
       stops: source.stops.where((stop) => stop.index < 4).toList(),
       branches: source.branches.take(2).toList(),
     );
-    final painter = ConstellationPainter(trail, expanded: true);
+    final painter = ConstellationPainter(trail);
     final width = painter.contentWidth(1195);
     final positions = painter.layoutPositions(Size(width, painter.contentHeight));
     expect(positions[2]!.dy - positions[3]!.dy, 88);
@@ -173,7 +171,7 @@ void main() {
   testWidgets('the large drawing paints fork rings, meeting dots and clickable peek ticks', (tester) async {
     await _surface(tester);
     await _key(tester, LogicalKeyboardKey.keyT);
-    final drawing = find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is ConstellationPainter && (widget.painter as ConstellationPainter).expanded);
+    final drawing = find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is ConstellationPainter);
     final paint = tester.renderObject<RenderCustomPaint>(drawing);
     expect(paint, paints..something((method, arguments) => method == #drawCircle && arguments[1] == 9.0 && (arguments[2] as Paint).color.toARGB32() == Tok.gold2.toARGB32()));
     expect(paint, paints..something((method, arguments) => method == #drawCircle && arguments[1] == 1.0 && (arguments[2] as Paint).color.toARGB32() == Tok.gold2.toARGB32()));

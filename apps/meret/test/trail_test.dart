@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -10,10 +8,11 @@ import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
 import 'package:meret/panes/pane.dart';
 import 'package:meret/shell/pane_row.dart';
+import 'package:meret/shell/trail_chip.dart';
 import 'package:meret/theme/tokens.dart';
 
 void main() {
-  testWidgets('meetings paint dots between visible stars but not folded peeks', (tester) async {
+  testWidgets('meetings paint dots between stars, and the tree draws peeks too', (tester) async {
     final trail = TrailDto(rootQuery: '', current: 2, kept: false, branches: const [], stops: [
       _stop(0, null, true),
       _stop(1, 0, true),
@@ -27,93 +26,19 @@ void main() {
       child: CustomPaint(key: const ValueKey('constellation'), painter: painter),
     )));
     final paint = tester.renderObject<RenderCustomPaint>(find.byKey(const ValueKey('constellation')));
-    expect(paint, paints..circle(radius: 1, color: Tok.gold2));
+    bool meeting(Symbol method, List<dynamic> arguments) => method == #drawCircle && arguments[1] == 1.0 && (arguments[2] as Paint).color.toARGB32() == Tok.gold2.toARGB32();
+    expect(paint, paints..something(meeting));
     final positions = painter.layoutPositions(const Size(800, 64));
-    expect(positions.keys, containsAll([2, 3]));
-    expect(positions, isNot(contains(4)));
-    final noMeeting = ConstellationPainter(TrailDto(rootQuery: '', current: 2, kept: false, branches: const [], stops: trail.stops, meetings: const [(2, 4)]));
+    expect(positions.keys, containsAll([2, 3, 4]));
+    final noMeeting = ConstellationPainter(TrailDto(rootQuery: '', current: 2, kept: false, branches: const [], stops: trail.stops, meetings: const []));
     await tester.pumpWidget(MaterialApp(home: CustomPaint(
       key: const ValueKey('constellation'), painter: noMeeting,
     )));
     expect(tester.renderObject<RenderCustomPaint>(find.byKey(const ValueKey('constellation'))),
-      isNot(paints..circle(radius: 1, color: Tok.gold2)));
+      isNot(paints..something(meeting)));
   });
 
-  testWidgets('long strips scroll to current without squeezing tap targets', (tester) async {
-    var trail = _longTrail(25, 24);
-    await tester.pumpWidget(_strip(trail));
-    await tester.pumpAndSettle();
-    final scroll = tester.widget<SingleChildScrollView>(find.byKey(const ValueKey('trail-scroll'))).controller!;
-    expect(scroll.offset, greaterThan(0));
-    final viewport = tester.getRect(find.byKey(const ValueKey('trail-scroll')));
-    expect(viewport.contains(tester.getCenter(find.byKey(const ValueKey('trail-stop-24')))), isTrue);
-    expect(find.byKey(const ValueKey('trail-more-left')), findsOneWidget);
-    expect(find.byKey(const ValueKey('trail-more-right')), findsNothing);
-    expect(tester.getSize(find.byKey(const ValueKey('trail-stop-24'))), const Size(44, 44));
-    final painter = ConstellationPainter(trail);
-    final positions = painter.layoutPositions(Size(painter.contentWidth(360), 64)).values.toList();
-    for (var i = 1; i < positions.length; i++) {
-      expect(positions[i].dx - positions[i - 1].dx, greaterThanOrEqualTo(44));
-    }
-    trail = _longTrail(25, 0);
-    await tester.pumpWidget(_strip(trail));
-    await tester.pumpAndSettle();
-    expect(scroll.offset, 0);
-    expect(viewport.contains(tester.getCenter(find.byKey(const ValueKey('trail-stop-0')))), isTrue);
-    expect(find.byKey(const ValueKey('trail-more-left')), findsNothing);
-    expect(find.byKey(const ValueKey('trail-more-right')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('trail-more-right')));
-    await tester.pumpAndSettle();
-    expect(scroll.offset, greaterThan(0));
-  });
-
-  testWidgets('stop titles take the room between stars: written out at 1728, clipped when stars crowd', (tester) async {
-    const title = 'Tyranny Official OST';
-    TrailDto trail(int stops) => TrailDto(rootQuery: '', current: 0, kept: false, branches: const [], meetings: const [],
-      stops: [for (var i = 0; i < stops; i++) _stop(i, i == 0 ? null : i - 1, true, title: title)]);
-    final natural = TextPainter(
-      text: TextSpan(text: title, style: Tok.body.copyWith(fontSize: 11.5, color: Tok.ink)),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    expect(natural.width, greaterThan(128), reason: 'the title must not fit the old fixed width');
-    natural.dispose();
-    bool clipped(WidgetTester tester) {
-      final paint = tester.renderObject<RenderCustomPaint>(find.byWidgetPredicate(
-        (widget) => widget is CustomPaint && widget.painter is ConstellationPainter,
-      ));
-      final paragraphs = <ui.Paragraph>[];
-      expect(paint, paints..everything((method, arguments) {
-        if (method == #drawParagraph) paragraphs.add(arguments[0] as ui.Paragraph);
-        return true;
-      }));
-      return paragraphs.first.didExceedMaxLines;
-    }
-    await tester.pumpWidget(_strip(trail(1), width: 1728, height: 44));
-    await tester.pumpAndSettle();
-    expect(clipped(tester), isFalse);
-    expect(find.byType(Scrollbar), findsNothing);
-    await tester.pumpWidget(_strip(trail(3), width: 360, height: 44));
-    await tester.pumpAndSettle();
-    expect(clipped(tester), isTrue);
-  });
-
-  testWidgets('the resume line is a door that calls onResume', (tester) async {
-    final core = FakeCore();
-    await core.startTrail(const TargetDto.search(query: 'Iona'));
-    await core.keepTrail(name: 'A kept tree');
-    var resumed = 0;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(
-      height: 64, child: NoTrailStrip(core: core, memoryVersion: 0, onResume: () => resumed++),
-    ))));
-    await tester.pumpAndSettle();
-    final door = find.byKey(const ValueKey('trail-resume'));
-    expect(find.descendant(of: door, matching: find.textContaining('to resume')), findsOneWidget);
-    expect(tester.widget<MouseRegion>(find.ancestor(of: door, matching: find.byType(MouseRegion)).first).cursor, SystemMouseCursors.click);
-    await tester.tap(door);
-    expect(resumed, 1);
-  });
-
-  testWidgets('bracket at a new search root restores the previous trail and strip', (tester) async {
+  testWidgets('bracket at a new search root restores the previous trail and its chip', (tester) async {
     tester.view.physicalSize = const Size(1800, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -130,14 +55,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_titles(tester), ['Iona', hit.title]);
-    final strip = tester.widget<TrailStrip>(find.byType(TrailStrip));
-    expect(strip.trail.rootQuery, previous.rootQuery);
-    expect(strip.trail.current, previous.current);
+    final chip = tester.widget<TrailChip>(find.byType(TrailChip));
+    expect(chip.trail.rootQuery, previous.rootQuery);
+    expect(chip.trail.current, previous.current);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_titles(tester), ['year:1998']);
-    expect(tester.widget<TrailStrip>(find.byType(TrailStrip)).trail.current, 0);
+    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.current, 0);
   });
 
   testWidgets('command S names and keeps the open trail, then marks its root', (tester) async {
@@ -161,13 +86,10 @@ void main() {
     expect(core.names, ['Music for the evening']);
     expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
     expect(find.text('◆ Music for the evening'), findsOneWidget);
-    final strip = tester.widget<TrailStrip>(find.byType(TrailStrip));
-    expect(strip.trail.kept, isTrue);
-    expect(strip.trail.stops, hasLength(2));
-    final mark = tester.widget<Text>(find.byKey(const ValueKey('trail-kept')));
-    expect(mark.style, Tok.label.copyWith(color: Tok.gold));
-    expect(tester.getTopLeft(find.byKey(const ValueKey('trail-kept'))).dx,
-      greaterThan(tester.getCenter(find.byKey(const ValueKey('trail-stop-0'))).dx));
+    final chip = tester.widget<TrailChip>(find.byType(TrailChip));
+    expect(chip.trail.kept, isTrue);
+    expect(chip.trail.stops, hasLength(2));
+    expect(tester.widget<Text>(find.byKey(const ValueKey('trail-chip-name'))).data, '◆ Music for the evening');
   });
 
   testWidgets('Escape cancels keeping and the root alone is the suggested name', (tester) async {
@@ -183,7 +105,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
     expect(core.names, isEmpty);
-    expect(tester.widget<TrailStrip>(find.byType(TrailStrip)).trail.kept, isFalse);
+    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.kept, isFalse);
   });
 
   testWidgets('command 1 twice shows Today over the trail, which stays open and keepable', (tester) async {
@@ -192,11 +114,10 @@ void main() {
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pumpAndSettle();
     await _command(tester, LogicalKeyboardKey.keyL);
-    expect(find.byType(TrailStrip), findsOneWidget);
+    expect(find.byType(TrailChip), findsOneWidget);
     await _command(tester, LogicalKeyboardKey.digit1);
     await _command(tester, LogicalKeyboardKey.digit1);
-    expect(find.byType(TrailStrip), findsOneWidget, reason: 'Today does not end a trail');
-    expect(find.byType(NoTrailStrip), findsNothing);
+    expect(find.byType(TrailChip), findsOneWidget, reason: 'Today does not end a trail');
     expect(find.byKey(const ValueKey('today')), findsOneWidget);
     expect(find.text('] back to Everything'), findsOneWidget);
     await _command(tester, LogicalKeyboardKey.keyS);
@@ -205,41 +126,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(core.names, ['Everything']);
     expect(find.text('◆ Everything'), findsOneWidget);
-  });
-
-  testWidgets('a core with no trail history has only the plain strip line', (tester) async {
-    _desktop(tester);
-    final core = FakeCore.empty();
-    await tester.pumpWidget(MeretApp(core: core));
-    await tester.pumpAndSettle();
-    expect(find.byType(NoTrailStrip), findsOneWidget);
-    expect(find.text('no trail yet'), findsOneWidget);
-    expect(find.descendant(of: find.byType(NoTrailStrip), matching: find.textContaining('to resume')), findsNothing);
-    await _command(tester, LogicalKeyboardKey.keyS);
-    expect(find.text("there's no trail to keep"), findsOneWidget);
-  });
-
-  testWidgets('no-trail memory refresh uses the kept name and a gold bracket', (tester) async {
-    final core = FakeCore();
-    Widget strip(int version, {CoreBridge? bridge}) => MaterialApp(home: Scaffold(body: SizedBox(
-      height: 64, child: NoTrailStrip(core: bridge ?? core, memoryVersion: version),
-    )));
-    await tester.pumpWidget(strip(0));
-    await tester.pumpAndSettle();
-    expect(find.text('no trail yet'), findsOneWidget);
-    await core.startTrail(const TargetDto.search(query: 'Iona'));
-    await core.keepTrail(name: 'A kept tree');
-    await tester.pumpWidget(strip(1));
-    await tester.pumpAndSettle();
-    const line = "[ to resume today's · A kept tree · 1 stop";
-    final text = tester.widget<Text>(find.text(line));
-    expect(text.maxLines, 1);
-    expect(text.overflow, TextOverflow.ellipsis);
-    final bracket = (text.textSpan! as TextSpan).children!.whereType<TextSpan>().firstWhere((span) => span.text == '[');
-    expect(bracket.style!.color, Tok.gold);
-    await tester.pumpWidget(strip(1, bridge: FakeCore.empty()));
-    await tester.pumpAndSettle();
-    expect(find.text('no trail yet'), findsOneWidget);
   });
 
   testWidgets('command S keeps while typing in the query line, like command 1', (tester) async {
@@ -308,17 +194,6 @@ StopDto _stop(int index, int? parent, bool onPath, {bool peek = false, String? t
   title: title ?? 'Stop $index', onPath: onPath, isFork: false, isPeek: peek,
   openedMs: PlatformInt64Util.from(0), dwellMs: PlatformInt64Util.from(0), actions: const [],
 );
-
-TrailDto _longTrail(int count, int current) => TrailDto(
-  rootQuery: '', current: current, kept: false,
-  stops: List.generate(count, (index) => _stop(index, index == 0 ? null : index - 1, index <= current)),
-  meetings: const [],
-  branches: const [],
-);
-
-Widget _strip(TrailDto trail, {double width = 360, double height = 64}) => MaterialApp(home: Scaffold(body: Center(child: SizedBox(
-  width: width, height: height, child: TrailStrip(trail: trail, onGo: (_) {}),
-))));
 
 List<String> _titles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children
     .cast<Pane>().map((pane) => pane.title).toList();
