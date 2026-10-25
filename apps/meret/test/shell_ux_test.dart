@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64Util;
 import 'package:meret/core/bridge.dart';
-import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
 import 'package:meret/now/history_sheet.dart';
@@ -14,8 +13,10 @@ import 'package:meret/panes/pane.dart';
 import 'package:meret/panes/person_pane.dart';
 import 'package:meret/panes/release_pane.dart';
 import 'package:meret/panes/table_pane.dart';
+import 'package:meret/panes/threads.dart';
 import 'package:meret/panes/tree_pane.dart';
 import 'package:meret/shell/pane_row.dart';
+import 'package:meret/shell/trail_chip.dart';
 import 'package:meret/shell/query_line.dart';
 import 'package:meret/theme/tokens.dart';
 
@@ -132,7 +133,7 @@ void main() {
 
     await fadesIn(LogicalKeyboardKey.bracketLeft, 'today');
     expect(find.text('] back to Everything'), findsOneWidget);
-    expect(find.byType(TrailStrip), findsOneWidget);
+    expect(find.byType(TrailChip), findsOneWidget);
     await fadesOut(LogicalKeyboardKey.bracketRight, 'today');
     // The first ⌘1 lays the Home column over the trail; the second shows Today.
     await _key(tester, LogicalKeyboardKey.digit1, meta: true);
@@ -278,6 +279,46 @@ void main() {
     await open(() => _key(tester, LogicalKeyboardKey.digit1, meta: true));
     await tester.tapAt(tester.getCenter(find.byType(PaneRow)));
     await closed();
+  });
+
+  testWidgets('THREAD-1 the followed row is lit and threaded to the next star, and the chip names the trail', (tester) async {
+    final core = FakeCore();
+    await _seedTrail(core, stops: 3);
+    await _surface(tester, core);
+    await _showTrail(tester);
+    final trail = (await core.trail())!;
+    final panes = find.descendant(of: find.byType(PaneRow), matching: find.byType(Pane));
+    expect(panes, findsNWidgets(3));
+    expect(tester.widgetList<Pane>(panes).map((pane) => pane.current), [false, false, true]);
+    expect(tester.widget<Pane>(panes.at(1)).via, trail.stops[1].via);
+
+    // The release names the person it led to, and the person the release it came from.
+    expect(find.descendant(of: panes.at(1), matching: find.byKey(const ValueKey('thread-went'))), findsWidgets);
+    expect(find.descendant(of: panes.at(2), matching: find.byKey(const ValueKey('thread-went'))), findsNothing);
+    expect(find.descendant(of: panes.at(2), matching: find.byKey(const ValueKey('arrow-came'))), findsWidgets);
+
+    // A gold thread joins each pane to the star in the next one's header.
+    final threads = <Offset>[];
+    final lines = tester.renderObject(find.descendant(of: find.byType(ThreadLines), matching: find.byType(CustomPaint)).first);
+    expect(lines, paints..everything((method, arguments) {
+      if (method == #drawPath && (arguments[1] as Paint).strokeWidth == 1.25) {
+        threads.add((arguments[0] as Path).getBounds().bottomRight);
+      }
+      return true;
+    }));
+    expect(threads, hasLength(2));
+    for (final (i, end) in threads.indexed) {
+      final star = tester.getCenter(find.descendant(of: panes.at(i + 1), matching: find.byKey(const ValueKey('pane-star'))));
+      final origin = tester.getTopLeft(find.byType(ThreadLines));
+      expect(end.dx, closeTo(star.dx - origin.dx, 0.5), reason: 'thread $i ends at the next star');
+    }
+
+    final chip = find.byKey(const ValueKey('trail-chip-name'));
+    expect(tester.widget<Text>(chip).data, 'Everything → ${trail.stops.last.title}');
+    expect(find.textContaining('3 stops · T'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('trail-chip')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TreePane), findsOneWidget);
   });
 
   testWidgets('HOME-3 a door starts a new tree and the old one moves to Trails; command 3 is the first Library door', (tester) async {
@@ -449,7 +490,7 @@ void main() {
     expect(core.backs, 1, reason: 'the surface has its keys back once the sheet is gone');
   });
 
-  testWidgets('LAUNCH-L4 before the first Now the strip and the bar draw nothing', (tester) async {
+  testWidgets('LAUNCH-L4 before the first Now the chip and the bar draw nothing', (tester) async {
     final core = _LateNowCore();
     tester.view.physicalSize = const Size(1100, 800);
     tester.view.devicePixelRatio = 1;
@@ -457,9 +498,7 @@ void main() {
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pump();
     expect(find.byType(NowBar), findsNothing);
-    expect(find.byType(NoTrailStrip), findsNothing);
-    expect(find.byType(TrailStrip), findsNothing);
-    expect(find.text('no trail yet'), findsNothing);
+    expect(find.byType(TrailChip), findsNothing);
     expect(find.byType(ResumeHeader), findsNothing);
     core.gate.complete();
     await tester.pump();

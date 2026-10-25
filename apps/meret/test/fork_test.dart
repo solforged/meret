@@ -9,6 +9,8 @@ import 'package:meret/panes/person_pane.dart';
 import 'package:meret/panes/release_pane.dart';
 import 'package:meret/panes/search_pane.dart';
 import 'package:meret/shell/pane_row.dart';
+import 'package:meret/shell/trail_chip.dart';
+import 'package:meret/shell/window_chrome.dart';
 import 'package:meret/theme/tokens.dart';
 
 void main() {
@@ -18,6 +20,8 @@ void main() {
     final current = find.byKey(const ValueKey('fork-0-3'));
     expect(find.descendant(of: oldBranch, matching: find.text('Low tide')), findsOneWidget);
     expect(tester.widget<Text>(find.descendant(of: current, matching: find.text('Cinder orchard'))).style!.color, Tok.gold);
+    final root = find.descendant(of: find.byType(PaneRow), matching: find.byType(Pane)).first;
+    expect(find.descendant(of: root, matching: find.text('⑂ 2')), findsOneWidget, reason: 'two branches leave the root');
     await tester.tap(oldBranch);
     await tester.pumpAndSettle();
     expect(core.visited, [2]);
@@ -37,7 +41,7 @@ void main() {
     await core.follow(0, TargetDto.release(id: PlatformInt64Util.from(2)), ThreadKind.appearsOn, 'local_tags');
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('trail-stop-4')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pumpAndSettle();
     core.visited.clear();
 
@@ -101,15 +105,15 @@ void main() {
     expect((await core.trail())!.current, 3);
   });
 
-  testWidgets('a fork prune removes that branch and refreshes the strip and pane', (tester) async {
+  testWidgets('a fork prune removes that branch and refreshes the chip and pane', (tester) async {
     final core = await _forkSurface(tester);
     await tester.tap(find.byKey(const ValueKey('prune-0-2')));
     await tester.pumpAndSettle();
     expect(core.pruned, [2]);
     expect((await core.trail())!.stops.map((stop) => stop.index), [0, 3]);
     expect(find.byKey(const ValueKey('fork-0-2')), findsNothing);
-    expect(find.byKey(const ValueKey('trail-stop-2')), findsNothing);
-    expect(find.byKey(const ValueKey('trail-play-tree')), findsNothing);
+    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.stops, hasLength(2));
+    expect(find.byKey(const ValueKey('pane-forks')), findsNothing, reason: 'no branch leaves the root now');
   });
 
   testWidgets('command backspace prunes the newest eligible branch', (tester) async {
@@ -119,21 +123,21 @@ void main() {
     expect((await core.trail())!.current, 3);
   });
 
-  testWidgets('strip playback selects branch or tree without moving and shows core failures', (tester) async {
+  testWidgets('menu playback selects branch or tree without moving and shows core failures', (tester) async {
     final core = await _forkSurface(tester);
-    await tester.tap(find.byKey(const ValueKey('trail-play-branch')));
+    WindowChrome.instance.onMenu!('playBranch');
     await tester.pump();
     await tester.pump();
     expect(core.playedTrails, [false]);
     expect((await core.trail())!.current, 3);
-    await tester.tap(find.byKey(const ValueKey('trail-play-tree')));
+    WindowChrome.instance.onMenu!('playTree');
     await tester.pump();
     await tester.pump();
     expect(core.playedTrails, [false, true]);
     expect((await core.trail())!.current, 3);
     expect(find.byKey(const ValueKey('prune-0-2')), findsNothing);
     core.playError = 'nothing on this trail has tracks to play';
-    await tester.tap(find.byKey(const ValueKey('trail-play-branch')));
+    WindowChrome.instance.onMenu!('playBranch');
     await tester.pump();
     final error = find.text(core.playError!);
     expect(error, findsOneWidget);
@@ -172,7 +176,7 @@ Future<_ForkCore> _forkSurface(WidgetTester tester) async {
   final core = await _forkCore();
   await tester.pumpWidget(MeretApp(core: core));
   await tester.pumpAndSettle();
-  await tester.tap(find.byKey(const ValueKey('trail-stop-3')));
+  await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
   await tester.pumpAndSettle();
   core.visited.clear();
   return core;

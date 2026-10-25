@@ -147,10 +147,10 @@ class _WorkPaneState extends State<WorkPane> {
                       kind: ThreadKind.appearsOn, label: 'on', source: 'tags', provider: 'local_tags',
                       to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
                     )),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    child: TrailRow(target: TargetDto.release(id: row.releaseId), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(row.album, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
                       TrailThreadMark(target: TargetDto.release(id: row.releaseId)),
-                    ]),
+                    ])),
                   ),
                 ),
               ])),

@@ -151,10 +151,10 @@ class _ReleasePaneState extends State<ReleasePane> {
                     child: GestureDetector(
                       key: ValueKey('release-work-$index'),
                       onTap: () => _follow(work),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      child: TrailRow(target: work.to, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(work.title, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
                         TrailThreadMark(target: work.to),
-                      ]),
+                      ])),
                     ),
                   ),
                 ],
@@ -288,10 +288,10 @@ class WrittenCredit extends StatelessWidget {
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () => onFollow(match.person),
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              child: TrailRow(target: match.person.to, child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(written.substring(match.start, match.end), style: Tok.body.copyWith(color: Tok.muted)),
                 TrailThreadMark(target: match.person.to),
-              ]),
+              ])),
             ),
           ),
         ),
@@ -328,7 +328,7 @@ class ThreadLine extends StatelessWidget {
       builder: (context, hover) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onFollow,
-        child: Container(
+        child: TrailRow(target: thread.to, child: Container(
           padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(color: hover ? Tok.panel2 : Colors.transparent, border: const Border(bottom: BorderSide(color: Tok.line))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -337,6 +337,8 @@ class ThreadLine extends StatelessWidget {
               Expanded(child: Text(thread.title, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 8),
               Text(thread.source, style: Tok.label.copyWith(color: Tok.dim, fontSize: 10)),
+              const SizedBox(width: 10),
+              ThreadArrow(target: thread.to, hover: hover),
             ]),
             if (thread.detail.isNotEmpty) Padding(
               padding: const EdgeInsets.only(left: _label, top: 2),
@@ -344,7 +346,7 @@ class ThreadLine extends StatelessWidget {
             ),
             Padding(padding: const EdgeInsets.only(left: _label), child: TrailThreadMark(target: thread.to)),
           ]),
-        ),
+        )),
       ),
     ),
   );

@@ -68,6 +68,13 @@ class _SearchPaneState extends State<SearchPane> {
     widget.onQuery?.call(query);
   }
 
+  /// A person or release hit lights when it's the thread to the next pane.
+  Widget _went(HitDto hit, Widget child) => switch (hit.kind) {
+    HitKind.person => TrailRow(target: TargetDto.person(id: hit.id), child: child),
+    HitKind.release => TrailRow(target: TargetDto.release(id: hit.id), child: child),
+    HitKind.track => child,
+  };
+
   Widget _group(String name, BigInt total, List<HitDto> hits) => Row(mainAxisSize: MainAxisSize.min, children: [
     Text('$name · $total', style: Tok.label),
     const SizedBox(width: 8),
@@ -79,11 +86,14 @@ class _SearchPaneState extends State<SearchPane> {
           key: ValueKey('search-hit-${hit.kind.name}-${hit.id}'),
           onPressed: () => widget.onHit(hit),
           style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 28)),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(hit.title, style: Tok.body.copyWith(color: Tok.gold)),
-            if (hit.kind == HitKind.person) TrailThreadMark(target: TargetDto.person(id: hit.id)),
-            if (hit.kind == HitKind.release) TrailThreadMark(target: TargetDto.release(id: hit.id)),
-          ]),
+          child: _went(
+            hit,
+            Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(hit.title, style: Tok.body.copyWith(color: Tok.gold)),
+              if (hit.kind == HitKind.person) TrailThreadMark(target: TargetDto.person(id: hit.id)),
+              if (hit.kind == HitKind.release) TrailThreadMark(target: TargetDto.release(id: hit.id)),
+            ]),
+          ),
         ),
       ),
     ),

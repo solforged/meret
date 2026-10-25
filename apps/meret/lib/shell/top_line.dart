@@ -1,19 +1,25 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
 import 'window_chrome.dart';
 
 /// The one line of chrome on desktop (navigation.md, plate 04): back and
-/// forward along the trail, the query, the LCD at the centre, then
-/// activity and the Now toggle. It is also the window's title bar: the
+/// forward along the trail, the trail chip, the query, the LCD at the
+/// centre, then activity and the Now toggle. It is also the window's title bar: the
 /// window buttons sit at its left, and its empty space moves the window.
 class TopLine extends StatelessWidget {
   const TopLine({
     super.key, required this.query, required this.lcd, required this.activity,
-    this.onBack, this.onForward, this.onNow, this.nowOpen = false,
+    this.onBack, this.onForward, this.onNow, this.nowOpen = false, this.chip,
   });
 
   final Widget query;
+
+  /// The open trail's chip, built for the line's room: the star alone, the
+  /// current stop, or the whole name with its counts.
+  final Widget Function({bool compact, bool star})? chip;
   final Widget lcd;
   final Widget activity;
 
@@ -29,6 +35,9 @@ class TopLine extends StatelessWidget {
   static const _query = 300.0;
   static const _lcd = 560.0;
 
+  /// The star chip and its gap.
+  static const _star = 35.0;
+
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
     valueListenable: WindowChrome.instance.fullScreen,
@@ -43,22 +52,43 @@ class TopLine extends StatelessWidget {
         LayoutBuilder(builder: (context, box) => Padding(
           padding: EdgeInsets.only(left: 12 + WindowChrome.instance.buttonsInset, right: 12),
           child: Row(children: [
-            if (box.maxWidth < 600)
-              Expanded(child: SizedBox(height: 28, child: query))
-            else ...[
+            if (box.maxWidth < 600) ...[
+              if (chip case final chip?) ...[
+                Flexible(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: box.maxWidth * 0.4), child: chip(compact: true))),
+                const SizedBox(width: 8),
+              ],
+              Expanded(child: SizedBox(height: 28, child: query)),
+            ] else ...[
               _Step(key: const ValueKey('top-back'), glyph: '‹', tooltip: 'Back along the trail  [', onTap: onBack),
               _Step(key: const ValueKey('top-forward'), glyph: '›', tooltip: 'Forward  ]', onTap: onForward),
-              const SizedBox(width: 12),
-              // The query keeps its share; the LCD gives way first.
-              SizedBox(width: (box.maxWidth * 0.3).clamp(140.0, _query), height: 28, child: query),
-              const SizedBox(width: 14),
-              // The LCD centres in the room between the query and the right.
-              Expanded(child: LayoutBuilder(builder: (context, box) => box.maxWidth < 240
-                ? const SizedBox.shrink()
-                : Center(child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: _lcd),
-                    child: SizedBox(height: 34, child: lcd),
-                  )))),
+              // Between the steps and activity: the chip, the query and the
+              // LCD. The query keeps its share; the LCD comes next, up to its
+              // width; the chip takes what's left, down to its star.
+              Expanded(child: LayoutBuilder(builder: (context, mid) {
+                final chip = this.chip;
+                final queryWidth = (box.maxWidth * 0.3 - (chip != null && box.maxWidth < 800 ? _star : 0)).clamp(140.0, _query);
+                final rest = mid.maxWidth - queryWidth - 12 - 14;
+                final lcdRoom = rest - (chip == null ? 0 : _star);
+                final lcdWidth = lcdRoom >= 240 ? math.min(_lcd, lcdRoom) : 0.0;
+                final chipRoom = chip == null ? 0.0 : math.min((box.maxWidth * 0.22).clamp(120.0, 380.0), rest - lcdWidth) - 8;
+                return Row(children: [
+                  // T and the Go menu reach the tree when there's no room for the star.
+                  if (chip != null && chipRoom >= 28) ...[
+                    const SizedBox(width: 8),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: chipRoom),
+                      child: chip(compact: box.maxWidth < 1000, star: box.maxWidth < 800 || chipRoom < 96),
+                    ),
+                  ],
+                  const SizedBox(width: 12),
+                  SizedBox(width: queryWidth, height: 28, child: query),
+                  const SizedBox(width: 14),
+                  // The LCD centres in the room between the query and the right.
+                  Expanded(child: lcdWidth == 0
+                    ? const SizedBox.shrink()
+                    : Center(child: SizedBox(width: lcdWidth, height: 34, child: lcd))),
+                ]);
+              })),
             ],
             const SizedBox(width: 14),
             // Activity keeps its words, up to a quarter of the line; the LCD gives way first.

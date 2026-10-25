@@ -9,7 +9,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 import 'package:meret/core/bridge.dart';
 import 'package:meret/core/playhead.dart';
 import 'package:meret/draw/body_painter.dart';
-import 'package:meret/draw/constellation.dart';
 import 'package:meret/main.dart';
 import 'package:meret/now/now_pane.dart';
 import 'package:meret/home/home.dart';
@@ -25,6 +24,7 @@ import 'package:meret/panes/release_pane.dart';
 import 'package:meret/panes/table_pane.dart';
 import 'package:meret/panes/work_pane.dart';
 import 'package:meret/shell/pane_row.dart';
+import 'package:meret/shell/trail_chip.dart';
 import 'package:meret/shell/query_line.dart';
 import 'package:meret/theme/light.dart';
 import 'package:meret/theme/tokens.dart';
@@ -74,7 +74,7 @@ void main() {
     expect(_zoneMarker(tester, 'dac').color, Light.of(tester.element(find.byType(PlayOn))).accent);
     expect((await core.now().first).anchor!.item, before.anchor!.item);
     expect(await core.trail(), isNull);
-    expect(find.byType(TrailStrip), findsNothing);
+    expect(find.byType(TrailChip), findsNothing);
     expect(find.byType(ResumeHeader), findsOneWidget);
   });
 
@@ -302,7 +302,7 @@ void main() {
     expect(why.overflow, TextOverflow.ellipsis);
     expect(find.byType(ResumeHeader), findsOneWidget);
     expect(find.byType(Today), findsOneWidget);
-    expect(find.byType(TrailStrip), findsNothing);
+    expect(find.byType(TrailChip), findsNothing);
     expect(await core.trail(), isNull);
 
     final pinned = find.descendant(of: find.byType(NowPane), matching: find.byKey(const ValueKey('now-why')));
@@ -335,7 +335,7 @@ void main() {
     expect(core.transports, [const TransportDto.pause(), const TransportDto.resume()]);
     expect(core.playSomethingCalls, 2);
     expect(await core.trail(), isNull);
-    expect(find.byType(TrailStrip), findsNothing);
+    expect(find.byType(TrailChip), findsNothing);
   });
 
   for (final empty in [false, true]) {
@@ -413,7 +413,7 @@ void main() {
     expect(core.started, isEmpty);
     expect(find.byType(ResumeHeader), findsOneWidget);
     expect(find.byType(Today), findsOneWidget);
-    expect(find.byType(TrailStrip), findsNothing);
+    expect(find.byType(TrailChip), findsNothing);
     expect(await core.trail(), isNull);
   });
 
@@ -731,8 +731,7 @@ void main() {
     expect(tester.widget<SearchPane>(find.byType(SearchPane)).query, 'idiom:score');
     final trail = (await core.trail())!;
     expect(trail.stops.single.target, const TargetDto.search(query: 'idiom:score'));
-    final painter = tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((widget) => widget.painter).whereType<ConstellationPainter>().single;
-    expect(painter.semanticsBuilder(const Size(1000, 64)).single.properties.label, 'idiom:score');
+    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.stops.single.title, 'idiom:score');
     expect(find.byKey(const ValueKey('query-hits')), findsNothing);
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().map((pane) => pane.title), ['idiom:score']);
   });
@@ -939,7 +938,7 @@ void main() {
     expect(find.byType(Today), findsOneWidget);
     expect(_rowCovered(tester), isTrue, reason: 'the table stays mounted under Today, out of reach');
     expect(find.textContaining('back to Everything'), findsOneWidget);
-    expect(find.byType(TrailStrip), findsOneWidget, reason: 'the trail stays open behind Today');
+    expect(find.byType(TrailChip), findsOneWidget, reason: 'the trail stays open behind Today');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -1146,7 +1145,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('album and artist cells open typed panes and their titles stay on the strip', (tester) async {
+  testWidgets('album and artist cells open typed panes and their titles stay on the trail', (tester) async {
     final core = FakeCore();
     final row = await _firstTrack(core);
     await _surface(tester, core);
@@ -1167,8 +1166,8 @@ void main() {
     expect(tester.widget<PersonPane>(find.byType(PersonPane)).id, row.artistId);
     final trail = (await core.trail())!;
     expect(trail.stops.map((stop) => stop.title), ['Everything', row.album, row.artist]);
-    final labels = _trailPainter(tester).semanticsBuilder(const Size(1000, 64)).map((node) => node.properties.label);
-    expect(labels, containsAll(['Everything', row.album, row.artist]));
+    final chip = tester.widget<TrailChip>(find.byType(TrailChip));
+    expect(chip.trail.stops.map((stop) => stop.title), containsAll(['Everything', row.album, row.artist]));
   });
 
   testWidgets('following from an earlier pane branches and replaces its later panes', (tester) async {
@@ -1352,7 +1351,7 @@ void main() {
     expect(trail.stops.firstWhere((stop) => stop.index == trail.current).target, workThread.to);
   });
 
-  testWidgets('Command-Enter follows the selected table row and a strip star goes back', (tester) async {
+  testWidgets('Command-Enter follows the selected table row and the back step goes back', (tester) async {
     final core = FakeCore();
     final row = await _firstTrack(core);
     await _surface(tester, core);
@@ -1360,7 +1359,7 @@ void main() {
     await tester.tapAt(tester.getTopLeft(find.byKey(const ValueKey('table-row-0'))) + const Offset(8, 13));
     await _commandKey(tester, LogicalKeyboardKey.enter);
     expect(_paneTitles(tester), ['Everything', row.album]);
-    await tester.tap(find.byKey(const ValueKey('trail-stop-0')));
+    await tester.tap(find.byKey(const ValueKey('top-back')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['Everything']);
@@ -1416,7 +1415,6 @@ bool _ahead<T extends Widget>(WidgetTester tester) =>
 bool _rowCovered(WidgetTester tester) =>
     tester.widget<IgnorePointer>(find.ancestor(of: find.byType(PaneRow), matching: find.byType(IgnorePointer)).first).ignoring;
 
-ConstellationPainter _trailPainter(WidgetTester tester) => tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((widget) => widget.painter).whereType<ConstellationPainter>().single;
 
 Future<void> _commandKey(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
