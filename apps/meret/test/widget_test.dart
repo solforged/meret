@@ -227,18 +227,28 @@ void main() {
     expect(core.seeks.single.toInt(), closeTo(now.lengthMs!.toInt(), 1));
   });
 
-  testWidgets('Now is pinned from 1560 wide and a bar below', (tester) async {
-    await _surface(tester, FakeCore(), size: const Size(1568, 984));
+  testWidgets('Now is pinned from 1800 wide; below, N or the LCD opens it beside the panes', (tester) async {
+    await _surface(tester, FakeCore(), size: const Size(1808, 984));
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.byType(NowPane), findsOneWidget);
     expect(find.byType(NowBar), findsNothing);
-    expect(tester.getSize(find.byType(NowPane)).width, 360);
+    expect(tester.getSize(find.byType(NowPane)).width, 380);
 
-    tester.view.physicalSize = const Size(1540, 900);
+    tester.view.physicalSize = const Size(1700, 900);
     await tester.pump();
     expect(find.byType(NowPane), findsNothing);
-    expect(find.byType(NowBar), findsOneWidget);
-    expect(find.byKey(const ValueKey('now-toggle')), findsOneWidget);
+    expect(find.byType(NowBar), findsNothing, reason: 'the LCD carries the transport at every desktop width');
+    expect(find.byKey(const ValueKey('lcd-toggle')), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.pump();
+    expect(tester.getSize(find.byType(NowPane)).width, 360);
+    await tester.tap(find.byKey(const ValueKey('lcd-title')));
+    await tester.pump();
+    expect(find.byType(NowPane), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('top-now')));
+    await tester.pump();
+    expect(find.byType(NowPane), findsOneWidget);
   });
 
   testWidgets('opens to the Now stage when the fake Now is loaded', (tester) async {
@@ -292,7 +302,6 @@ void main() {
     expect(find.byType(FrontPane), findsOneWidget);
     expect(find.byType(TrailStrip), findsNothing);
     expect(await core.trail(), isNull);
-    expect(find.textContaining('⇧␣ play something'), findsOneWidget);
 
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.descendant(of: find.byType(NowPane), matching: find.byKey(const ValueKey('now-why'))), findsOneWidget);

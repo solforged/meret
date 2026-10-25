@@ -7,6 +7,7 @@ import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../draw/constellation.dart';
 import '../now/history_sheet.dart';
+import '../now/lcd.dart';
 import '../now/now_pane.dart';
 import '../now/now_stage.dart';
 import '../panes/front_pane.dart';
@@ -20,15 +21,16 @@ import '../panes/work_pane.dart';
 import '../settings/settings_window.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
+import 'activity.dart';
 import 'keep_dialog.dart';
 import 'outside.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
-import 'status_line.dart';
+import 'top_line.dart';
 import 'width_class.dart';
 import 'window_chrome.dart';
 
-/// The one surface: query line, trail strip, panes, Now, status line.
+/// The one surface: top line, trail strip, panes, Now.
 /// No tabs, no sidebar, no destinations.
 class Surface extends StatefulWidget {
   const Surface({super.key, required this.core});
@@ -93,8 +95,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   final _settingsChanges = ValueNotifier(0);
   BuildContext? _settingsContext;
 
-  /// Play something found nothing playable; the bar says so until an item loads.
+  /// Play something found nothing playable; the LCD says so until an item loads.
   bool _nothingToPlay = false;
+
+  /// `N` or the LCD: the Now panel shown or hidden; null keeps the width
+  /// class's default (pinned from 1800 pt). [_nowShown] is the last build's answer.
+  bool? _nowPanel;
+  bool _nowShown = false;
 
   @override
   void initState() {
@@ -102,6 +109,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _settings = widget.core.settings();
     _queryFocus.addListener(_queryFocusChanged);
     WindowChrome.instance.onSettings = _openSettings;
+    WindowChrome.instance.onMenu = _menu;
     _nowSub = widget.core.now().listen((n) {
       if (!mounted) return;
       _clock.anchor(n.anchor);
@@ -135,6 +143,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _surfaceFocus.dispose();
     _settingsChanges.dispose();
     WindowChrome.instance.onSettings = null;
+    WindowChrome.instance.onMenu = null;
     _outside.dispose();
     super.dispose();
   }
@@ -313,6 +322,34 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     await _navigate(by < 0 ? widget.core.trailBack : widget.core.trailForward, frontOnNull: by < 0);
   }
 
+  /// The Go and Controls menus run what their keys run.
+  void _menu(String id) {
+    if (!mounted) return;
+    switch (id) {
+      case 'front': _showFront();
+      case 'table': _report(_start(const TargetDto.search(query: '')));
+      case 'search': _queryFocus.requestFocus();
+      case 'back': _report(_move(-1));
+      case 'forward': _report(_move(1));
+      case 'previousBranch': _report(_sibling(-1));
+      case 'nextBranch': _report(_sibling(1));
+      case 'tree': _toggleTree();
+      case 'keep': _report(_keep());
+      case 'prune': _report(_pruneNewest());
+      case 'toggle': _toggle();
+      case 'playSomething': _report(_playSomething());
+      case 'fromStart': _fromStart();
+      case 'now': _toggleNow();
+      case 'history': _history();
+    }
+  }
+
+  /// `N`: the Now panel beside the panes. The Now stage is Now already.
+  void _toggleNow() {
+    if (_stage != _Stage.front) return;
+    setState(() => _nowPanel = !_nowShown);
+  }
+
   /// `⌘1`: the Front over the trail, and back again. The trail stays open.
   void _showFront() {
     if (_frontOnly && _trail != null && _stage != _Stage.now) {
@@ -460,7 +497,6 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       track: _now?.trackId?.toInt(),
       release: _now?.releaseId?.toInt(),
     );
-    final playing = (_now?.anchor?.rate ?? 0) > 0;
     return SettingsScope(
       core: widget.core,
       onChanged: (settings) {
@@ -477,6 +513,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         SingleActivator(LogicalKeyboardKey.space, shift: true, includeRepeats: false): _PlaySomething(),
         SingleActivator(LogicalKeyboardKey.space, alt: true, includeRepeats: false): _FromStart(),
         SingleActivator(LogicalKeyboardKey.keyH): _History(),
+        SingleActivator(LogicalKeyboardKey.keyN, includeRepeats: false): _NowPanel(),
         SingleActivator(LogicalKeyboardKey.keyT, includeRepeats: false): _Tree(),
         SingleActivator(LogicalKeyboardKey.escape, includeRepeats: false): _CloseTree(),
         SingleActivator(LogicalKeyboardKey.bracketLeft): _Move(-1),
@@ -498,6 +535,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           _PlaySomething: CallbackAction<_PlaySomething>(onInvoke: (_) => _report(_playSomething())),
           _FromStart: CallbackAction<_FromStart>(onInvoke: (_) => _fromStart()),
           _History: CallbackAction<_History>(onInvoke: (_) => _history()),
+          _NowPanel: CallbackAction<_NowPanel>(onInvoke: (_) => _toggleNow()),
           _Tree: CallbackAction<_Tree>(onInvoke: (_) => _toggleTree()),
           _CloseTree: CallbackAction<_CloseTree>(onInvoke: (_) => _closeTree()),
           _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
@@ -566,8 +604,21 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                               Expanded(child: front),
                             ])
                           : null;
+              final phone = wc == WidthClass.phone;
+              _nowShown = !phone && _stage == _Stage.front && (_nowPanel ?? wc.pinnedNow);
               return Column(children: [
-                QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
+                TopLine(
+                  query: QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
+                  lcd: Lcd(
+                    core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
+                    open: _nowShown, onOpen: _stage == _Stage.front && !phone ? _toggleNow : null,
+                  ),
+                  activity: Activity(core: widget.core, status: _status),
+                  onBack: trail == null || _stage != _Stage.front ? null : () => _report(_move(-1)),
+                  onForward: trail == null || (!_frontOnly && along.length == path.length) ? null : () => _report(_move(1)),
+                  onNow: _stage == _Stage.front && !phone ? _toggleNow : null,
+                  nowOpen: _nowShown,
+                ),
                 SizedBox(
                   height: wc == WidthClass.phone ? 44 : 64,
                   // Nothing until the first Now says which stage opens.
@@ -621,8 +672,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                         ])),
                         // Retain loaded details: async remounts clamp a restored scroll offset.
                         Visibility(
-                          visible: wc.pinnedNow, maintainState: true, maintainAnimation: false, maintainSize: false,
-                          child: SizedBox(width: wc.nowWidth ?? 360, child: NowPane(
+                          visible: _nowShown, maintainState: true, maintainAnimation: false, maintainSize: false,
+                          child: SizedBox(width: wc.nowWidth ?? WidthClass.panel, child: NowPane(
                             core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
                             settingsChanges: _settingsChanges,
                             onRelease: (id) => _report(_start(TargetDto.release(id: id))),
@@ -631,18 +682,12 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                       ]),
                   ),
                 ),
-                if (_stage == _Stage.front && !wc.pinnedNow) NowBar(
+                // Phones keep a player bar under the thumb; desktops have the LCD.
+                if (_stage == _Stage.front && phone) NowBar(
                   core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
                   settingsChanges: _settingsChanges,
                   onRelease: (id) => _report(_start(TargetDto.release(id: id))),
                 ),
-                if (wc != WidthClass.phone)
-                  StatusLine(core: widget.core, status: _status, keys: [
-                    ('/', 'search'), ('[ ]', 'along the trail'),
-                    if (trail != null) ('T', _treeOnly ? 'panes' : 'tree'),
-                    ('␣', playing ? 'pause' : 'play'), ('⇧␣', 'play something'),
-                    if (wc.index >= WidthClass.laptop.index) ...[('⌘1', 'Front'), ('⌘L', 'table')],
-                  ]),
               ]);
             }),
           ),
@@ -681,6 +726,10 @@ List<StopDto> _path(TrailDto trail) {
     stop = stops[stop.parent];
   }
   return path.reversed.toList();
+}
+
+class _NowPanel extends Intent {
+  const _NowPanel();
 }
 
 class _Keep extends Intent {

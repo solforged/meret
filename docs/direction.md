@@ -31,7 +31,7 @@ The idea is a notebook of observed sound. Leonardo drew things to find out how t
 - **Podcasts fit the same grammar.** A show is a system of episodes, an episode is a body whose rings are chapters, and the transcript is its marginalia.
 - **Type:** Instrument Sans and Geist Mono, at working weights.
 
-Navigation (2026-10-13): trails of panes joined by threads, with a query line and a status line, in place of tabs and a sidebar. See [navigation.md](navigation.md).
+Navigation (2026-10-13): trails of panes joined by threads, with one top line (query, LCD, activity; 2026-10-23) in place of tabs, a sidebar and a status line. See [navigation.md](navigation.md).
 
 Earlier candidates, kept for reference:
 

@@ -239,7 +239,7 @@ void main() {
     expect(find.byType(ReleasePane, skipOffstage: false), findsNothing, reason: 'a new trail parks nothing from the old one');
   });
 
-  testWidgets('WIDTH-W4 the status line never overflows at 600 wide with a trail open', (tester) async {
+  testWidgets('WIDTH-W4 the top line never overflows at 600 wide with a trail open', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 3);
     await _surface(tester, core, width: 600, height: 900);
@@ -247,43 +247,31 @@ void main() {
     await core.transport(const TransportDto.resume());
     await tester.pump();
     await tester.pump();
-    expect(_hints(tester), contains('␣ pause'));
     expect(tester.takeException(), isNull);
-    final hints = tester.widget<Text>(find.byKey(const ValueKey('status-keys')));
-    expect(hints.maxLines, 1);
-    expect(hints.overflow, TextOverflow.ellipsis);
-    expect(find.ancestor(of: find.byKey(const ValueKey('status-keys')), matching: find.byType(Expanded)), findsWidgets);
-    tester.view.physicalSize = const Size(640, 900);
-    await tester.pump();
-    await tester.pump();
-    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('activity')), findsOneWidget);
+    expect(find.text('Search or type a command'), findsOneWidget);
+    for (final width in [640.0, 1000.0, 1280.0]) {
+      tester.view.physicalSize = Size(width, 900);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: '$width wide');
+    }
+    expect(find.byKey(const ValueKey('lcd')), findsOneWidget, reason: 'the LCD shows once there is room');
   });
 
-  testWidgets('KEYS-K3 command 1 and command L hints show from the laptop class', (tester) async {
-    final core = FakeCore();
-    await _surface(tester, core, width: 999);
-    expect(find.textContaining('⌘1 Front'), findsNothing);
-    tester.view.physicalSize = const Size(1000, 900);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('⌘1 Front'), findsOneWidget);
-    expect(find.textContaining('⌘L table'), findsOneWidget);
-  });
-
-  testWidgets('KEYS-K5 the Space hint says pause while playing', (tester) async {
+  testWidgets('KEYS-K5 the LCD play button says pause while playing', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
-    expect(_hints(tester), contains('  ␣ play  '));
-    expect(_hints(tester), isNot(contains('  ␣ pause  ')));
+    String tip() => tester.widget<Tooltip>(find.descendant(of: find.byKey(const ValueKey('lcd-toggle')), matching: find.byType(Tooltip)).first).message!;
+    expect(tip(), 'Play');
     await core.transport(const TransportDto.resume());
     await tester.pump();
     await tester.pump();
-    expect(_hints(tester), contains('  ␣ pause  '));
-    expect(_hints(tester), isNot(contains('  ␣ play  ')));
+    expect(tip(), 'Pause');
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pump();
     await tester.pump();
-    expect(_hints(tester), contains('  ␣ play  '));
-    expect(_hints(tester), isNot(contains('  ␣ pause  ')));
+    expect(tip(), 'Play');
   });
 
   testWidgets('KEYS-K6 the query hint promises Enter only while focused', (tester) async {
@@ -442,7 +430,6 @@ Future<void> _sibling(WidgetTester tester, int step) async {
   await tester.pumpAndSettle();
 }
 
-String _hints(WidgetTester tester) => tester.widget<Text>(find.byKey(const ValueKey('status-keys'))).textSpan!.toPlainText();
 
 /// Where each pane on the row starts.
 List<double> _paneXs(WidgetTester tester, {bool offstage = false}) => [

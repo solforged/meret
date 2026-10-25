@@ -18,7 +18,7 @@ extension JobScan on JobDto {
 /// one; the fake one lets widget tests and design work run without the
 /// native library.
 ///
-/// Nothing here is called per frame. Now and the status line are streams;
+/// Nothing here is called per frame. Now and the status are streams;
 /// the playhead is an anchor that `PlayheadClock` extrapolates.
 abstract interface class CoreBridge {
   Stream<NowDto> now();

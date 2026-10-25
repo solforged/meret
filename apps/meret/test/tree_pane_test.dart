@@ -17,7 +17,7 @@ import 'package:meret/theme/tokens.dart';
 
 void main() {
   testWidgets('T toggles the open trail and Escape restores panes with strip and Now retained', (tester) async {
-    await _surface(tester);
+    await _surface(tester, size: const Size(1900, 1000));
     await _key(tester, LogicalKeyboardKey.keyT);
     expect(find.byType(TreePane), findsOneWidget);
     expect(find.byType(TrailStrip), findsOneWidget);

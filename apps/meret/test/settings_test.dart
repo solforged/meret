@@ -166,9 +166,13 @@ void main() {
       await _surface(tester, core);
       if (form != 'stage') await _command(tester, LogicalKeyboardKey.digit1);
       if (form == 'sheet') {
-        tester.view.physicalSize = const Size(1200, 900);
+        // The sheet is the phone's; desktops open the Now panel from the LCD.
+        tester.view.physicalSize = const Size(400, 900);
         await _settle(tester);
         await tester.tap(find.byKey(const ValueKey('now-bar-title')));
+        await _settle(tester);
+        // The sheet stays open over a wider window, where Settings fits.
+        tester.view.physicalSize = const Size(1200, 900);
         await _settle(tester);
       }
       final zones = tester.state(find.byType(PlayOn));

@@ -17,7 +17,7 @@ import 'picks.dart';
 import 'signal_path.dart';
 
 /// Now: what's playing, the transport, the signal path and the queue.
-/// Pinned at the right from 1560 px; [NowBar] below that. [nothingToPlay]
+/// Pinned at the right from 1800 px, opened beside the panes below that; [NowBar] on a phone. [nothingToPlay]
 /// is the reply when play found nothing: the title slot says so.
 class NowPane extends StatelessWidget {
   const NowPane({
@@ -514,12 +514,15 @@ class NowBar extends StatelessWidget {
 /// until something has been queued; play always answers, and with nothing
 /// loaded it plays something.
 class Transport extends StatelessWidget {
-  const Transport({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.compact = false});
+  const Transport({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.compact = false, this.id = 'now'});
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
   final bool compact;
+
+  /// Prefixes the buttons' keys: `now-toggle`, or `lcd-toggle` in the LCD.
+  final String id;
 
   @override
   Widget build(BuildContext context) {
@@ -528,7 +531,7 @@ class Transport extends StatelessWidget {
     final accent = Light.of(context).accent;
     final buttons = Row(mainAxisSize: MainAxisSize.min, children: [
       _TransportButton(
-        key: const ValueKey('now-previous'),
+        key: ValueKey('$id-previous'),
         icon: Icons.skip_previous,
         tooltip: 'Previous',
         onPressed: loaded ? () => core.transport(const TransportDto.previous()) : null,
@@ -536,7 +539,7 @@ class Transport extends StatelessWidget {
       ListenableBuilder(
         listenable: clock,
         builder: (_, _) => _TransportButton(
-          key: const ValueKey('now-toggle'),
+          key: ValueKey('$id-toggle'),
           icon: clock.playing ? Icons.pause : Icons.play_arrow,
           tooltip: clock.playing ? 'Pause' : 'Play',
           size: compact ? 22 : 28,
@@ -545,7 +548,7 @@ class Transport extends StatelessWidget {
         ),
       ),
       _TransportButton(
-        key: const ValueKey('now-next'),
+        key: ValueKey('$id-next'),
         icon: Icons.skip_next,
         tooltip: 'Next',
         onPressed: loaded ? () => core.transport(const TransportDto.next()) : null,
@@ -592,11 +595,17 @@ class _TransportButton extends StatelessWidget {
 /// clock is re-anchored at once so the hand doesn't jump back while the
 /// engine's own anchor is on its way.
 class SeekBar extends StatefulWidget {
-  const SeekBar({super.key, required this.core, required this.now, required this.clock, this.compact = false});
+  const SeekBar({super.key, required this.core, required this.now, required this.clock, this.compact = false, this.hairline = false, this.id = 'now'});
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final bool compact;
+
+  /// The LCD's scrubber: the track alone, no thumb, no time.
+  final bool hairline;
+
+  /// Prefixes the slider's key: `now-seek`, or `lcd-seek` in the LCD.
+  final String id;
 
   @override
   State<SeekBar> createState() => _SeekBarState();
@@ -615,13 +624,14 @@ class _SeekBarState extends State<SeekBar> {
       builder: (_, _) {
         final position = (_dragging ?? (enabled ? widget.clock.positionMs : 0.0)).clamp(0.0, length ?? 1.0).toDouble();
         final slider = ThinSlider(
-          sliderKey: const ValueKey('now-seek'),
+          sliderKey: ValueKey('${widget.id}-seek'),
           value: enabled ? position / length : 0,
           semanticFormatterCallback: (value) => 'Seek to ${clockLength((value * (length ?? 0)).round())}',
           onChanged: enabled ? (value) => setState(() => _dragging = value * length) : null,
           onChangeEnd: enabled ? (value) => _seek(anchor, value * length) : null,
+          hairline: widget.hairline,
         );
-        if (!widget.compact) return slider;
+        if (!widget.compact || widget.hairline) return slider;
         return Row(children: [
           Expanded(child: slider),
           const SizedBox(width: 6),
@@ -710,8 +720,9 @@ class _UpNextState extends State<UpNext> {
 /// The instrument's slider: a 2 px track and a small thumb in the light.
 /// [sliderKey] lands on the `Slider` itself, so tests can read its value.
 class ThinSlider extends StatelessWidget {
-  const ThinSlider({super.key, this.sliderKey, required this.value, required this.onChanged, this.onChangeEnd, this.semanticFormatterCallback});
+  const ThinSlider({super.key, this.sliderKey, required this.value, required this.onChanged, this.onChangeEnd, this.semanticFormatterCallback, this.hairline = false});
   final Key? sliderKey;
+  final bool hairline;
   final double value;
   final ValueChanged<double>? onChanged;
   final ValueChanged<double>? onChangeEnd;
@@ -729,8 +740,8 @@ class ThinSlider extends StatelessWidget {
         disabledActiveTrackColor: Tok.line,
         disabledInactiveTrackColor: Tok.line,
         disabledThumbColor: Tok.dim,
-        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5, disabledThumbRadius: 3),
-        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+        thumbShape: hairline ? SliderComponentShape.noThumb : const RoundSliderThumbShape(enabledThumbRadius: 5, disabledThumbRadius: 3),
+        overlayShape: hairline ? SliderComponentShape.noOverlay : const RoundSliderOverlayShape(overlayRadius: 12),
         trackShape: const RectangularSliderTrackShape(),
       ),
       child: Slider(
