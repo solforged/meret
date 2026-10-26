@@ -171,7 +171,9 @@ fn display(cols: &HotColumns, mut rows: Vec<usize>, view: &View) -> (Vec<TrackId
                     SortKey::Format => cols.format[i] as u64,
                 };
                 let cmp = key(a).cmp(&key(b));
-                (if view.descending { cmp.reverse() } else { cmp }).then_with(|| a.cmp(&b))
+                blank_last(view, cols.year[a] == 0, cols.year[b] == 0)
+                    .then(if view.descending { cmp.reverse() } else { cmp })
+                    .then_with(|| a.cmp(&b))
             });
         }
         let tracks = rows.into_iter().map(|i| cols.track[i]).collect::<Vec<_>>();
@@ -217,7 +219,9 @@ fn display(cols: &HotColumns, mut rows: Vec<usize>, view: &View) -> (Vec<TrackId
     } else {
         groups.sort_unstable_by(|a, b| {
             let cmp = a.key.cmp(&b.key);
-            (if view.descending { cmp.reverse() } else { cmp }).then_with(|| a.start.cmp(&b.start))
+            blank_last(view, a.key == 0, b.key == 0)
+                .then(if view.descending { cmp.reverse() } else { cmp })
+                .then_with(|| a.start.cmp(&b.start))
         });
     }
     let releases = groups.len();
@@ -233,9 +237,16 @@ fn display(cols: &HotColumns, mut rows: Vec<usize>, view: &View) -> (Vec<TrackId
     (tracks, items, releases)
 }
 
+/// Rows with no year go after the dated ones whichever way the year runs,
+/// so an ascending sort doesn't open on a screen of blanks.
+fn blank_last(view: &View, a: bool, b: bool) -> std::cmp::Ordering {
+    if view.sort == SortKey::Year { a.cmp(&b) } else { std::cmp::Ordering::Equal }
+}
+
+/// Short enough for the table's Format column; the track rows carry the detail.
 fn format_labels(bits: u8) -> Vec<&'static str> {
     use format_code::*;
-    [(UNKNOWN, "Unknown format"), (FLAC_CD, "Lossless, up to 16/48"), (HI_RES, "Hi-res"), (DSD, "DSD"), (CHIPTUNE, "Native chiptune"), (LOSSY, "Lossy")]
+    [(UNKNOWN, "Unknown"), (FLAC_CD, "Lossless"), (HI_RES, "Hi-res"), (DSD, "DSD"), (CHIPTUNE, "Chiptune"), (LOSSY, "Lossy")]
         .into_iter().filter_map(|(code, label)| (bits & (1 << code) != 0).then_some(label)).collect()
 }
 
@@ -263,6 +274,21 @@ mod tests {
         assert_eq!(items[0], Item::Group { release: ReleaseId(2), first: 0, tracks: 2, length_s: 130, formats: 2 });
         assert_eq!(items[3], Item::Group { release: ReleaseId(1), first: 2, tracks: 3, length_s: 120, formats: 6 });
         assert_eq!(items[4..], [Item::Track(2), Item::Track(3), Item::Track(4)]);
+    }
+
+    #[test]
+    fn rows_without_a_year_sort_last_in_both_directions() {
+        let cols = HotColumns::from_rows([
+            Row { track: 11, release: 1, year: 0, ..Default::default() },
+            Row { track: 21, release: 2, year: 1998, ..Default::default() },
+            Row { track: 31, release: 3, year: 2024, ..Default::default() },
+        ]);
+        for group in [false, true] {
+            for (descending, expected) in [(false, [21, 31, 11]), (true, [31, 21, 11])] {
+                let (tracks, _, _) = display(&cols, (0..cols.len()).collect(), &View { sort: SortKey::Year, descending, group });
+                assert_eq!(tracks, expected.map(TrackId), "group {group}, descending {descending}");
+            }
+        }
     }
 
     #[test]
@@ -329,7 +355,7 @@ mod tests {
         assert_eq!(new.album_artist, Some((AgentId(2), "Beta".into())));
         assert!(new.cover.is_none());
         let PageItem::Group(old) = &page.items[3] else { panic!() };
-        assert_eq!(old.formats, ["Lossless, up to 16/48", "Hi-res"]);
+        assert_eq!(old.formats, ["Lossless", "Hi-res"]);
         assert_eq!(old.cover.as_ref().unwrap().hash, "ab");
         let middle = core.rows("", &view, 4, 2).unwrap();
         assert_eq!(middle.items.iter().map(|item| match item {

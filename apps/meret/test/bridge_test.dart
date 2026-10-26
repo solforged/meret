@@ -108,7 +108,7 @@ void main() {
       expect(group.title, row.album);
       expect(group.tracks, 1);
       expect(group.lengthMs, row.lengthMs);
-      expect(group.format, 'Lossless, up to 16/48');
+      expect(group.format, 'Lossless');
       expect(track.ordinal, 0);
       expect(row.title, isNotEmpty);
       expect(row.format, 'FLAC 16/44.1');

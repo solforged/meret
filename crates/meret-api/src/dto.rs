@@ -1656,7 +1656,7 @@ mod view_tests {
             album_artist: Some((AgentId(2), "Mark Cromer".into())),
             tracks: 3,
             length_ms: 120000,
-            formats: vec!["Lossless, up to 16/48", "Hi-res"],
+            formats: vec!["Lossless", "Hi-res"],
             cover: Some(meret_store::Artwork { hash: "abcd".into(), light: None, light_wash: None, light_dim: None }),
         };
         let dto = GroupDto::from_group(group.clone(), Path::new("/tmp/meret/art"));
@@ -1664,7 +1664,7 @@ mod view_tests {
         assert_eq!(dto.album_artist_id, Some(2));
         assert_eq!(dto.album_artist.as_deref(), Some("Mark Cromer"));
         assert_eq!(dto.idiom.as_deref(), Some("score"));
-        assert_eq!(dto.format, "Lossless, up to 16/48 · Hi-res");
+        assert_eq!(dto.format, "Lossless · Hi-res");
         group.cover = None;
         assert!(GroupDto::from_group(group, Path::new("/tmp/meret/art")).cover.is_none());
         assert_eq!(View::from(ViewDto::default()), View::default());
