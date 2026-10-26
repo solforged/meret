@@ -94,15 +94,12 @@ class HomeDoors extends ChangeNotifier {
     return [
       ('Listen', listen),
       ('Library', library),
-      ('Crates', const [HomeDoor(id: 'crates', glyph: '▤', label: 'Crates', kind: DoorKind.later)]),
       ('Trails', [
         for (final trail in _trails)
           HomeDoor(id: 'trail-${trail.uid}', glyph: trail.kept ? '◆' : '⑂', label: trail.name ?? trail.title, kind: DoorKind.trail, uid: trail.uid,
             count: dayWord(trail.whenMs.toInt(), now: now) == 'today' ? clockTime(trail.whenMs.toInt()) : dayWord(trail.whenMs.toInt(), now: now)),
       ]),
       ('Out there', [
-        const HomeDoor(id: 'leads', glyph: '☆', label: 'Leads', kind: DoorKind.later),
-        const HomeDoor(id: 'wants', glyph: '♡', label: 'Wants', kind: DoorKind.later),
         for (final (i, need) in needs.indexed)
           HomeDoor(id: 'need-$i', glyph: '≈', label: need.label, kind: need.query == null ? DoorKind.later : DoorKind.query,
             query: need.query, count: _n(need.count), amber: true),
@@ -151,7 +148,8 @@ class Home extends StatelessWidget {
       key: const ValueKey('home-column'),
       padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
       children: [
-        for (final (title, entries) in sections) ...[
+        // Crates, Leads and Wants get doors when they open onto something.
+        for (final (title, entries) in sections) if (entries.isNotEmpty || title == 'Trails') ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
             child: Text(title.toUpperCase(), style: Tok.label.copyWith(fontSize: 9.5, color: Tok.dim)),

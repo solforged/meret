@@ -686,7 +686,7 @@ void main() {
     expect([...ys]..sort(), ys, reason: 'All tracks, then by tracks owned');
     final scores = find.byKey(const ValueKey('home-idiom-idiom:score'));
     expect(find.descendant(of: scores, matching: find.text('212')), findsOneWidget);
-    for (final section in ['LISTEN', 'LIBRARY', 'CRATES', 'TRAILS', 'OUT THERE']) {
+    for (final section in ['LISTEN', 'LIBRARY', 'TRAILS', 'OUT THERE']) {
       expect(find.descendant(of: column, matching: find.text(section)), findsOneWidget, reason: section);
     }
     for (final plumbing in ['Folders', 'Sources', 'Unmatched']) {

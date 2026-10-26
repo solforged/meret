@@ -387,6 +387,25 @@ void main() {
     expect(find.byType(TablePane), findsOneWidget);
   });
 
+  testWidgets('HOME-4 Pick up plays the latest partway release, and Home shows no doors that open onto nothing', (tester) async {
+    final core = FakeCore();
+    await _surface(tester, core);
+    await _key(tester, LogicalKeyboardKey.digit1, meta: true);
+    await tester.pumpAndSettle();
+    final column = find.byKey(const ValueKey('home-column'));
+    expect(find.descendant(of: column, matching: find.byKey(const ValueKey('home-pick-up'))), findsOneWidget);
+    for (final dead in ['crates', 'leads', 'wants']) {
+      expect(find.byKey(ValueKey('home-$dead')), findsNothing, reason: dead);
+    }
+    // The loaded release is already where it stopped; Pick up goes to the next.
+    final loaded = (await core.now().first).releaseId;
+    final latest = (await core.resumePoints(99)).firstWhere((point) => point.releaseId != loaded);
+    await tester.tap(find.byKey(const ValueKey('home-pick-up')));
+    await tester.pump();
+    await tester.pump();
+    expect((await core.now().first).trackId, latest.recordingId);
+  });
+
   testWidgets('NAV-N2 the parked set keeps the last six stops and empties for another trail', (tester) async {
     final core = FakeCore();
     await core.startTrail(const TargetDto.search(query: ''));
