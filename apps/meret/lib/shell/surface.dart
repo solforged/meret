@@ -202,6 +202,14 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     if (mounted) setState(() => _nothingToPlay = pick == null);
   }
 
+  /// The Pick up door: the latest partway release that isn't loaded, from
+  /// where it stopped; Today lists the rest.
+  Future<void> _pickUpLatest() async {
+    final points = await widget.core.resumePoints(99);
+    final point = points.where((point) => point.releaseId != _now?.releaseId).firstOrNull ?? points.firstOrNull;
+    if (point != null) await widget.core.pickUp(point.releaseId);
+  }
+
   Future<void> _keep() async {
     final trail = _trail;
     if (trail == null) {
@@ -400,8 +408,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   /// A Home door: Today, a play, or a new tree, as a search starts one.
   void _door(HomeDoor door) {
     switch (door.kind) {
-      // TODO(home): Pick up roots a trail at its own list once the core has that target.
-      case DoorKind.today || DoorKind.pickUp: _showToday();
+      case DoorKind.today: _showToday();
+      case DoorKind.pickUp: _report(_pickUpLatest());
       case DoorKind.playSomething: _report(_playSomething());
       case DoorKind.query: _report(_start(TargetDto.search(query: door.query!)));
       case DoorKind.trail: _report(_navigate(() => widget.core.openTrail(door.uid!)));
