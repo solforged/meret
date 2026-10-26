@@ -363,7 +363,7 @@ class FakeCore implements CoreBridge {
 
   StatusDto get _status => StatusDto(
         sources: [
-          SourceDto(key: 'local', name: 'This Mac', detail: _empty ? '0' : '48,210', ok: true),
+          SourceDto(key: 'local', name: 'This Mac', detail: _empty ? '0 tracks' : '48,210 tracks', ok: true),
           SourceDto(key: 'musicbrainz', name: 'MusicBrainz', detail: switch (_settings.lookups) {
             LookupsDto.unasked => 'asks first',
             LookupsDto.allowed => 'not used yet',

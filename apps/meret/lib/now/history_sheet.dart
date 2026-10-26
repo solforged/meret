@@ -77,7 +77,7 @@ class _HistorySheetState extends State<_HistorySheet> {
                   Text(listen.title, style: Tok.body),
                   Text([if (listen.credit != null) listen.credit!, if (listen.releaseTitle != null) listen.releaseTitle!].join(' · '), style: Tok.label),
                   const SizedBox(height: 4),
-                  Text(positionOf(listen.playedMs.toInt(), listen.lengthMs?.toInt()), style: Tok.monoSmall),
+                  Text(listenOutcome(listen, null), style: Tok.monoSmall),
                 ]),
               );
             },

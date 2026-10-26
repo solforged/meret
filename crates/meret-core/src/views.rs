@@ -39,7 +39,7 @@ pub struct List {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Item {
-    Group { release: ReleaseId, first: u32, tracks: u32, length_s: u64, formats: u8 },
+    Group { release: ReleaseId, first: u32, tracks: u32, length_ms: u64, formats: u8 },
     Track(u32),
 }
 
@@ -125,7 +125,7 @@ impl Core {
         let mut art = self.store.release_art(&release_ids)?;
         let items = page.iter().filter_map(|item| match item {
             Item::Track(i) => Some(PageItem::Track { ordinal: *i, row: tracks.remove(&list.tracks[*i as usize])? }),
-            Item::Group { release, tracks, length_s, formats, .. } => {
+            Item::Group { release, tracks, length_ms, formats, .. } => {
                 let head = heads.remove(release)?;
                 Some(PageItem::Group(GroupRow {
                     release: *release,
@@ -134,7 +134,7 @@ impl Core {
                     idiom: head.idiom,
                     album_artist: head.album_artist,
                     tracks: *tracks,
-                    length_ms: length_s * 1000,
+                    length_ms: *length_ms,
                     formats: format_labels(*formats),
                     cover: art.remove(release),
                 }))
@@ -167,7 +167,7 @@ fn display(cols: &HotColumns, mut rows: Vec<usize>, view: &View) -> (Vec<TrackId
                     SortKey::Artist => cols.artist_rank[i] as u64,
                     SortKey::Album => cols.album_rank[i] as u64,
                     SortKey::Year => cols.year[i] as u64,
-                    SortKey::Length => cols.length_s[i] as u64,
+                    SortKey::Length => cols.length_ms[i] as u64,
                     SortKey::Format => cols.format[i] as u64,
                 };
                 let cmp = key(a).cmp(&key(b));
@@ -185,7 +185,7 @@ fn display(cols: &HotColumns, mut rows: Vec<usize>, view: &View) -> (Vec<TrackId
         start: usize,
         end: usize,
         release: ReleaseId,
-        length_s: u64,
+        length_ms: u64,
         formats: u8,
         key: u64,
     }
@@ -199,15 +199,15 @@ fn display(cols: &HotColumns, mut rows: Vec<usize>, view: &View) -> (Vec<TrackId
                 SortKey::Length => 0,
                 SortKey::Format => cols.format[i] as u64,
             };
-            groups.push(Group { start: position, end: position, release: ReleaseId(cols.release[i] as i64), length_s: 0, formats: 0, key });
+            groups.push(Group { start: position, end: position, release: ReleaseId(cols.release[i] as i64), length_ms: 0, formats: 0, key });
         }
         let g = groups.last_mut().expect("one group");
         g.end = position + 1;
-        g.length_s += cols.length_s[i] as u64;
+        g.length_ms += cols.length_ms[i] as u64;
         g.formats |= 1 << cols.format[i];
         match view.sort {
             SortKey::Year => g.key = g.key.max(cols.year[i] as u64),
-            SortKey::Length => g.key = g.length_s,
+            SortKey::Length => g.key = g.length_ms,
             SortKey::Format => g.key = g.key.min(cols.format[i] as u64),
             _ => {}
         }
@@ -228,7 +228,7 @@ fn display(cols: &HotColumns, mut rows: Vec<usize>, view: &View) -> (Vec<TrackId
     let mut tracks = Vec::with_capacity(rows.len());
     let mut items = Vec::with_capacity(rows.len() + groups.len());
     for g in groups {
-        items.push(Item::Group { release: g.release, first: tracks.len() as u32, tracks: (g.end - g.start) as u32, length_s: g.length_s, formats: g.formats });
+        items.push(Item::Group { release: g.release, first: tracks.len() as u32, tracks: (g.end - g.start) as u32, length_ms: g.length_ms, formats: g.formats });
         for &i in &rows[g.start..g.end] {
             items.push(Item::Track(tracks.len() as u32));
             tracks.push(cols.track[i]);
@@ -271,8 +271,8 @@ mod tests {
         let (tracks, items, releases) = display(&cols, (0..cols.len()).collect(), &View { sort: SortKey::Year, descending: true, group: true });
         assert_eq!(tracks, [21, 22, 11, 12, 13].map(TrackId));
         assert_eq!(releases, 2);
-        assert_eq!(items[0], Item::Group { release: ReleaseId(2), first: 0, tracks: 2, length_s: 130, formats: 2 });
-        assert_eq!(items[3], Item::Group { release: ReleaseId(1), first: 2, tracks: 3, length_s: 120, formats: 6 });
+        assert_eq!(items[0], Item::Group { release: ReleaseId(2), first: 0, tracks: 2, length_ms: 130_000, formats: 2 });
+        assert_eq!(items[3], Item::Group { release: ReleaseId(1), first: 2, tracks: 3, length_ms: 120_000, formats: 6 });
         assert_eq!(items[4..], [Item::Track(2), Item::Track(3), Item::Track(4)]);
     }
 

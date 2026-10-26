@@ -30,6 +30,8 @@ pub struct Row {
     pub album_rank: u32,
     pub year: u16,
     pub length_s: u32,
+    /// Exact, so a group's total matches its release's; 0 takes `length_s`.
+    pub length_ms: u32,
     pub plays: u32,
     /// Unix seconds; 0 for never.
     pub last_played: i64,
@@ -82,6 +84,7 @@ pub struct HotColumns {
     pub album_rank: Vec<u32>,
     pub year: Vec<u16>,
     pub length_s: Vec<u32>,
+    pub length_ms: Vec<u32>,
     pub plays: Vec<u32>,
     pub last_played: Vec<i64>,
     pub added: Vec<i64>,
@@ -123,6 +126,7 @@ impl HotColumns {
         self.album_rank.push(r.album_rank);
         self.year.push(r.year);
         self.length_s.push(r.length_s);
+        self.length_ms.push(if r.length_ms == 0 { r.length_s.saturating_mul(1000) } else { r.length_ms });
         self.plays.push(r.plays);
         self.last_played.push(r.last_played);
         self.added.push(r.added);

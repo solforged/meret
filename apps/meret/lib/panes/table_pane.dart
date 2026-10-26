@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
+import '../core/when.dart';
 import '../draw/histogram_header.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
@@ -432,13 +433,7 @@ class _TablePaneState extends State<TablePane> {
     ]);
   }
 
-  String _length(BigInt? ms) {
-    if (ms == null) return '';
-    final seconds = ms.toInt() ~/ 1000;
-    return seconds >= 3600
-        ? '${seconds ~/ 3600}:${(seconds ~/ 60 % 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}'
-        : '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
-  }
+  String _length(BigInt? ms) => ms == null ? '' : clockLength(ms.toInt());
 
   Widget _columns(ItemDto item, Set<_Col> shown, {required bool playing, required Light light}) {
     final group = item is ItemDto_Group ? item.field0 : null;

@@ -65,14 +65,17 @@ class NowPane extends StatelessWidget {
         Expanded(flex: 5, child: SingleChildScrollView(
           key: const PageStorageKey('now-pane'),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Text('SIGNAL PATH', style: Tok.label),
-            const SizedBox(height: 6),
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final s in n?.path ?? const <StageDto>[]) _Stage(s),
-            ]),
-            const SizedBox(height: 8),
-            if (n?.fidelity != null) NowFidelity(now: n!, exclusive: core.settings().exclusive),
-            const SizedBox(height: 12),
+            // Paused or stopped there is no path to draw, so no heading either.
+            if (n != null && (n.path.isNotEmpty || n.fidelity != null)) ...[
+              const Text('SIGNAL PATH', style: Tok.label),
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final s in n.path) _Stage(s),
+              ]),
+              const SizedBox(height: 8),
+              if (n.fidelity != null) NowFidelity(now: n, exclusive: core.settings().exclusive),
+              const SizedBox(height: 12),
+            ],
             PlayOn(core: core, now: n, settingsChanges: settingsChanges),
             if (loaded) ...[
               const SizedBox(height: 12),
@@ -329,7 +332,7 @@ class _NowMemoryState extends State<NowMemory> {
             Text([
               if (listen.credit != null) listen.credit!,
               if (listen.releaseTitle != null) listen.releaseTitle!,
-              _listenOutcome(listen, identical(listen, _history.first) ? widget.now : null),
+              listenOutcome(listen, identical(listen, _history.first) ? widget.now : null),
             ].join(' · '), style: Tok.label),
           ]),
         ),
@@ -358,7 +361,9 @@ String resumeRule(String? idiom) {
     ? rule : '${idiom[0].toUpperCase()}${idiom.substring(1)} · $rule';
 }
 
-String _listenOutcome(ListenDto listen, NowDto? now) {
+/// How a listen ended, as Now and History say it: "played through",
+/// "skipped at 0:01", "paused at 2:14".
+String listenOutcome(ListenDto listen, NowDto? now) {
   final anchor = now?.anchor;
   if (listen.trackId != null && listen.trackId == now?.trackId && anchor != null) {
     return '${anchor.rate == 0 ? 'paused' : 'playing'} at ${clockLength(anchor.positionMs.round())}';

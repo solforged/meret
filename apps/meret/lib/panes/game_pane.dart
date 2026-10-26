@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
+import '../core/when.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'pane.dart';
@@ -201,8 +202,4 @@ class _GamePaneState extends State<GamePane> {
   }
 }
 
-String _time(BigInt? milliseconds) {
-  if (milliseconds == null) return '';
-  final seconds = milliseconds.toInt() ~/ 1000;
-  return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
-}
+String _time(BigInt? milliseconds) => milliseconds == null ? '' : clockLength(milliseconds.toInt());

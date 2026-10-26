@@ -217,7 +217,8 @@ void main() {
   }
 
   testWidgets('Sources and future sections do not offer unavailable actions', (tester) async {
-    await _surface(tester, FakeCore());
+    final core = FakeCore();
+    await _surface(tester, core);
     showSettings(tester.element(find.byType(Today)), section: SettingsSection.sources);
     await _settle(tester);
     for (final name in ['This Mac', 'MusicBrainz', 'Spotify', 'Music Assistant', 'Roon', 'Bandcamp', 'YouTube', 'Qobuz', 'ListenBrainz', 'Last.fm']) {
@@ -227,6 +228,9 @@ void main() {
     await tester.tap(find.text('MusicBrainz').last);
     await tester.pump();
     expect(find.text('Recordings and credits'), findsOneWidget);
+    final musicbrainz = (await core.status().first).sources.singleWhere((source) => source.key == 'musicbrainz');
+    expect(find.text('${musicbrainz.detail[0].toUpperCase()}${musicbrainz.detail.substring(1)}'), findsWidgets,
+      reason: 'Sources says what the activity popover says, not a fixed line');
     expect(find.textContaining('Connect…'), findsNothing);
     expect(find.textContaining('Sign in'), findsNothing);
 

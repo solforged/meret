@@ -138,6 +138,7 @@ impl Store {
                     album_artist: r.get(15)?,
                     year: r.get(1)?,
                     length_s: (r.get::<_, i64>(2)? / 1000) as u32,
+                    length_ms: r.get::<_, i64>(2)?.clamp(0, u32::MAX as i64) as u32,
                     plays: r.get(3)?,
                     last_played: r.get::<_, i64>(4)? / 1000,
                     added: r.get::<_, i64>(5)? / 1000,

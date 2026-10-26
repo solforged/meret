@@ -381,9 +381,11 @@ class _SettingsWindowState extends State<_SettingsWindow> {
 
   Widget _sources() {
     final local = _status?.sources.where((source) => source.key == 'local').firstOrNull;
+    // The same words as the activity popover, so the two never disagree.
+    final musicbrainz = _status?.sources.where((source) => source.key == 'musicbrainz').firstOrNull;
     final entries = <(String, String, String, String)>[
       ('local', 'This Mac', _status == null ? 'Reading library…' : '${_count(_status!.tracks)} tracks', 'Your music folders'),
-      ('musicbrainz', 'MusicBrainz', 'Not used yet', 'Recordings and credits'),
+      ('musicbrainz', 'MusicBrainz', musicbrainz == null ? 'Reading…' : _capital(musicbrainz.detail), 'Recordings and credits'),
       ..._futureSources.map((source) => (source.$1, source.$2, 'Coming later', source.$3)),
     ];
     final selected = entries.firstWhere((entry) => entry.$1 == _source);
@@ -646,6 +648,8 @@ Widget _dot(Color colour, {bool hollow = false}) => Container(
   height: 7,
   decoration: BoxDecoration(shape: BoxShape.circle, color: hollow ? Colors.transparent : colour, border: hollow ? Border.all(color: colour) : null),
 );
+
+String _capital(String words) => words.isEmpty ? words : '${words[0].toUpperCase()}${words.substring(1)}';
 
 String _count(BigInt number) => number.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
 
