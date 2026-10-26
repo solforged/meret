@@ -435,9 +435,13 @@ void main() {
     expect(tester.getCenter(lcd).dx, moreOrLessEquals(900, epsilon: 1), reason: 'centred on the window, not on what the chip leaves');
     expect(tester.getTopLeft(query).dx, greaterThan(tester.getTopRight(lcd).dx), reason: 'the query waits docked at the right');
     final docked = tester.getSize(query).width;
+    expect(find.text('Search'), findsOneWidget, reason: 'docked, the hint is one word');
+    expect(find.byKey(const ValueKey('activity-words')), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.slash);
     await tester.pumpAndSettle();
+    expect(find.text('Search or type a command'), findsOneWidget);
+    expect(find.byKey(const ValueKey('activity-words')), findsNothing, reason: 'activity quiets to its ring');
     expect(tester.getSize(query).width, greaterThan(docked * 2));
     expect(tester.getCenter(query).dx, moreOrLessEquals(900, epsilon: 1), reason: 'the query has the centre');
     expect(tester.getSize(lcd).width, lessThan(240), reason: 'the LCD folds to a pill');
@@ -451,6 +455,24 @@ void main() {
     expect(find.byKey(const ValueKey('top-now')), findsNothing, reason: 'the LCD opens Now');
   });
 
+  testWidgets('TOP-2 with nothing loaded the query has the centre, and an open Now keeps the LCD', (tester) async {
+    final core = FakeCore.empty();
+    await _surface(tester, core, width: 1700);
+    final query = find.byType(QueryLine);
+    expect(find.byKey(const ValueKey('lcd')), findsNothing);
+    expect(tester.getCenter(query).dx, moreOrLessEquals(850, epsilon: 1));
+    expect(find.text('Search or type a command'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('lcd')), findsOneWidget, reason: 'the mouse can close Now again');
+    expect(tester.getCenter(find.byKey(const ValueKey('lcd'))).dx, moreOrLessEquals(850, epsilon: 1));
+    await tester.tap(find.byKey(const ValueKey('lcd-title')));
+    await tester.pumpAndSettle();
+    expect(find.byType(NowPane), findsNothing);
+    expect(find.byKey(const ValueKey('lcd')), findsNothing);
+  });
+
   testWidgets('WIDTH-W4 the top line never overflows at 600 wide with a trail open', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 3);
@@ -461,7 +483,7 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
     expect(find.byKey(const ValueKey('activity')), findsOneWidget);
-    expect(find.text('Search or type a command'), findsOneWidget);
+    expect(find.text('Search'), findsOneWidget, reason: 'docked beside the LCD, the hint is one word');
     for (final width in [640.0, 1000.0, 1280.0]) {
       tester.view.physicalSize = Size(width, 900);
       await tester.pump();
@@ -506,7 +528,7 @@ void main() {
     expect(focus.hasFocus, isFalse);
     expect(tester.widget<TextField>(field).controller!.text, 'xen', reason: 'a search keeps its words on the line');
     expect(find.text('↵ as a table'), findsNothing);
-    expect(find.text('Search or type a command'), findsOneWidget);
+    expect(find.text('Search'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.slash);
     await tester.pump();
     expect(find.text('↵ as a table'), findsOneWidget);
@@ -518,7 +540,7 @@ void main() {
     }
     expect(focus.hasFocus, isFalse);
     expect(tester.widget<TextField>(field).controller!.text, '');
-    expect(find.text('Search or type a command'), findsOneWidget);
+    expect(find.text('Search'), findsOneWidget);
   });
 
   testWidgets('KEYS-K8 Tab and Shift-Tab move focus nowhere on the surface', (tester) async {

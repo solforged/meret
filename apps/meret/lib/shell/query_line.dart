@@ -219,8 +219,8 @@ class _QueryLineState extends State<QueryLine> {
   Widget build(BuildContext context) {
     final p = _parsed;
     // Enter reaches the line only while it has focus; unfocused, it is a door.
-    final hint = _submitError ?? switch (widget.focus.hasFocus ? p?.kind : null) {
-      null => 'Search or type a command',
+    String hintFor({required bool docked}) => _submitError ?? switch (widget.focus.hasFocus ? p?.kind : null) {
+      null => docked ? 'Search' : 'Search or type a command',
       QueryKind.invalid => p!.error ?? '',
       QueryKind.command => '↵ to run',
       QueryKind.search => '↵ as a table',
@@ -229,20 +229,25 @@ class _QueryLineState extends State<QueryLine> {
     final empty = _text.text.isEmpty;
     return OverlayPortal(
       controller: _overlay,
-      overlayChildBuilder: (_) => Positioned(
-        width: 520,
+      // Hung from the line's right edge, so it stays on screen while the
+      // line slides out of its dock, and as wide as the line once it's there.
+      overlayChildBuilder: (context) => Positioned(
+        width: math.min(560, MediaQuery.sizeOf(context).width - 32),
         child: CompositedTransformFollower(
           link: _link,
           showWhenUnlinked: false,
-          targetAnchor: Alignment.bottomLeft,
-          followerAnchor: Alignment.topLeft,
+          targetAnchor: Alignment.bottomRight,
+          followerAnchor: Alignment.topRight,
           offset: const Offset(0, 4),
           child: _hits == null ? const SizedBox() : TextFieldTapRegion(child: _dropdown(_hits!)),
         ),
       ),
       child: CompositedTransformTarget(
         link: _link,
-        child: Container(
+        child: LayoutBuilder(builder: (context, box) {
+          // Docked beside the LCD the line is short, and says so in a word.
+          final hint = hintFor(docked: box.maxWidth < 260);
+          return Container(
           height: 28,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(color: const Color(0xFF040713), border: Border.all(color: widget.focus.hasFocus ? Tok.gold3 : Tok.rule)),
@@ -303,7 +308,8 @@ class _QueryLineState extends State<QueryLine> {
               ),
             ],
           ]),
-        ),
+          );
+        }),
       ),
     );
   }

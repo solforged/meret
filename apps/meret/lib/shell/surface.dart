@@ -693,12 +693,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 TopLine(
                   query: QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
                   queryFocus: _queryFocus,
-                  loaded: _now?.anchor != null,
-                  lcd: Lcd(
+                  // An open Now panel keeps the LCD, so the mouse can close it again.
+                  showLcd: _now?.anchor != null || _nowShown,
+                  lcd: ({folded = false}) => Lcd(
                     core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
-                    open: _nowShown, onOpen: phone ? null : _toggleNow,
+                    open: _nowShown, onOpen: phone ? null : _toggleNow, folded: folded,
                   ),
-                  activity: Activity(core: widget.core, status: _status),
+                  activity: ({quiet = false}) => Activity(core: widget.core, status: _status, quiet: quiet),
                   onBack: trail == null ? null : () => _report(_move(-1)),
                   onForward: trail == null || (!_frontOnly && along.length == path.length) ? null : () => _report(_move(1)),
                   // Under Home or Today the "] back to" line names the trail, so the chip waits.
