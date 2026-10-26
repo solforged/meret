@@ -112,7 +112,7 @@ void main() {
     expect(find.text('Nothing playing'), findsNothing);
   });
 
-  testWidgets('the pinned pane reserves the why slot so the transport never moves', (tester) async {
+  testWidgets('the pinned pane reserves the why slot so the seek bar never moves', (tester) async {
     final core = FakeCore();
     final now = await core.now().first;
     final clock = PlayheadClock(tester);
@@ -121,13 +121,14 @@ void main() {
       body: SizedBox(width: 360, height: 900, child: NowPane(core: core, now: n, clock: clock, onToggle: () {})),
     )));
     await pane(now);
-    final before = tester.getTopLeft(find.byType(Transport));
+    final before = tester.getTopLeft(find.byType(SeekBar));
     await pane(NowDto(
       trackId: now.trackId, releaseId: now.releaseId, title: now.title, subtitle: now.subtitle, anchor: now.anchor,
       lengthMs: now.lengthMs, path: now.path, fidelity: now.fidelity, dr: now.dr, loudnessLufs: now.loudnessLufs,
       why: 'Never played · In your library for 1 week, never played through. The whole score, in order, twice over.',
     ));
-    expect(tester.getTopLeft(find.byType(Transport)), before);
+    expect(tester.getTopLeft(find.byType(SeekBar)), before);
+    expect(find.byType(Transport), findsNothing, reason: 'the LCD has the transport');
     final why = tester.widget<Text>(find.byKey(const ValueKey('now-why')));
     expect(why.maxLines, 2);
     expect(why.overflow, TextOverflow.ellipsis);

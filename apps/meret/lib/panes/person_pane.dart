@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
+import '../draw/facts.dart';
 import '../theme/tokens.dart';
 import 'pane.dart';
 import 'release_pane.dart';
@@ -84,12 +85,12 @@ class _PersonPaneState extends State<PersonPane> {
     if (person == null) return paneReading(null, _error ?? 'Reading person…', error: _error != null);
     return CustomScrollView(slivers: [
       SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text([
+        Facts([
           '${person.tracks} ${person.tracks == 1 ? 'track' : 'tracks'}',
           if (person.releases.isNotEmpty) '${person.releases.length} ${person.releases.length == 1 ? 'release' : 'releases'}',
           if (person.works.isNotEmpty) '${person.works.length} ${person.works.length == 1 ? 'work' : 'works'}',
           playsFact(person.plays, person.lastPlayedMs),
-        ].join(' · '), style: Tok.label),
+        ], style: Tok.label),
         if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
       ])),
       const ForksHere(),

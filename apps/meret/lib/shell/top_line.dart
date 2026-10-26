@@ -34,6 +34,7 @@ class TopLine extends StatelessWidget {
   static const height = 44.0;
   static const _query = 300.0;
   static const _lcd = 560.0;
+  static const _lcdMax = 760.0;
 
   /// The star chip and its gap.
   static const _star = 35.0;
@@ -83,10 +84,15 @@ class TopLine extends StatelessWidget {
                   const SizedBox(width: 12),
                   SizedBox(width: queryWidth, height: 28, child: query),
                   const SizedBox(width: 14),
-                  // The LCD centres in the room between the query and the right.
+                  // The LCD centres in the room between the query and the right,
+                  // and grows past its width into what a short chip leaves, so
+                  // the subtitle shows instead of a gap.
                   Expanded(child: lcdWidth == 0
                     ? const SizedBox.shrink()
-                    : Center(child: SizedBox(width: lcdWidth, height: 34, child: lcd))),
+                    : Center(child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: lcdWidth, maxWidth: _lcdMax),
+                        child: SizedBox(width: double.infinity, height: 34, child: lcd),
+                      ))),
                 ]);
               })),
             ],

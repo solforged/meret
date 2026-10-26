@@ -35,6 +35,17 @@ void main() {
     expect(layout(3, focus: 2, start: 5).start, 0, reason: 'a shorter row pulls the window back');
   });
 
+  test('room the spines leave peeks at the stop ahead instead of a dead strip', () {
+    // Now open on a laptop: 1345 pt holds two 560 pt panes, a spine either side and 133 pt more.
+    final row = layout(4, focus: 2, width: 1345, maxVisible: 3);
+    expect(row.start, 1);
+    expect(row.widths, [46, 560, 560, 560], reason: 'the stop ahead keeps a full pane width, clipped by the row');
+    expect(row.x, [0, 46, 606, 1166]);
+    expect(row.ghost, isNull);
+    final tight = layout(4, focus: 2, width: 1250, maxVisible: 3);
+    expect(tight.widths, [46, 560, 560, 46], reason: '38 pt left over is no strip worth filling');
+  });
+
   test('spines nearest the window show first when there is no room for them all', () {
     final row = layout(10);
     expect(row.start, 7);

@@ -4,6 +4,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 
 import '../core/bridge.dart';
 import '../core/when.dart';
+import '../draw/facts.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'pane.dart';
@@ -119,6 +120,10 @@ class _GamePaneState extends State<GamePane> {
   Widget _row(TrackRowDto row, int index) {
     final light = Light.of(context);
     final lit = light.track == row.trackId.toInt();
+    // A soundtrack's artist and album show where they change, not under every track.
+    final before = index > 0 ? _game!.rows[index - 1] : null;
+    final newAlbum = before == null || before.releaseId != row.releaseId;
+    final artist = row.artist != null && (newAlbum || before.artist != row.artist) ? row.artist : null;
     return Semantics(
       key: ValueKey('game-row-$index'),
       button: true,
@@ -139,8 +144,8 @@ class _GamePaneState extends State<GamePane> {
             child: Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(row.title, style: Tok.body.copyWith(color: lit ? light.accent : Tok.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (row.artist case final artist?) Text(artist, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                Semantics(
+                if (artist != null) Text(artist, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                if (newAlbum) Semantics(
                   button: true,
                   child: GestureDetector(
                     key: ValueKey('game-album-${row.trackId}'),
@@ -182,7 +187,7 @@ class _GamePaneState extends State<GamePane> {
           Text(game.title, style: Tok.title),
           if (facts.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(facts.join(' · '), style: Tok.label),
+            Facts(facts, style: Tok.label),
           ],
           const SizedBox(height: 10),
           PaneActions(primary: 'Play', onPrimary: game.rows.isEmpty ? null : () => _play(0), primaryKey: const ValueKey('game-play')),

@@ -423,6 +423,11 @@ void main() {
       expect(tester.takeException(), isNull, reason: '$width wide');
     }
     expect(find.byKey(const ValueKey('lcd')), findsOneWidget, reason: 'the LCD shows once there is room');
+    tester.view.physicalSize = const Size(1800, 900);
+    await tester.pump();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(tester.getSize(find.byKey(const ValueKey('lcd'))).width, greaterThan(560), reason: 'wide, the LCD takes the room the chip leaves');
   });
 
   testWidgets('KEYS-K5 the LCD play button says pause while playing', (tester) async {
