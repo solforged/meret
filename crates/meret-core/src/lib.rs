@@ -48,6 +48,7 @@ pub use facets::{Facet, FacetColumn, Facets};
 pub use local_zone::{LocalZone, file_uri};
 pub use now::NowState;
 pub use picks::{Pick, Why};
+pub use trails::search_title;
 pub use status::{SourceStatus, StatusState};
 pub use meret_store::{JobCounts, Level, LightLevel, Lookups, Settings};
 pub use lookups::LookupSummary;

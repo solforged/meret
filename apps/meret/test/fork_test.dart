@@ -204,7 +204,7 @@ class _ForkCore extends FakeCore {
     id: id, name: 'Nera Vale', tracks: 2, plays: BigInt.zero,
     releases: [
       for (final (index, title) in [(1, 'Glass harbour'), (2, 'Cinder orchard')])
-        ThreadDto(kind: ThreadKind.appearsOn, label: 'on', source: 'tags', provider: 'local_tags',
+        ThreadDto(kind: ThreadKind.appearsOn, label: 'appears on', source: 'tags', provider: 'local_tags',
           to: TargetDto.release(id: PlatformInt64Util.from(index)), title: title, detail: ''),
     ],
     appearsOn: [], roles: [], works: [], games: [], groups: [], workedWith: [],

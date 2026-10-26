@@ -178,7 +178,7 @@ void main() {
     final painter = tester.widget<CustomPaint>(drawing).painter as ConstellationPainter;
     final positions = painter.layoutPositions(paint.size);
     final label = TextPainter(
-      text: TextSpan(text: 'on', style: Tok.label.copyWith(fontSize: 10.5, fontStyle: FontStyle.italic, color: Tok.gold2)),
+      text: TextSpan(text: 'appears on', style: Tok.label.copyWith(fontSize: 10.5, fontStyle: FontStyle.italic, color: Tok.gold2)),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: 190);
     for (final index in [1, 2]) {
@@ -399,7 +399,7 @@ TrailDto _fixture() => TrailDto(
   ],
 );
 
-StopDto _stop(int index, int? parent, String title, TargetDto target, {bool onPath = false, bool fork = false, bool peek = false, List<String> actions = const [], String via = 'on'}) => StopDto(
+StopDto _stop(int index, int? parent, String title, TargetDto target, {bool onPath = false, bool fork = false, bool peek = false, List<String> actions = const [], String via = 'appears on'}) => StopDto(
   index: index, parent: parent, target: target, title: title, via: parent == null ? null : via,
   onPath: onPath, isFork: fork, isPeek: peek,
   openedMs: PlatformInt64Util.from(DateTime(2026, 10, 20, 18, index).millisecondsSinceEpoch),

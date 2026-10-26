@@ -21,7 +21,9 @@ class TablePane extends StatefulWidget {
   final CoreBridge core;
   final String query;
   final ValueChanged<String> onQuery;
-  final Future<void> Function(TargetDto, ThreadKind)? onFollow;
+  /// Opens a row's release or artist: a hit of this search, so the thread
+  /// is the search's own.
+  final Future<void> Function(TargetDto)? onFollow;
   final BigInt? libraryVersion;
   final BigInt? tracks;
   final bool scanning;
@@ -227,10 +229,7 @@ class _TablePaneState extends State<TablePane> {
     };
     if (artist && person == null) return;
     try {
-      await onFollow(
-        artist ? TargetDto.person(id: person!) : TargetDto.release(id: release),
-        artist ? ThreadKind.by : ThreadKind.appearsOn,
-      );
+      await onFollow(artist ? TargetDto.person(id: person!) : TargetDto.release(id: release));
     } catch (error) {
       if (mounted) setState(() => _actionError = error.toString());
     }

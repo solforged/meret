@@ -395,8 +395,7 @@ impl Api {
     fn trail_dto(&self, t: &meret_graph::Trail) -> TrailDto {
         TrailDto::from_trail(t, now_ms(), |target| {
             let name = match target {
-                TargetDto::Search { query } if query.is_empty() => Ok(Some("Everything".into())),
-                TargetDto::Search { query } => Ok(Some(query.clone())),
+                TargetDto::Search { query } => Ok(Some(meret_core::search_title(query))),
                 TargetDto::Release { id } => self.core.store.release_title(ReleaseId(*id)),
                 TargetDto::Person { id } => self.core.store.agent_name(AgentId(*id)),
                 TargetDto::Work { id } => self.core.store.work_title(WorkId(*id)),
@@ -481,7 +480,7 @@ impl Api {
         self.core.store.trail_summaries(limit).map_err(|e| e.to_string())?.into_iter().map(|summary| {
             let title = |entity| -> Result<String, String> {
                 let name = match entity {
-                    EntityRef::Search => return Ok(summary.root_query.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| "Everything".into())),
+                    EntityRef::Search => return Ok(meret_core::search_title(summary.root_query.as_deref().unwrap_or_default())),
                     EntityRef::Release(id) => self.core.store.release_title(id),
                     EntityRef::Agent(id) => self.core.store.agent_name(id),
                     EntityRef::Work(id) => self.core.store.work_title(id),

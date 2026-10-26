@@ -15,7 +15,7 @@ class SearchPane extends StatefulWidget {
   final String query;
   final ValueChanged<HitDto> onHit;
   final ValueChanged<String>? onQuery;
-  final Future<void> Function(TargetDto, ThreadKind)? onFollow;
+  final Future<void> Function(TargetDto)? onFollow;
   final BigInt? libraryVersion;
   final BigInt? tracks;
   final bool scanning;

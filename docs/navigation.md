@@ -40,7 +40,7 @@ Decided 2026-10-23 (plates 01, 06, 07). Sol: "Home as a column feels right." It 
 
 - **Three states.** A 248 pt column when nothing is open, beside Today. A 52 pt rail inside a trail, with the door the trail started from lit. The column laid over the trail with `⌘1` or `◐`: the panes dim and never move. `Esc`, `]` or a click on a pane closes it. From 2200 pt the column can stay open as a setting.
 - **Today** is Home's own page, not a trail stop: Resume first, then Play something with its reasons, partway through, added lately and your week. Meret opens here. Opening something from Today starts a trail whose first pane says so ("from Today · added lately").
-- **Doors start trees.** A door starts a new tree, as a search does, and the old tree moves to Trails, one `[` away. Doors never fork the current tree.
+- **Doors start trees.** A door starts a new tree, as a search does, and the old tree moves to Trails, one `[` away. Doors never fork the current tree. The tree and its first pane take the door's name (All tracks, Scores), not its query, and a row opened from a search's table is *found* by it.
 - **Sections are fixed:** Listen (Today, Pick up, Play something), Library (All tracks, then one row per idiom you own, People, Games), Crates, Trails, Out there (Leads, Wants, Needs you). Crates and trails can be pinned and reordered. Needs you shows only while it isn't zero. Folders, sources and jobs never get a door; they live in the activity popover and Settings.
 - **Keys.** `⌘1`–`⌘9` go to the first nine doors in order.
 

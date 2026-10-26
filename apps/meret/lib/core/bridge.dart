@@ -391,16 +391,16 @@ class FakeCore implements CoreBridge {
       releases: BigInt.from(8142),
       lookups: _settings.lookups == LookupsDto.unasked ? await lookups() : null,
       idioms: [
-        for (final (label, releases, tracks, idiom) in const [
-          ('Albums', 2104, 25210, 'album'),
-          ('Songs', 3880, 3880, 'song'),
-          ('Works', 1204, 9310, 'work'),
-          ('Sessions', 412, 4110, 'session'),
-          ('Scores', 212, 1840, 'score'),
-          ('Sets', 318, 2420, 'set'),
-          ('Spoken', 12, 1440, 'spoken'),
+        for (final (idiom, releases, tracks) in const [
+          ('album', 2104, 25210),
+          ('song', 3880, 3880),
+          ('work', 1204, 9310),
+          ('session', 412, 4110),
+          ('score', 212, 1840),
+          ('set', 318, 2420),
+          ('spoken', 12, 1440),
         ])
-          IdiomLineDto(label: label, releases: BigInt.from(releases), tracks: BigInt.from(tracks), query: 'idiom:$idiom'),
+          IdiomLineDto(label: _idioms[idiom]!, releases: BigInt.from(releases), tracks: BigInt.from(tracks), query: 'idiom:$idiom'),
       ],
       formats: [
         for (final (label, count, note, query) in const [
@@ -555,8 +555,19 @@ class FakeCore implements CoreBridge {
     return parsed.canonical;
   }
 
+  static const _idioms = {
+    'album': 'Albums', 'song': 'Songs', 'work': 'Works', 'session': 'Sessions', 'score': 'Scores', 'set': 'Sets', 'spoken': 'Spoken',
+  };
+
+  /// The core's `search_title`: a door's root takes the door's name.
+  static String _searchTitle(String query) {
+    if (query.trim().isEmpty) return 'All tracks';
+    final idiom = RegExp(r'^idiom:(\w+)$').firstMatch(query.trim())?[1];
+    return _idioms[idiom] ?? query;
+  }
+
   Future<String> _title(TargetDto target) async => switch (target) {
-    TargetDto_Search(:final query) => query.isEmpty ? 'Everything' : query,
+    TargetDto_Search(:final query) => _searchTitle(query),
     TargetDto_Release(:final id) => (await release(id)).title,
     TargetDto_Person(:final id) => (await person(id)).name,
     TargetDto_Work(:final id) => (await work(id)).title,
@@ -605,7 +616,7 @@ class FakeCore implements CoreBridge {
   static String _threadLabel(ThreadKind kind) => switch (kind) {
     ThreadKind.by => 'by',
     ThreadKind.albumArtist => 'album artist',
-    ThreadKind.appearsOn => 'on',
+    ThreadKind.appearsOn => 'appears on',
     ThreadKind.workedWith => 'worked with',
     ThreadKind.hasMember => 'has member',
     ThreadKind.composedBy => 'composed by',
@@ -616,7 +627,7 @@ class FakeCore implements CoreBridge {
     ThreadKind.producedBy => 'produced by',
     ThreadKind.engineeredBy => 'engineered by',
     ThreadKind.recordingOf => 'recording of',
-    ThreadKind.matched => 'matched',
+    ThreadKind.matched => 'found',
     ThreadKind.scored => 'scored',
     ThreadKind.soundtrackOf => 'soundtrack of',
     ThreadKind.soundtrack => 'soundtrack',
@@ -1256,7 +1267,7 @@ class FakeCore implements CoreBridge {
       tracks += credited;
       final first = rows.first;
       final own = first.albumArtistId == id;
-      final thread = ThreadDto(kind: ThreadKind.appearsOn, label: 'on', source: 'tags', provider: 'local_tags',
+      final thread = ThreadDto(kind: ThreadKind.appearsOn, label: 'appears on', source: 'tags', provider: 'local_tags',
         to: TargetDto.release(id: first.releaseId), title: first.album,
         detail: '${first.year} · ${own ? '${rows.length} tracks' : '$credited of ${rows.length} tracks'}');
       (own ? releases : appearsOn).add(thread);

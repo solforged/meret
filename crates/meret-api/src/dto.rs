@@ -752,7 +752,7 @@ impl From<Front> for FrontDto {
         let mut idioms: Vec<IdiomLineDto> = Idiom::ALL
             .into_iter()
             .map(|i| IdiomLineDto {
-                label: plural(i).into(),
+                label: i.plural().into(),
                 releases: f.facts.releases_by_idiom[i as usize],
                 tracks: f.tracks_by_idiom[i as usize] as u64,
                 query: Some(format!("idiom:{}", i.as_str())),
@@ -817,18 +817,6 @@ impl From<Front> for FrontDto {
     }
 }
 
-fn plural(i: Idiom) -> &'static str {
-    match i {
-        Idiom::Album => "Albums",
-        Idiom::Song => "Songs",
-        Idiom::Work => "Works",
-        Idiom::Session => "Sessions",
-        Idiom::Score => "Scores",
-        Idiom::Set => "Sets",
-        Idiom::Spoken => "Spoken",
-    }
-}
-
 /// What a pane is about, and where a thread can lead.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TargetDto {
@@ -884,7 +872,7 @@ pub(crate) fn role_thread(role: &str) -> Option<(ThreadKind, &'static str)> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ThreadDto {
     pub kind: ThreadKind,
-    /// "by", "album artist", "on", "worked with".
+    /// "by", "album artist", "appears on", "worked with".
     pub label: String,
     /// "tags", "MB", "your library".
     pub source: String,
@@ -1249,7 +1237,7 @@ pub struct StopDto {
     pub target: TargetDto,
     /// The release's title, the person's name, or the search.
     pub title: String,
-    /// The thread into this stop: "on". None for the root.
+    /// The thread into this stop: "appears on". None for the root.
     pub via: Option<String>,
     /// Where that thread came from: "tags".
     pub via_source: Option<String>,

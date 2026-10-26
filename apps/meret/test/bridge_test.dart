@@ -186,7 +186,7 @@ void main() {
     final releaseTrail = await core.follow(root.current, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn, 'local_tags');
     final releaseStop = releaseTrail.current;
     expect(releaseTrail.stops.last.title, row.album);
-    expect(releaseTrail.stops.last.via, 'on');
+    expect(releaseTrail.stops.last.via, 'appears on');
     expect(releaseTrail.stops.last.viaSource, 'tags');
     final release = await core.release(row.releaseId);
     expect(release.id, row.releaseId);

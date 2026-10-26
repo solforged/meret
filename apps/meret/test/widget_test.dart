@@ -565,7 +565,7 @@ void main() {
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
     final hit = (await core.search('Iona')).people.first;
-    await tester.widget<SearchPane>(find.byType(SearchPane)).onFollow!(TargetDto.person(id: hit.id), ThreadKind.matched);
+    await tester.widget<SearchPane>(find.byType(SearchPane)).onFollow!(TargetDto.person(id: hit.id));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -698,7 +698,7 @@ void main() {
 
     final table = tester.widget<TablePane>(find.byType(TablePane));
     expect(table.query, 'idiom:score');
-    expect(find.descendant(of: find.ancestor(of: find.byType(SearchPane), matching: find.byType(Pane)), matching: find.text('idiom:score')), findsOneWidget);
+    expect(tester.widget<Pane>(find.ancestor(of: find.byType(SearchPane), matching: find.byType(Pane))).title, 'Scores', reason: 'the pane takes its door\'s name');
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(1));
   });
 
@@ -731,9 +731,9 @@ void main() {
     expect(tester.widget<SearchPane>(find.byType(SearchPane)).query, 'idiom:score');
     final trail = (await core.trail())!;
     expect(trail.stops.single.target, const TargetDto.search(query: 'idiom:score'));
-    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.stops.single.title, 'idiom:score');
+    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.stops.single.title, 'Scores');
     expect(find.byKey(const ValueKey('query-hits')), findsNothing);
-    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().map((pane) => pane.title), ['idiom:score']);
+    expect(tester.widget<PaneRow>(find.byType(PaneRow)).children.cast<Pane>().map((pane) => pane.title), ['Scores']);
   });
 
   testWidgets('the dropdown groups hits, highlights with arrows and closes on Escape', (tester) async {
@@ -842,7 +842,7 @@ void main() {
     expect(trail.stops.first.target, const TargetDto.search(query: 'Open'));
     expect(trail.stops.last.target, TargetDto.release(id: release.id));
     expect(trail.stops.last.title, 'Open Sky');
-    expect(trail.stops.last.via, 'matched');
+    expect(trail.stops.last.via, 'found');
     expect(tester.widget<PaneRow>(find.byType(PaneRow)).children, hasLength(2));
   });
 
@@ -921,7 +921,7 @@ void main() {
     expect(find.byType(TablePane), findsNothing);
   });
 
-  testWidgets('Command-L roots Everything; Command-1 twice shows Today over the trail and ] returns', (tester) async {
+  testWidgets('Command-L roots All tracks; Command-1 twice shows Today over the trail and ] returns', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
     await _commandKey(tester, LogicalKeyboardKey.keyL);
@@ -937,7 +937,7 @@ void main() {
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     expect(find.byType(Today), findsOneWidget);
     expect(_rowCovered(tester), isTrue, reason: 'the table stays mounted under Today, out of reach');
-    expect(find.textContaining('back to Everything'), findsOneWidget);
+    expect(find.textContaining('back to All tracks'), findsOneWidget);
     expect(find.byType(TrailChip), findsOneWidget, reason: 'the trail stays open behind Today');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
@@ -1153,7 +1153,7 @@ void main() {
     await tester.tap(find.byKey(ValueKey('table-release-${row.releaseId}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_paneTitles(tester), ['Everything', row.album]);
+    expect(_paneTitles(tester), ['All tracks', row.album]);
     expect(tester.widget<ReleasePane>(find.byType(ReleasePane)).id, row.releaseId);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
@@ -1162,12 +1162,12 @@ void main() {
     await tester.tap(find.byKey(ValueKey('table-group-artist-${row.releaseId}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_paneTitles(tester), ['Everything', row.artist]);
+    expect(_paneTitles(tester), ['All tracks', row.artist]);
     expect(tester.widget<PersonPane>(find.byType(PersonPane)).id, row.artistId);
     final trail = (await core.trail())!;
-    expect(trail.stops.map((stop) => stop.title), ['Everything', row.album, row.artist]);
+    expect(trail.stops.map((stop) => stop.title), ['All tracks', row.album, row.artist]);
     final chip = tester.widget<TrailChip>(find.byType(TrailChip));
-    expect(chip.trail.stops.map((stop) => stop.title), containsAll(['Everything', row.album, row.artist]));
+    expect(chip.trail.stops.map((stop) => stop.title), containsAll(['All tracks', row.album, row.artist]));
   });
 
   testWidgets('following from an earlier pane branches and replaces its later panes', (tester) async {
@@ -1184,13 +1184,13 @@ void main() {
     await tester.tap(find.byKey(ValueKey('thread-${credit.kind.name}-${credit.to}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_paneTitles(tester), ['Everything', row.album, credit.title]);
+    expect(_paneTitles(tester), ['All tracks', row.album, credit.title]);
 
     final other = release.credits.firstWhere((thread) => thread.to != credit.to);
-    await tester.widget<SearchPane>(find.byType(SearchPane)).onFollow!(other.to, other.kind);
+    await tester.widget<SearchPane>(find.byType(SearchPane)).onFollow!(other.to);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_paneTitles(tester), ['Everything', other.title]);
+    expect(_paneTitles(tester), ['All tracks', other.title]);
     expect(find.byType(ReleasePane), findsNothing);
     final trail = (await core.trail())!;
     expect(trail.stops.where((stop) => !stop.onPath), hasLength(2));
@@ -1208,12 +1208,12 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_paneTitles(tester), ['Everything']);
+    expect(_paneTitles(tester), ['All tracks']);
     expect(_aheadTitles(tester), [row.album], reason: '[ dims the stop ahead instead of removing it');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_paneTitles(tester), ['Everything', row.album]);
+    expect(_paneTitles(tester), ['All tracks', row.album]);
     for (var i = 0; i < 2; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
       await tester.pump();
@@ -1358,11 +1358,11 @@ void main() {
     await _commandKey(tester, LogicalKeyboardKey.keyL);
     await tester.tapAt(tester.getTopLeft(find.byKey(const ValueKey('table-row-0'))) + const Offset(8, 13));
     await _commandKey(tester, LogicalKeyboardKey.enter);
-    expect(_paneTitles(tester), ['Everything', row.album]);
+    expect(_paneTitles(tester), ['All tracks', row.album]);
     await tester.tap(find.byKey(const ValueKey('top-back')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(_paneTitles(tester), ['Everything']);
+    expect(_paneTitles(tester), ['All tracks']);
     expect(_aheadTitles(tester), [row.album]);
     expect((await core.trail())!.current, 0);
   });
