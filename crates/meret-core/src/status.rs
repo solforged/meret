@@ -32,7 +32,7 @@ pub struct StatusState {
 const SCAN_VERBS: [&str; 3] = ["scanning", "reading tags", "reading covers"];
 
 pub(crate) fn initial(registry: &Registry) -> StatusState {
-    let mut sources = vec![SourceStatus { key: "local".into(), name: local_name().into(), detail: "0".into(), ok: true }];
+    let mut sources = vec![SourceStatus { key: "local".into(), name: local_name().into(), detail: tracks_word(0), ok: true }];
     for provider in registry.all() {
         let (detail, ok) = match provider.health() {
             Health::Ok { detail } => (detail, true),
@@ -46,11 +46,16 @@ pub(crate) fn initial(registry: &Registry) -> StatusState {
     StatusState { sources, ..Default::default() }
 }
 
+/// "1 track", "844 tracks": a source's count says what it counts.
+fn tracks_word(n: u64) -> String {
+    format!("{} {}", thousands(n), if n == 1 { "track" } else { "tracks" })
+}
+
 pub(crate) fn set_library(s: &mut StatusState, tracks: u64) {
     s.tracks = tracks;
     s.library_version += 1;
     if let Some(local) = s.sources.iter_mut().find(|x| x.name == local_name()) {
-        local.detail = thousands(tracks);
+        local.detail = tracks_word(tracks);
     }
 }
 
