@@ -11,10 +11,14 @@ String _n(BigInt number) => number.toString().replaceAllMapped(RegExp(r'(\d)(?=(
 /// something needs you. Its popover lists sources, folders, jobs and
 /// guesses, and opens Settings.
 class Activity extends StatefulWidget {
-  const Activity({super.key, required this.core, required this.status});
+  const Activity({super.key, required this.core, required this.status, this.quiet = false});
 
   final CoreBridge core;
   final StatusDto? status;
+
+  /// Down to the dot or ring while the query has the centre; the words
+  /// wait in the tooltip.
+  final bool quiet;
 
   @override
   State<Activity> createState() => _ActivityState();
@@ -173,7 +177,7 @@ class _ActivityState extends State<Activity> {
       menuChildren: _popover(status),
       builder: (context, controller, _) => Semantics(
         label: words.isEmpty ? 'Every source is fine' : words,
-        child: TextButton(
+        child: Tooltip(message: widget.quiet ? words : '', child: TextButton(
           key: const ValueKey('activity'),
           focusNode: _focus,
           onPressed: () => controller.isOpen ? controller.close() : controller.open(),
@@ -192,15 +196,21 @@ class _ActivityState extends State<Activity> {
               ))
             else
               _Dot(needs.isEmpty ? Tok.ok : Tok.warn, key: const ValueKey('activity-dot')),
-            if (words.isNotEmpty) ...[
-              const SizedBox(width: 7),
-              Flexible(child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320),
-                child: Text(words, key: const ValueKey('activity-words'), style: Tok.label.copyWith(color: colour), maxLines: 1, overflow: TextOverflow.ellipsis),
-              )),
-            ],
+            // The words slide away with the query's slide, so the line never jumps.
+            Flexible(child: AnimatedSize(
+              duration: kMotion,
+              curve: Curves.easeOut,
+              alignment: Alignment.centerLeft,
+              child: words.isEmpty || widget.quiet ? const SizedBox(height: 11) : Padding(
+                padding: const EdgeInsets.only(left: 7),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 320),
+                  child: Text(words, key: const ValueKey('activity-words'), style: Tok.label.copyWith(color: colour), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+            )),
           ]),
-        ),
+        )),
       ),
     );
   }

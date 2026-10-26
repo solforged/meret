@@ -10,14 +10,15 @@ import 'window_chrome.dart';
 /// right, and one centre slot shared by whatever you're doing. With
 /// something loaded the LCD holds the window's centre and the query waits
 /// docked at the right; `/` grows the query over the centre and folds the LCD
-/// to a pill beside it. With nothing loaded the query has the centre. The
+/// to a pill beside it. With nothing loaded and Now closed the query has
+/// the centre. The
 /// LCD opens the Now panel, so the line has no Now button of its own. It is
 /// also the window's title bar: the window buttons sit at its left, and its
 /// empty space moves the window.
 class TopLine extends StatelessWidget {
   const TopLine({
     super.key, required this.query, required this.queryFocus, required this.lcd, required this.activity,
-    this.loaded = false, this.onBack, this.onForward, this.chip,
+    this.showLcd = false, this.onBack, this.onForward, this.chip,
   });
 
   final Widget query;
@@ -28,11 +29,15 @@ class TopLine extends StatelessWidget {
   /// The open trail's chip, built for the line's room: the star alone, the
   /// current stop, or the whole name with its counts.
   final Widget Function({bool compact, bool star})? chip;
-  final Widget lcd;
-  final Widget activity;
 
-  /// Something is in the player, so the LCD has the centre.
-  final bool loaded;
+  /// The LCD, folded to its pill while the query has the centre.
+  final Widget Function({bool folded}) lcd;
+
+  /// Activity, quiet down to its dot while the query has the centre.
+  final Widget Function({bool quiet}) activity;
+
+  /// Something is in the player, or Now is open, so the LCD has the centre.
+  final bool showLcd;
 
   /// `[` and `]`; null when there's nowhere to go.
   final VoidCallback? onBack;
@@ -62,6 +67,8 @@ class TopLine extends StatelessWidget {
                   const SizedBox(width: 8),
                 ],
                 Expanded(child: SizedBox(height: 28, child: query)),
+                const SizedBox(width: 14),
+                ConstrainedBox(constraints: BoxConstraints(maxWidth: box.maxWidth * 0.25), child: activity()),
               ]),
             );
           }
@@ -77,21 +84,27 @@ class TopLine extends StatelessWidget {
           ]);
           return ListenableBuilder(
             listenable: queryFocus,
-            builder: (context, _) => TweenAnimationBuilder<double>(
-              tween: Tween(end: queryFocus.hasFocus ? 1 : 0),
-              duration: kMotion,
-              curve: Curves.easeOut,
-              builder: (context, t, _) => CustomMultiChildLayout(
-                delegate: _CentreSlot(t: t, loaded: loaded, inset: inset),
-                children: [
-                  LayoutId(id: _Slot.left, child: left),
-                  // Too narrow to say anything, the LCD gives its room away.
-                  LayoutId(id: _Slot.lcd, child: LayoutBuilder(builder: (_, slot) => slot.maxWidth < _CentreSlot.pill * 0.6 ? const SizedBox.shrink() : lcd)),
-                  LayoutId(id: _Slot.query, child: query),
-                  LayoutId(id: _Slot.right, child: activity),
-                ],
-              ),
-            ),
+            builder: (context, _) {
+              final searching = queryFocus.hasFocus;
+              // Built once per change of state, not per frame of the slide.
+              final lcd = this.lcd(folded: searching);
+              final activity = this.activity(quiet: searching);
+              return TweenAnimationBuilder<double>(
+                tween: Tween(end: searching ? 1 : 0),
+                duration: kMotion,
+                curve: Curves.easeOut,
+                builder: (context, t, _) => CustomMultiChildLayout(
+                  delegate: _CentreSlot(t: t, showLcd: showLcd, inset: inset),
+                  children: [
+                    LayoutId(id: _Slot.left, child: left),
+                    // Too narrow to say anything, the LCD gives its room away.
+                    LayoutId(id: _Slot.lcd, child: LayoutBuilder(builder: (_, slot) => slot.maxWidth < _CentreSlot.pill * 0.6 ? const SizedBox.shrink() : lcd)),
+                    LayoutId(id: _Slot.query, child: query),
+                    LayoutId(id: _Slot.right, child: activity),
+                  ],
+                ),
+              );
+            },
           );
         }),
       ]),
@@ -104,9 +117,9 @@ enum _Slot { left, lcd, query, right }
 /// Places the line's four parts. [t] runs from resting (0) to searching (1),
 /// and the LCD and query slide between their two places along it.
 class _CentreSlot extends MultiChildLayoutDelegate {
-  _CentreSlot({required this.t, required this.loaded, required this.inset});
+  _CentreSlot({required this.t, required this.showLcd, required this.inset});
   final double t;
-  final bool loaded;
+  final bool showLcd;
   final double inset;
 
   static const _gap = 14.0;
@@ -145,11 +158,11 @@ class _CentreSlot extends MultiChildLayoutDelegate {
     }
 
     final docked = (w * 0.18).clamp(120.0, _docked);
-    final restQuery = loaded ? row(to - docked, docked, 28) : wide(to);
+    final restQuery = showLcd ? row(to - docked, docked, 28) : wide(to);
 
     // At rest the LCD sits on the window's centre, as wide as the nearer side allows.
     Rect? restLcd;
-    if (loaded) {
+    if (showLcd) {
       final room = to - docked - _gap;
       final half = math.min(centre - from, room - centre);
       if (half * 2 >= _lcdCentred) {
@@ -162,10 +175,10 @@ class _CentreSlot extends MultiChildLayoutDelegate {
     }
 
     // Searching, the LCD folds to a pill at the right and the query takes the centre.
-    final pillLcd = loaded ? row(to - pill, pill, 34) : null;
+    final pillLcd = showLcd ? row(to - pill, pill, 34) : null;
     final searchQuery = wide(pillLcd == null ? to : pillLcd.left - _gap);
 
-    final lcd = loaded ? Rect.lerp(restLcd ?? row(to, 0, 34), pillLcd, t)! : Rect.zero;
+    final lcd = showLcd ? Rect.lerp(restLcd ?? row(to, 0, 34), pillLcd, t)! : Rect.zero;
     layoutChild(_Slot.lcd, BoxConstraints.tight(lcd.size));
     positionChild(_Slot.lcd, lcd.topLeft);
     final query = Rect.lerp(restQuery, searchQuery, t)!;
@@ -174,7 +187,7 @@ class _CentreSlot extends MultiChildLayoutDelegate {
   }
 
   @override
-  bool shouldRelayout(_CentreSlot old) => old.t != t || old.loaded != loaded || old.inset != inset;
+  bool shouldRelayout(_CentreSlot old) => old.t != t || old.showLcd != showLcd || old.inset != inset;
 }
 
 class _Step extends StatelessWidget {

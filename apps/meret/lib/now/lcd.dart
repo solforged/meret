@@ -14,7 +14,7 @@ import 'now_pane.dart';
 class Lcd extends StatelessWidget {
   const Lcd({
     super.key, required this.core, required this.now, required this.clock, required this.onToggle,
-    this.onOpen, this.nothingToPlay = false, this.open = false,
+    this.onOpen, this.nothingToPlay = false, this.open = false, this.folded = false,
   });
   final CoreBridge core;
   final NowDto? now;
@@ -25,6 +25,9 @@ class Lcd extends StatelessWidget {
   final VoidCallback? onOpen;
   final bool open;
   final bool nothingToPlay;
+
+  /// Beside a search: the pill, whatever the width on the way there.
+  final bool folded;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +43,7 @@ class Lcd extends StatelessWidget {
       // Narrow, the DR mark goes first, then the time; the title and scrubber stay.
       // Narrower still, the pill keeps the time and scrubber and lets the title go.
       child: LayoutBuilder(builder: (context, box) {
-        final pill = box.maxWidth < 240;
+        final pill = folded || box.maxWidth < 240;
         final time = ListenableBuilder(
           listenable: clock,
           builder: (_, _) => Text(
@@ -56,7 +59,10 @@ class Lcd extends StatelessWidget {
         return Row(children: [
           Transport(core: core, now: n, clock: clock, onToggle: onToggle, compact: true, id: 'lcd'),
           SizedBox(width: pill ? 6 : 10),
-          Expanded(child: Tooltip(
+          // The full face and the pill cross-fade as the slot slides, so
+          // nothing snaps between layouts halfway.
+          Expanded(child: AnimatedSwitcher(duration: kMotion, child: Tooltip(
+            key: ValueKey(pill),
             message: onOpen == null ? '' : open ? 'Hide Now  N' : 'Show Now  N',
             child: GestureDetector(
               key: const ValueKey('lcd-title'),
@@ -94,7 +100,7 @@ class Lcd extends StatelessWidget {
                       ]),
               ),
             ),
-          )),
+          ))),
         ]);
       }),
     );
