@@ -192,8 +192,8 @@ class MainFlutterWindow: NSWindow {
     placeButtons()
   }
 
-  /// The top line is 44 points; the buttons sit on its centre line.
-  private static let topLine: CGFloat = 44
+  /// The top line is 52 points (`TopLine.height`); the buttons sit on its centre line.
+  private static let topLine: CGFloat = 52
 
   private func placeButtons() {
     guard !styleMask.contains(.fullScreen) else { return }

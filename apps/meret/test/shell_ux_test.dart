@@ -434,6 +434,12 @@ void main() {
     final query = find.byType(QueryLine);
     expect(tester.getCenter(lcd).dx, moreOrLessEquals(900, epsilon: 1), reason: 'centred on the window, not on what the chip leaves');
     expect(tester.getTopLeft(query).dx, greaterThan(tester.getTopRight(lcd).dx), reason: 'the query waits docked at the right');
+    // iTunes' three lines: title, subtitle under it, the scrubber across with a time at each end.
+    expect(tester.getSize(lcd).height, 46);
+    final seek = find.descendant(of: lcd, matching: find.byKey(const ValueKey('lcd-seek')));
+    expect(tester.getCenter(find.byKey(const ValueKey('lcd-subtitle'))).dy, lessThan(tester.getCenter(seek).dy));
+    expect(tester.getTopRight(find.byKey(const ValueKey('lcd-time'))).dx, lessThan(tester.getTopLeft(seek).dx));
+    expect(tester.getTopLeft(find.byKey(const ValueKey('lcd-length'))).dx, greaterThan(tester.getTopRight(seek).dx));
     final docked = tester.getSize(query).width;
     expect(find.text('Search'), findsOneWidget, reason: 'docked, the hint is one word');
     expect(find.byKey(const ValueKey('activity-words')), findsOneWidget);
