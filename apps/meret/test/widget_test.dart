@@ -1127,6 +1127,33 @@ void main() {
     expect(core.played, [('', 3)]);
   });
 
+  testWidgets('a single click on a release title follows at once, without waiting out a double tap', (tester) async {
+    final core = _RecordingCore();
+    final followed = <TargetDto>[];
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: LightScope(light: Light.brass, child: TablePane(
+      core: core, query: '', onQuery: (_) {}, onFollow: (to) async => followed.add(to),
+    )))));
+    await tester.pumpAndSettle();
+    final title = find.byWidgetPredicate((widget) => widget.key is ValueKey<String> && (widget.key! as ValueKey<String>).value.startsWith('table-release-')).first;
+    await tester.tap(title);
+    await tester.pump();
+    expect(followed, hasLength(1));
+    expect(followed.single, isA<TargetDto_Release>());
+  });
+
+  testWidgets('a narrow table drops LUFS, DR, Format and Year before it squeezes the title', (tester) async {
+    Future<Set<String>> headers(double width) async {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SizedBox(width: width, height: 600,
+        child: LightScope(light: Light.brass, child: TablePane(core: FakeCore(), query: '', onQuery: (_) {})))))));
+      await tester.pumpAndSettle();
+      return {for (final name in ['library_', 'title', 'artist', 'year', 'length', 'format']) if (find.byKey(ValueKey('table-sort-$name')).evaluate().isNotEmpty) name};
+    }
+    expect(await headers(1000), {'library_', 'title', 'artist', 'year', 'length', 'format'});
+    expect(find.text('LUFS'), findsNWidgets(2), reason: 'the histogram and the column');
+    expect(await headers(420), {'library_', 'title', 'artist', 'length'});
+    expect(find.text('LUFS'), findsOneWidget, reason: 'only the histogram is left');
+  });
+
   testWidgets('the table refetches when query or library version changes', (tester) async {
     final core = _RecordingCore();
     await tester.pumpWidget(_table(core, libraryVersion: BigInt.one));

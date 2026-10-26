@@ -1073,7 +1073,7 @@ class FakeCore implements CoreBridge {
           albumArtist: first.albumArtist, albumArtistId: first.albumArtistId,
           year: first.year, idiom: _idiom(first), tracks: rows.length,
           lengthMs: rows.fold(BigInt.zero, (total, row) => total + (row.lengthMs ?? BigInt.zero)),
-          format: [if (rows.any((row) => row.format != 'AAC')) 'Lossless, up to 16/48', if (rows.any((row) => row.format == 'AAC')) 'Lossy'].join(' · '),
+          format: [if (rows.any((row) => row.format != 'AAC')) 'Lossless', if (rows.any((row) => row.format == 'AAC')) 'Lossy'].join(' · '),
         );
       }
       final releases = groups.keys.toList()..sort((a, b) {

@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -55,6 +55,7 @@ class _TablePaneState extends State<TablePane> {
   String? _rowsError;
   String? _actionError;
   bool _adding = false;
+  (int, Duration)? _lastDown;
 
   @override
   void initState() {
@@ -301,13 +302,13 @@ class _TablePaneState extends State<TablePane> {
         FacetBrowser(facets: _facets, onQuery: widget.onQuery),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(child: HistogramHeader(label: 'Year', bins: _year?.bins ?? Uint32List(0), onBrush: (r) => _brush('year', r, 1950, 2026))),
+          Expanded(child: HistogramHeader(label: 'Year', range: '1950–2026', bins: _year?.bins ?? Uint32List(0), onBrush: (r) => _brush('year', r, 1950, 2026))),
           const SizedBox(width: 16),
-          Expanded(child: HistogramHeader(label: 'Last played', bins: _last?.bins ?? Uint32List(0), onBrush: _brushRecent)),
+          Expanded(child: HistogramHeader(label: 'Last played', range: 'year ago–now', bins: _last?.bins ?? Uint32List(0), onBrush: _brushRecent)),
           const SizedBox(width: 16),
-          Expanded(child: HistogramHeader(key: const ValueKey('table-dr-histogram'), label: 'DR', bins: _dr?.bins ?? Uint32List(0), onBrush: (r) => _brush('dr', r, 0, 30))),
+          Expanded(child: HistogramHeader(key: const ValueKey('table-dr-histogram'), label: 'DR', range: '0–30', bins: _dr?.bins ?? Uint32List(0), onBrush: (r) => _brush('dr', r, 0, 30))),
           const SizedBox(width: 16),
-          Expanded(child: HistogramHeader(key: const ValueKey('table-lufs-histogram'), label: 'LUFS', bins: _loudness?.bins ?? Uint32List(0), onBrush: (r) => _brush('lufs', r, -60, 0))),
+          Expanded(child: HistogramHeader(key: const ValueKey('table-lufs-histogram'), label: 'LUFS', range: '−60–0', bins: _loudness?.bins ?? Uint32List(0), onBrush: (r) => _brush('lufs', r, -60, 0))),
         ]),
         const Divider(color: Tok.line, height: 16),
         Wrap(spacing: 12, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
@@ -319,7 +320,6 @@ class _TablePaneState extends State<TablePane> {
               _segment('None', false),
             ])),
           ]),
-          TextButton(onPressed: _adding ? null : _addFolder, child: const Text('+ Add folder', style: Tok.label)),
         ]),
         if (_actionError != null) Text(_actionError!, style: Tok.label.copyWith(color: Tok.warn)),
         Expanded(
@@ -329,39 +329,36 @@ class _TablePaneState extends State<TablePane> {
                   ? Center(child: TextButton(onPressed: _adding ? null : _addFolder, child: const Text('Add a music folder', style: Tok.body)))
                   : _total == 0
                       ? Center(child: Text(widget.scanning ? 'Scanning…' : 'No matching tracks', style: Tok.label))
-                      : LayoutBuilder(builder: (context, box) => SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: math.max(840, box.maxWidth), height: box.maxHeight,
-                            child: Column(children: [
-                              SizedBox(height: _row, child: _headers()),
+                      : LayoutBuilder(builder: (context, box) {
+                          final shown = _shownColumns(box.maxWidth);
+                          return Column(children: [
+                              SizedBox(height: _row, child: _headers(shown)),
                               Expanded(child: ListView.builder(
                                 key: const ValueKey('table-rows'), controller: _scroll,
                                 itemExtent: _row, itemCount: _total ?? 1,
                                 itemBuilder: (_, i) {
                                   final item = _lookup(i);
                                   final playing = item is ItemDto_Track && item.row.trackId.toInt() == light.track;
+                                  // A double click is counted here, not by a gesture
+                                  // recognizer: one would hold every single click on a
+                                  // title or artist for the double-tap timeout.
                                   return Listener(
                                     key: ValueKey('table-row-$i'), behavior: HitTestBehavior.opaque,
-                                    onPointerDown: (_) => _select(i),
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque, onDoubleTap: () => _play(i),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: playing ? light.wash : _selected == i ? Tok.panel2 : Colors.transparent,
-                                          border: Border(left: BorderSide(color: playing ? light.accent : Colors.transparent, width: 2), bottom: const BorderSide(color: Tok.line)),
-                                        ),
-                                        child: item == null
-                                            ? const Align(alignment: Alignment.centerLeft, child: Text('…', style: Tok.label))
-                                            : _columns(item, playing: playing, light: light),
+                                    onPointerDown: (event) => _down(i, event.timeStamp),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: playing ? light.wash : _selected == i ? Tok.panel2 : Colors.transparent,
+                                        border: Border(left: BorderSide(color: playing ? light.accent : Colors.transparent, width: 2), bottom: const BorderSide(color: Tok.line)),
                                       ),
+                                      child: item == null
+                                          ? const Align(alignment: Alignment.centerLeft, child: Text('…', style: Tok.label))
+                                          : _columns(item, shown, playing: playing, light: light),
                                     ),
                                   );
                                 },
                               )),
-                            ]),
-                          ),
-                        )),
+                            ]);
+                        }),
         ),
       ]),
     );
@@ -392,22 +389,46 @@ class _TablePaneState extends State<TablePane> {
     );
   }
 
-  Widget _headers() {
+  void _down(int index, Duration at) {
+    final last = _lastDown;
+    _lastDown = (index, at);
+    _select(index);
+    if (last != null && last.$1 == index && at - last.$2 <= kDoubleTapTimeout) {
+      _lastDown = null;
+      _play(index);
+    }
+  }
+
+  /// The fixed columns that fit beside a readable title and artist, giving
+  /// way from the right: LUFS first, then DR, Format and Year. # and
+  /// Length always stay.
+  Set<_Col> _shownColumns(double width) {
+    final shown = {..._Col.values};
+    final flex = _view.group ? 300.0 : 460.0;
+    double fixed() => shown.fold(0.0, (sum, col) => sum + col.width);
+    for (final col in const [_Col.lufs, _Col.dr, _Col.format, _Col.year]) {
+      if (fixed() + flex <= width) break;
+      shown.remove(col);
+    }
+    return shown;
+  }
+
+  Widget _headers(Set<_Col> shown) {
     Widget header(String name, SortKeyDto sort) => _cell(
       '$name${_view.sort == sort ? _view.descending ? ' ↓' : ' ↑' : ''}',
       Tok.label.copyWith(color: _view.sort == sort ? Tok.gold : Tok.faint),
       key: ValueKey('table-sort-${sort.name}'), onTap: () => _sort(sort),
     );
     return Row(children: [
-      SizedBox(width: 40, child: header('#', SortKeyDto.library_)),
+      SizedBox(width: _Col.number.width, child: header('#', SortKeyDto.library_)),
       Expanded(flex: 4, child: header('Title', SortKeyDto.title)),
       Expanded(flex: 3, child: header('Artist', SortKeyDto.artist)),
       if (!_view.group) Expanded(flex: 4, child: header('Album', SortKeyDto.album)),
-      SizedBox(width: 60, child: header('Year', SortKeyDto.year)),
-      SizedBox(width: 72, child: header('Length', SortKeyDto.length)),
-      SizedBox(width: 120, child: header('Format', SortKeyDto.format)),
-      SizedBox(width: 48, child: _cell('DR', Tok.label)),
-      SizedBox(width: 64, child: _cell('LUFS', Tok.label)),
+      if (shown.contains(_Col.year)) SizedBox(width: _Col.year.width, child: header('Year', SortKeyDto.year)),
+      SizedBox(width: _Col.length.width, child: header('Length', SortKeyDto.length)),
+      if (shown.contains(_Col.format)) SizedBox(width: _Col.format.width, child: header('Format', SortKeyDto.format)),
+      if (shown.contains(_Col.dr)) SizedBox(width: _Col.dr.width, child: _cell('DR', Tok.label)),
+      if (shown.contains(_Col.lufs)) SizedBox(width: _Col.lufs.width, child: _cell('LUFS', Tok.label)),
     ]);
   }
 
@@ -419,7 +440,7 @@ class _TablePaneState extends State<TablePane> {
         : '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
   }
 
-  Widget _columns(ItemDto item, {required bool playing, required Light light}) {
+  Widget _columns(ItemDto item, Set<_Col> shown, {required bool playing, required Light light}) {
     final group = item is ItemDto_Group ? item.field0 : null;
     final row = item is ItemDto_Track ? item.row : null;
     final artist = group?.albumArtist ?? (_view.group && row?.artist == row?.albumArtist ? '' : row?.artist ?? '');
@@ -433,21 +454,21 @@ class _TablePaneState extends State<TablePane> {
             const SizedBox(width: 10),
             Expanded(child: TrailRow(target: TargetDto.release(id: group.releaseId), child: _cell(group.title, Tok.body.copyWith(fontWeight: FontWeight.w600),
               key: ValueKey('table-release-${group.releaseId}'), onTap: widget.onFollow == null ? null : () => _follow(item)))),
-            _cell(_count(group.tracks, 'track'), Tok.label),
+            Flexible(child: _cell(_count(group.tracks, 'track'), Tok.label)),
           ]);
     return Row(children: [
-      SizedBox(width: 40, child: _cell(group != null || row!.number == 0 ? '' : row.disc > 1 ? '${row.disc}-${row.number}' : '${row.number}', Tok.monoSmall)),
+      SizedBox(width: _Col.number.width, child: _cell(group != null || row!.number == 0 ? '' : row.disc > 1 ? '${row.disc}-${row.number}' : '${row.number}', Tok.monoSmall)),
       Expanded(flex: 4, child: title),
       Expanded(flex: 3, child: _went(person == null || artist.isEmpty ? null : TargetDto.person(id: person), _cell(artist, Tok.body.copyWith(color: Tok.muted),
         key: group != null ? ValueKey('table-group-artist-${group.releaseId}') : ValueKey('table-artist-${row!.trackId}'),
         onTap: widget.onFollow == null || person == null || artist.isEmpty ? null : () => _follow(item, artist: true)))),
       if (!_view.group) Expanded(flex: 4, child: TrailRow(target: TargetDto.release(id: row!.releaseId), child: _cell(row.album, Tok.body.copyWith(color: Tok.muted),
         key: ValueKey('table-album-${row.trackId}'), onTap: widget.onFollow == null ? null : () => _follow(item)))),
-      SizedBox(width: 60, child: _cell(group != null ? '${group.year ?? ''}' : _view.group ? '' : '${row!.year ?? ''}', Tok.monoSmall)),
-      SizedBox(width: 72, child: _cell(_length(group?.lengthMs ?? row?.lengthMs), Tok.monoSmall)),
-      SizedBox(width: 120, child: _cell(group?.format ?? row!.format, Tok.monoSmall)),
-      SizedBox(width: 48, child: _cell('${row?.dr ?? ''}', Tok.monoSmall)),
-      SizedBox(width: 64, child: _cell(row?.loudness?.toStringAsFixed(1) ?? '', Tok.monoSmall)),
+      if (shown.contains(_Col.year)) SizedBox(width: _Col.year.width, child: _cell(group != null ? '${group.year ?? ''}' : _view.group ? '' : '${row!.year ?? ''}', Tok.monoSmall)),
+      SizedBox(width: _Col.length.width, child: _cell(_length(group?.lengthMs ?? row?.lengthMs), Tok.monoSmall)),
+      if (shown.contains(_Col.format)) SizedBox(width: _Col.format.width, child: _cell(group?.format ?? row!.format, Tok.monoSmall)),
+      if (shown.contains(_Col.dr)) SizedBox(width: _Col.dr.width, child: _cell('${row?.dr ?? ''}', Tok.monoSmall)),
+      if (shown.contains(_Col.lufs)) SizedBox(width: _Col.lufs.width, child: _cell(row?.loudness?.toStringAsFixed(1) ?? '', Tok.monoSmall)),
     ]);
   }
 
@@ -465,4 +486,12 @@ class _TablePaneState extends State<TablePane> {
     final days = ((1 - r.$1) * 365).ceil();
     widget.onQuery('last:${days}d');
   }
+}
+
+/// The table's fixed-width columns.
+enum _Col {
+  number(40), year(60), length(72), format(120), dr(48), lufs(64);
+
+  const _Col(this.width);
+  final double width;
 }

@@ -8,9 +8,12 @@ import '../theme/tokens.dart';
 /// Dragging across it brushes a range; the caller turns that into a query
 /// clause such as `last:30d` and asks the core for new counts.
 class HistogramHeader extends StatefulWidget {
-  const HistogramHeader({super.key, required this.label, required this.bins, this.onBrush, this.height = 44});
+  const HistogramHeader({super.key, required this.label, required this.bins, this.range, this.onBrush, this.height = 44});
 
   final String label;
+
+  /// The span the bins cover, drawn at the right of the label: `1950–2026`.
+  final String? range;
   final Uint32List bins;
   final ValueChanged<(double, double)?>? onBrush;
   final double height;
@@ -51,7 +54,12 @@ class _HistogramHeaderState extends State<HistogramHeader> {
             painter: _HistogramPainter(widget.bins, _brush),
             child: Align(
               alignment: Alignment.topLeft,
-              child: Text(widget.label.toUpperCase(), style: Tok.label),
+              child: Row(children: [
+                Flexible(child: Text(widget.label.toUpperCase(), style: Tok.label, maxLines: 1, overflow: TextOverflow.clip)),
+                const Spacer(),
+                // A narrow header keeps its label and drops the span.
+                if (widget.range case final range? when box.maxWidth >= 140) Text(range, style: Tok.label.copyWith(color: Tok.faint)),
+              ]),
             ),
           ),
         ),
