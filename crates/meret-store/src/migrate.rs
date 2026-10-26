@@ -34,7 +34,10 @@ pub fn run(conn: &mut Connection) -> rusqlite::Result<()> {
         tx.commit()?;
         tracing::info!(version = i + 1, "migrated library.db");
     }
-    Ok(())
+    // Not a numbered migration: it follows how names split, so it checks at every open.
+    let tx = conn.transaction()?;
+    crate::credits::split_joined(&tx)?;
+    tx.commit()
 }
 
 #[cfg(test)]
@@ -164,6 +167,36 @@ mod tests {
         assert_eq!(conn.query_row("SELECT artist_credit FROM recording WHERE id = 2", [], |r| r.get::<_, String>(0)).unwrap(), "Geoff Knorr & Michael Curran");
         assert_eq!(conn.query_row("SELECT album_artist_credit FROM release WHERE id = 1", [], |r| r.get::<_, String>(0)).unwrap(), "Geoff Knorr & Michael Curran");
         assert_eq!(conn.query_row("SELECT COUNT(*) FROM search WHERE entity_kind = 6", [], |r| r.get::<_, u32>(0)).unwrap(), 6);
+        let credits: u32 = conn.query_row("SELECT COUNT(*) FROM credit", [], |r| r.get(0)).unwrap();
+        run(&mut conn).unwrap();
+        assert_eq!(conn.query_row("SELECT COUNT(*) FROM credit", [], |r| r.get::<_, u32>(0)).unwrap(), credits);
+    }
+
+    #[test]
+    fn names_joined_by_a_slash_split_at_open_and_join_people_known_by_name() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        crate::search::register(&conn).unwrap();
+        run(&mut conn).unwrap();
+        conn.execute_batch(
+            "INSERT INTO provenance (id, source, fetched_at) VALUES (1, 'local_tags', 0), (2, 'wikidata', 0);
+             INSERT INTO agent (id, kind, name, normalized_name, rev) VALUES
+               (1, 0, 'Roger Briggs', 'roger briggs', 1), (2, 0, 'Roger Briggs/Mark Cromer', 'roger briggs/mark cromer', 1),
+               (3, 0, 'AC/DC', 'ac/dc', 1);
+             INSERT INTO recording (id, title, rev) VALUES (1, 'Opening', 1), (2, 'Back in Black', 1);
+             INSERT INTO release (id, title, rev) VALUES (1, 'Soundtrack', 1);
+             INSERT INTO game (id, title, rev) VALUES (1, 'The Game', 1);
+             INSERT INTO credit (subject_kind, subject_id, agent_id, role, provenance_id, rev) VALUES
+               (13, 1, 1, 'composer', 2, 1), (2, 1, 2, 'artist', 1, 1), (3, 1, 2, 'album_artist', 1, 1),
+               (2, 2, 3, 'artist', 1, 1);"
+        ).unwrap();
+        run(&mut conn).unwrap();
+        let names = conn.prepare("SELECT name FROM agent ORDER BY id").unwrap()
+            .query_map([], |r| r.get::<_, String>(0)).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+        assert_eq!(names, ["Roger Briggs", "AC/DC", "Mark Cromer"]);
+        let roles = conn.prepare("SELECT subject_kind, role FROM credit WHERE agent_id = 1 ORDER BY subject_kind").unwrap()
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))).unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+        assert_eq!(roles, [(2, "artist".into()), (3, "album_artist".into()), (13, "composer".into())],
+            "the person Wikidata named is the one the tags credit");
         let credits: u32 = conn.query_row("SELECT COUNT(*) FROM credit", [], |r| r.get(0)).unwrap();
         run(&mut conn).unwrap();
         assert_eq!(conn.query_row("SELECT COUNT(*) FROM credit", [], |r| r.get::<_, u32>(0)).unwrap(), credits);

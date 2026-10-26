@@ -1,4 +1,5 @@
-//! Canonical local-tag people and the data part of migration 0007.
+//! Canonical local-tag people, the data part of migration 0007, and the
+//! repair that splits names once joined by `/`.
 
 use meret_model::credit::{clean_name, name_key, split_credit};
 use rusqlite::{OptionalExtension, Transaction, params};
@@ -16,6 +17,60 @@ pub fn agent(tx: &Transaction<'_>, name: &str, rev: i64) -> rusqlite::Result<i64
     )?;
     search::index_agent(tx, id)?;
     Ok(id)
+}
+
+/// Local-tag credits stored under one joined name before `/` split names
+/// ("Roger Briggs/Mark Cromer") move to each person, joining anyone already
+/// known by that name. It runs at every open and finds nothing once done.
+pub(crate) fn split_joined(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    let joined = tx.prepare("SELECT id, name FROM agent WHERE name LIKE '%/%'")?
+        .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter().filter(|(_, name)| split_credit(name).len() > 1).collect::<Vec<_>>();
+    if joined.is_empty() {
+        return Ok(());
+    }
+    let rev = crate::next_rev(tx)?;
+    let (mut recordings, mut releases) = (vec![], vec![]);
+    for (joined_id, name) in joined {
+        let credits = tx.prepare(
+            "SELECT c.id, c.subject_kind, c.subject_id, c.role, c.detail, c.sort, c.provenance_id
+             FROM credit c LEFT JOIN provenance p ON p.id = c.provenance_id
+             WHERE c.agent_id = ?1 AND (p.source = 'local_tags' OR p.id IS NULL)"
+        )?.query_map([joined_id], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?, r.get::<_, String>(3)?,
+            r.get::<_, Option<String>>(4)?, r.get::<_, i64>(5)?, r.get::<_, Option<i64>>(6)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        let people = split_credit(&name).iter().map(|person| agent(tx, person, rev)).collect::<rusqlite::Result<Vec<_>>>()?;
+        for (id, kind, subject, role, detail, sort, provenance) in credits {
+            tx.execute("DELETE FROM credit WHERE id = ?1", [id])?;
+            for (i, person) in people.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO credit (subject_kind, subject_id, agent_id, role, detail, sort, provenance_id, rev)
+                     SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE NOT EXISTS (
+                        SELECT 1 FROM credit WHERE subject_kind = ?1 AND subject_id = ?2 AND agent_id = ?3 AND role = ?4 AND provenance_id IS ?7)",
+                    params![kind, subject, person, role, detail, sort * 1000 + i as i64, provenance, rev],
+                )?;
+            }
+            match kind {
+                2 => recordings.push(subject),
+                3 => releases.push(subject),
+                _ => {}
+            }
+        }
+        // The joined name goes only when nothing else points at it.
+        let unused = tx.query_row(
+            "SELECT NOT EXISTS (SELECT 1 FROM credit WHERE agent_id = ?1)
+                AND NOT EXISTS (SELECT 1 FROM external_id WHERE entity_kind = 6 AND entity_id = ?1)
+                AND NOT EXISTS (SELECT 1 FROM edge WHERE (from_kind = 6 AND from_id = ?1) OR (to_kind = 6 AND to_id = ?1))",
+            [joined_id], |r| r.get::<_, bool>(0),
+        )?;
+        if unused {
+            tx.execute("DELETE FROM search WHERE entity_kind = 6 AND entity_id = ?1", [joined_id])?;
+            tx.execute("DELETE FROM agent WHERE id = ?1", [joined_id])?;
+        }
+        for person in people { search::index_agent(tx, person)?; }
+    }
+    for id in recordings { search::index_recording(tx, id)?; }
+    for id in releases { search::index_release(tx, id)?; }
+    Ok(())
 }
 
 pub(crate) fn migrate(tx: &Transaction<'_>) -> rusqlite::Result<()> {
