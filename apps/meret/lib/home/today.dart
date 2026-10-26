@@ -339,7 +339,7 @@ class _TodayState extends State<Today> {
     core: widget.core, now: widget.now, resumeLimit: 6, historyLimit: 0, onRelease: widget.onRelease,
     header: (points) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if ((widget.now, widget.clock) case (final now?, final clock?) when now.anchor != null)
-        ResumeHeader(core: widget.core, now: now, clock: clock, onToggle: widget.onToggle ?? () {}, points: points),
+        ResumeHeader(now: now, clock: clock, onToggle: widget.onToggle ?? () {}, points: points),
       PlaySomething(core: widget.core, now: widget.now),
       const SizedBox(height: 22),
     ]),
