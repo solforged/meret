@@ -144,7 +144,7 @@ class _WorkPaneState extends State<WorkPane> {
                   child: GestureDetector(
                     key: ValueKey('work-album-${row.trackId}'),
                     onTap: () => _follow(ThreadDto(
-                      kind: ThreadKind.appearsOn, label: 'on', source: 'tags', provider: 'local_tags',
+                      kind: ThreadKind.appearsOn, label: 'appears on', source: 'tags', provider: 'local_tags',
                       to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
                     )),
                     child: TrailRow(target: TargetDto.release(id: row.releaseId), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

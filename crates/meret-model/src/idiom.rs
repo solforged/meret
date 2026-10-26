@@ -128,6 +128,19 @@ impl Idiom {
         }
     }
 
+    /// What Home, the facets and a door's pane call the idiom.
+    pub fn plural(self) -> &'static str {
+        match self {
+            Idiom::Album => "Albums",
+            Idiom::Song => "Songs",
+            Idiom::Work => "Works",
+            Idiom::Session => "Sessions",
+            Idiom::Score => "Scores",
+            Idiom::Set => "Sets",
+            Idiom::Spoken => "Spoken",
+        }
+    }
+
     /// Accepts the singular and the plural the Front uses ("scores", "works").
     pub fn parse(s: &str) -> Option<Idiom> {
         let s = s.to_ascii_lowercase();

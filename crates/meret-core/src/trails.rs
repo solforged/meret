@@ -1,8 +1,24 @@
 use std::collections::HashSet;
 
 use meret_model::EntityRef;
+use meret_query::{Clause, Input, Term, parse};
 
 use crate::{Core, CoreError, MAX_QUEUE, Result, queue_items};
+
+/// What a search stop is called: the Home door that roots it ("All tracks",
+/// "Scores"), or the query as typed.
+pub fn search_title(query: &str) -> String {
+    if query.trim().is_empty() {
+        return "All tracks".into();
+    }
+    match parse(query) {
+        Ok(Input::Search(q)) => match q.clauses.as_slice() {
+            [Clause { negated: false, term: Term::Idiom { idiom } }] => idiom.plural().into(),
+            _ => query.into(),
+        },
+        _ => query.into(),
+    }
+}
 
 impl Core {
     /// Plays the active trail: `whole`, every stop of the tree depth first;
@@ -99,6 +115,16 @@ mod tests {
     use crate::{CoreConfig, OutputChoice};
     use meret_graph::{Action, Trail, Via};
     use meret_model::{AgentId, EntityRef, ReleaseId, ThreadKind};
+
+    #[test]
+    fn searches_a_door_roots_take_the_doors_name() {
+        assert_eq!(search_title(""), "All tracks");
+        assert_eq!(search_title("idiom:score"), "Scores");
+        assert_eq!(search_title("idiom:session"), "Sessions");
+        assert_eq!(search_title("idiom:score year:2001"), "idiom:score year:2001");
+        assert_eq!(search_title("-idiom:score"), "-idiom:score");
+        assert_eq!(search_title("lepreezy"), "lepreezy");
+    }
 
     #[test]
     fn walking_then_reopening_starts_on_front_and_back_restores_same_tree() {

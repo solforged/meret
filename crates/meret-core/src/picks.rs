@@ -87,7 +87,7 @@ impl Core {
         recent.into_iter().map(|(name, root, releases)| {
             let title = match (name, root) {
                 (Some(name), _) => name,
-                (None, Some((EntityRef::Search, query))) => query.filter(|q| !q.is_empty()).unwrap_or_else(|| "Everything".into()),
+                (None, Some((EntityRef::Search, query))) => crate::search_title(query.as_deref().unwrap_or_default()),
                 (None, Some((EntityRef::Release(id), _))) => self.store.release_title(id)?.unwrap_or_else(|| "gone".into()),
                 (None, Some((EntityRef::Agent(id), _))) => self.store.agent_name(id)?.unwrap_or_else(|| "gone".into()),
                 _ => "gone".into(),

@@ -69,8 +69,8 @@ impl ThreadKind {
             Self::ListenedAfter => "listened after",
             Self::By => "by",
             Self::AlbumArtist => "album artist",
-            Self::AppearsOn => "on",
-            Self::Matched => "matched",
+            Self::AppearsOn => "appears on",
+            Self::Matched => "found",
         }
     }
 

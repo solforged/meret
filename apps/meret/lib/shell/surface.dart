@@ -502,7 +502,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         libraryVersion: _status?.libraryVersion,
         tracks: _status?.tracks,
         scanning: scanning,
-        onFollow: (to, via) => follow(to, via, 'local_tags'),
+        onFollow: (to) => follow(to, ThreadKind.matched, 'library'),
         onHit: (hit) => _report(follow(_hitTarget(hit), ThreadKind.matched, 'library')),
       ),
       TargetDto_Release(:final id) => ReleasePane(core: widget.core, id: id, fromStop: stop.index, onFollow: follow, title: stop.title,

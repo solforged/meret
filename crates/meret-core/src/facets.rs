@@ -52,7 +52,7 @@ impl Core {
             tracks: idiom_rows.len() as u32,
             entries: Idiom::ALL.into_iter().filter_map(|idiom| {
                 let count = counts[idiom as usize];
-                (count > 0).then(|| facet(&q, 0, idiom as i64, plural(idiom).into(), count, Term::Idiom { idiom }))
+                (count > 0).then(|| facet(&q, 0, idiom as i64, idiom.plural().into(), count, Term::Idiom { idiom }))
             }).collect(),
         };
 
@@ -137,18 +137,6 @@ fn facet(q: &Query, column: u8, id: i64, name: String, tracks: u32, term: Term) 
 
 fn sort_names(entries: &mut [Facet]) {
     entries.sort_by_cached_key(|f| (f.name.to_lowercase(), f.id));
-}
-
-fn plural(idiom: Idiom) -> &'static str {
-    match idiom {
-        Idiom::Album => "Albums",
-        Idiom::Song => "Songs",
-        Idiom::Work => "Works",
-        Idiom::Session => "Sessions",
-        Idiom::Score => "Scores",
-        Idiom::Set => "Sets",
-        Idiom::Spoken => "Spoken",
-    }
 }
 
 #[cfg(test)]

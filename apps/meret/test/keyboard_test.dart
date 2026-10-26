@@ -140,7 +140,7 @@ void main() {
 
     final opened = <TargetDto>[];
     await tester.pumpWidget(_pane(TablePane(
-      core: core, query: '', onQuery: (_) {}, onFollow: (target, _) async { opened.add(target); },
+      core: core, query: '', onQuery: (_) {}, onFollow: (target) async { opened.add(target); },
     )));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('table-row-0')));

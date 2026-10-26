@@ -132,7 +132,7 @@ void main() {
     }
 
     await fadesIn(LogicalKeyboardKey.bracketLeft, 'today');
-    expect(find.text('] back to Everything'), findsOneWidget);
+    expect(find.text('] back to All tracks'), findsOneWidget);
     expect(find.byType(TrailChip), findsOneWidget);
     await fadesOut(LogicalKeyboardKey.bracketRight, 'today');
     // The first ⌘1 lays the Home column over the trail; the second shows Today.
@@ -318,7 +318,7 @@ void main() {
     }
 
     await _key(tester, LogicalKeyboardKey.keyL, meta: true);
-    await fadesThrough('Everything');
+    await fadesThrough('All tracks');
     // [ at a root steps back into the previous tree, which fades through too.
     await _key(tester, LogicalKeyboardKey.bracketLeft);
     await fadesThrough('Iona');
@@ -357,7 +357,7 @@ void main() {
     }
 
     final chip = find.byKey(const ValueKey('trail-chip-name'));
-    expect(tester.widget<Text>(chip).data, 'Everything → ${trail.stops.last.title}');
+    expect(tester.widget<Text>(chip).data, 'All tracks → ${trail.stops.last.title}');
     expect(find.textContaining('3 stops · T'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('trail-chip')));
     await tester.pumpAndSettle();
@@ -376,7 +376,7 @@ void main() {
     expect(trail.stops, hasLength(1), reason: 'a door never forks the current tree');
     await _key(tester, LogicalKeyboardKey.digit1, meta: true);
     await tester.pumpAndSettle();
-    expect(find.descendant(of: find.byKey(const ValueKey('home-column')), matching: find.textContaining('Everything')), findsOneWidget, reason: 'the old tree is in Trails');
+    expect(find.descendant(of: find.byKey(const ValueKey('home-column')), matching: find.textContaining('All tracks →')), findsOneWidget, reason: 'the old tree is in Trails');
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
