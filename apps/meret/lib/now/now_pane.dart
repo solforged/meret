@@ -59,7 +59,8 @@ class NowPane extends StatelessWidget {
           child: Text(error, style: Tok.label.copyWith(color: Tok.warn)),
         ),
         const SizedBox(height: 10),
-        Transport(core: core, now: n, clock: clock, onToggle: onToggle),
+        // The LCD above carries previous, play and next; the pane keeps a
+        // seek bar wide enough to aim, which the LCD's hairline isn't.
         SeekBar(core: core, now: n, clock: clock),
         Expanded(flex: 4, child: NowDial(now: n, clock: clock, onToggle: loaded ? onToggle : null)),
         Expanded(flex: 5, child: SingleChildScrollView(

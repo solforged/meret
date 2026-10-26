@@ -6,6 +6,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 
 import '../core/bridge.dart';
 import '../core/when.dart';
+import '../draw/facts.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'pane.dart';
@@ -195,6 +196,7 @@ class _ReleasePaneState extends State<ReleasePane> {
       if (release.dr != null) 'DR ${release.dr}',
       if (release.loudnessLufs != null) '${release.loudnessLufs!.toStringAsFixed(1)} LUFS',
       playsFact(release.plays, release.lastPlayedMs),
+      ...release.formats,
     ];
     return Focus(
       focusNode: _focus,
@@ -211,9 +213,7 @@ class _ReleasePaneState extends State<ReleasePane> {
               if (release.artist case final artist?)
                 WrittenCredit(written: artist, people: release.artistLinks, onFollow: _follow),
               const SizedBox(height: 8),
-              Text(facts.join(' · '), style: Tok.label),
-              if (release.formats.isNotEmpty)
-                Text(release.formats.join(' · '), style: Tok.monoSmall.copyWith(color: Tok.muted)),
+              Facts(facts, style: Tok.label),
               const SizedBox(height: 10),
               PaneActions(
                 primary: 'Play',

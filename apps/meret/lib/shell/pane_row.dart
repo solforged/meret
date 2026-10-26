@@ -122,9 +122,14 @@ class PaneRow extends StatefulWidget {
       leftover = 0;
     }
 
+    // Room the spines and the ghost can't use would be a dead strip, so the
+    // first stop ahead peeks in at full width, clipped by the row's edge,
+    // instead of folding; the full panes keep their width.
+    final peek = rightNeed > 0 && leftover > 0 && leftover + right * spine >= ghostMin;
+    if (peek) widths[s + n] = pane;
     final x = List<double?>.filled(count, null);
     var at0 = 0.0;
-    for (var i = s - left; i < s + n + right; i++) {
+    for (var i = s - left; i < s + n + (peek ? 1 : right); i++) {
       x[i] = at0;
       at0 += widths[i];
     }

@@ -199,7 +199,7 @@ void main() {
     expect(find.byKey(const ValueKey('up-next-3')), findsOneWidget);
     expect(find.descendant(of: find.byKey(const ValueKey('up-next-3')), matching: find.text(second.title)), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('now-next')));
+    await tester.tap(find.byKey(const ValueKey('lcd-next')));
     await tester.pump();
     await tester.pump();
     expect(find.descendant(of: find.byType(NowPane), matching: find.text(second.title)), findsAtLeastNWidgets(1));
@@ -208,7 +208,7 @@ void main() {
     expect(find.descendant(of: find.byType(UpNext), matching: find.text(third.title)), findsAtLeastNWidgets(1));
 
     // Within three seconds, previous goes back a row rather than restarting.
-    await tester.tap(find.byKey(const ValueKey('now-previous')));
+    await tester.tap(find.byKey(const ValueKey('lcd-previous')));
     await tester.pump();
     await tester.pump();
     expect(find.byKey(const ValueKey('up-next-3')), findsOneWidget);
@@ -1299,6 +1299,9 @@ void main() {
       matching: find.byKey(ValueKey('thread-${soundtrack.kind.name}-${soundtrack.to}')));
     expect(soundtrackLink, findsOneWidget);
     expect(find.byKey(const ValueKey('game-row-0')), findsOneWidget);
+    // One soundtrack: its album shows on the first track, not under each.
+    expect(find.byKey(ValueKey('game-album-${game.rows[0].trackId}')), findsOneWidget);
+    expect(find.byKey(ValueKey('game-album-${game.rows[1].trackId}')), findsNothing);
     final trail = (await core.trail())!;
     expect(trail.stops.firstWhere((stop) => stop.index == trail.current).viaSource, 'Wikidata');
 
