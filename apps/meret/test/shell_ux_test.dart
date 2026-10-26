@@ -133,8 +133,9 @@ void main() {
 
     await fadesIn(LogicalKeyboardKey.bracketLeft, 'today');
     expect(find.text('] back to All tracks'), findsOneWidget);
-    expect(find.byType(TrailChip), findsOneWidget);
+    expect(find.byType(TrailChip), findsNothing, reason: 'the back line names the trail under Today');
     await fadesOut(LogicalKeyboardKey.bracketRight, 'today');
+    expect(find.byType(TrailChip), findsOneWidget);
     // The first ⌘1 lays the Home column over the trail; the second shows Today.
     await _key(tester, LogicalKeyboardKey.digit1, meta: true);
     await tester.pumpAndSettle();
@@ -422,6 +423,32 @@ void main() {
     await _key(tester, LogicalKeyboardKey.keyL, meta: true);
     await tester.pumpAndSettle();
     expect(find.byType(ReleasePane, skipOffstage: false), findsNothing, reason: 'a new trail parks nothing from the old one');
+  });
+
+  testWidgets('TOP-1 the LCD holds the window centre and the query takes it while searching', (tester) async {
+    final core = FakeCore();
+    await _seedTrail(core, stops: 3);
+    await _surface(tester, core, width: 1800);
+    await _showTrail(tester);
+    final lcd = find.byKey(const ValueKey('lcd'));
+    final query = find.byType(QueryLine);
+    expect(tester.getCenter(lcd).dx, moreOrLessEquals(900, epsilon: 1), reason: 'centred on the window, not on what the chip leaves');
+    expect(tester.getTopLeft(query).dx, greaterThan(tester.getTopRight(lcd).dx), reason: 'the query waits docked at the right');
+    final docked = tester.getSize(query).width;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(query).width, greaterThan(docked * 2));
+    expect(tester.getCenter(query).dx, moreOrLessEquals(900, epsilon: 1), reason: 'the query has the centre');
+    expect(tester.getSize(lcd).width, lessThan(240), reason: 'the LCD folds to a pill');
+    expect(tester.getTopLeft(lcd).dx, greaterThan(tester.getTopRight(query).dx));
+    expect(find.byKey(const ValueKey('lcd-toggle')), findsOneWidget, reason: 'the pill keeps play and pause');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(tester.getCenter(lcd).dx, moreOrLessEquals(900, epsilon: 1));
+    expect(tester.getSize(query).width, docked);
+    expect(find.byKey(const ValueKey('top-now')), findsNothing, reason: 'the LCD opens Now');
   });
 
   testWidgets('WIDTH-W4 the top line never overflows at 600 wide with a trail open', (tester) async {

@@ -117,15 +117,15 @@ void main() {
     expect(find.byType(TrailChip), findsOneWidget);
     await _command(tester, LogicalKeyboardKey.digit1);
     await _command(tester, LogicalKeyboardKey.digit1);
-    expect(find.byType(TrailChip), findsOneWidget, reason: 'Today does not end a trail');
+    expect(find.byType(TrailChip), findsNothing, reason: 'the back line names the trail under Today');
     expect(find.byKey(const ValueKey('today')), findsOneWidget);
-    expect(find.text('] back to All tracks'), findsOneWidget);
+    expect(find.text('] back to All tracks'), findsOneWidget, reason: 'Today does not end a trail');
     await _command(tester, LogicalKeyboardKey.keyS);
     expect(find.byKey(const ValueKey('keep-trail-dialog')), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(core.names, ['All tracks']);
-    expect(find.text('◆ All tracks'), findsOneWidget);
+    expect(find.text('] back to ◆ All tracks'), findsOneWidget);
   });
 
   testWidgets('command S keeps while typing in the query line, like command 1', (tester) async {

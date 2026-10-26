@@ -247,7 +247,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('lcd-title')));
     await tester.pump();
     expect(find.byType(NowPane), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('top-now')));
+    await tester.tap(find.byKey(const ValueKey('lcd-title')));
     await tester.pump();
     expect(find.byType(NowPane), findsOneWidget);
   });
@@ -938,7 +938,7 @@ void main() {
     expect(find.byType(Today), findsOneWidget);
     expect(_rowCovered(tester), isTrue, reason: 'the table stays mounted under Today, out of reach');
     expect(find.textContaining('back to All tracks'), findsOneWidget);
-    expect(find.byType(TrailChip), findsOneWidget, reason: 'the trail stays open behind Today');
+    expect(find.byType(TrailChip), findsNothing, reason: 'the back line names the trail under Today');
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
