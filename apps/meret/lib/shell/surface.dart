@@ -666,7 +666,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 jobs: _status?.jobs ?? const [],
                 now: _now, clock: _clock, onToggle: _toggle,
                 onRelease: (id) => _report(_start(TargetDto.release(id: id))),
-                trailName: trail == null ? null : trail.name ?? path.first.title,
+                // The chip waits under Today, so the back line carries a kept trail's mark.
+                trailName: trail == null ? null : '${trail.kept ? '◆ ' : ''}${trail.name ?? path.first.title}',
               );
               // Plate 01: Today is Home's own page, never a pane beside a trail.
               final showToday = trail == null || (_frontOnly && !_treeOnly);
@@ -691,6 +692,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               return Column(children: [
                 TopLine(
                   query: QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
+                  queryFocus: _queryFocus,
+                  loaded: _now?.anchor != null,
                   lcd: Lcd(
                     core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
                     open: _nowShown, onOpen: phone ? null : _toggleNow,
@@ -698,9 +701,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   activity: Activity(core: widget.core, status: _status),
                   onBack: trail == null ? null : () => _report(_move(-1)),
                   onForward: trail == null || (!_frontOnly && along.length == path.length) ? null : () => _report(_move(1)),
-                  onNow: phone ? null : _toggleNow,
-                  nowOpen: _nowShown,
-                  chip: trail == null || !_decided ? null : ({compact = false, star = false}) => TrailChip(trail: trail, onTree: _toggleTree, compact: compact, star: star),
+                  // Under Home or Today the "] back to" line names the trail, so the chip waits.
+                  chip: trail == null || !_decided || (!phone && (_homeOver || showToday)) ? null : ({compact = false, star = false}) => TrailChip(trail: trail, onTree: _toggleTree, compact: compact, star: star),
                 ),
                 Expanded(child: Row(children: [
                   Expanded(child: Stack(fit: StackFit.expand, children: [
