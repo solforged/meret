@@ -43,7 +43,7 @@ class TopLine extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onForward;
 
-  static const height = 44.0;
+  static const height = 52.0;
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
@@ -66,7 +66,7 @@ class TopLine extends StatelessWidget {
                   Flexible(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: box.maxWidth * 0.4), child: chip(compact: true))),
                   const SizedBox(width: 8),
                 ],
-                Expanded(child: SizedBox(height: 28, child: query)),
+                Expanded(child: SizedBox(height: _CentreSlot._queryHeight, child: query)),
                 const SizedBox(width: 14),
                 ConstrainedBox(constraints: BoxConstraints(maxWidth: box.maxWidth * 0.25), child: activity()),
               ]),
@@ -123,6 +123,8 @@ class _CentreSlot extends MultiChildLayoutDelegate {
   final double inset;
 
   static const _gap = 14.0;
+  static const _lcdHeight = 46.0;
+  static const _queryHeight = 30.0;
   static const _docked = 200.0;
   static const _wide = 560.0;
   static const _lcdMax = 760.0;
@@ -154,11 +156,11 @@ class _CentreSlot extends MultiChildLayoutDelegate {
     // The query on the centre as far as its neighbours allow.
     Rect wide(double end) {
       final width = math.max(0.0, math.min(_wide, end - from));
-      return row(math.max(from, math.min(centre - width / 2, end - width)), width, 28);
+      return row(math.max(from, math.min(centre - width / 2, end - width)), width, _queryHeight);
     }
 
     final docked = (w * 0.18).clamp(120.0, _docked);
-    final restQuery = showLcd ? row(to - docked, docked, 28) : wide(to);
+    final restQuery = showLcd ? row(to - docked, docked, _queryHeight) : wide(to);
 
     // At rest the LCD sits on the window's centre, as wide as the nearer side allows.
     Rect? restLcd;
@@ -167,18 +169,18 @@ class _CentreSlot extends MultiChildLayoutDelegate {
       final half = math.min(centre - from, room - centre);
       if (half * 2 >= _lcdCentred) {
         final width = math.min(_lcdMax, half * 2);
-        restLcd = row(centre - width / 2, width, 34);
+        restLcd = row(centre - width / 2, width, _lcdHeight);
       } else if (room - from >= _lcdLeast) {
         final width = math.min(_lcdMax, room - from);
-        restLcd = row(from + (room - from - width) / 2, width, 34);
+        restLcd = row(from + (room - from - width) / 2, width, _lcdHeight);
       }
     }
 
     // Searching, the LCD folds to a pill at the right and the query takes the centre.
-    final pillLcd = showLcd ? row(to - pill, pill, 34) : null;
+    final pillLcd = showLcd ? row(to - pill, pill, _lcdHeight) : null;
     final searchQuery = wide(pillLcd == null ? to : pillLcd.left - _gap);
 
-    final lcd = showLcd ? Rect.lerp(restLcd ?? row(to, 0, 34), pillLcd, t)! : Rect.zero;
+    final lcd = showLcd ? Rect.lerp(restLcd ?? row(to, 0, _lcdHeight), pillLcd, t)! : Rect.zero;
     layoutChild(_Slot.lcd, BoxConstraints.tight(lcd.size));
     positionChild(_Slot.lcd, lcd.topLeft);
     final query = Rect.lerp(restQuery, searchQuery, t)!;

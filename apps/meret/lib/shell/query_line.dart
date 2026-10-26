@@ -248,7 +248,7 @@ class _QueryLineState extends State<QueryLine> {
           // Docked beside the LCD the line is short, and says so in a word.
           final hint = hintFor(docked: box.maxWidth < 260);
           return Container(
-          height: 28,
+          height: 30,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(color: const Color(0xFF040713), border: Border.all(color: widget.focus.hasFocus ? Tok.gold3 : Tok.rule)),
           child: Row(children: [
