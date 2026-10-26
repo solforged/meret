@@ -75,18 +75,19 @@ void main() {
     expect(find.descendant(of: pane, matching: find.text('UP NEXT')), findsNothing);
   });
 
-  testWidgets('the Resume dial never shrinks when the window grows', (tester) async {
+  testWidgets('Resume on Today keeps to its choices, since the LCD shows what is playing', (tester) async {
     final core = FakeCore();
     await _app(tester, core, size: const Size(1400, 900));
-    final at1400 = tester.getSize(find.byType(NowDial)).width;
-    tester.view.physicalSize = const Size(1728, 1000);
-    await tester.pump();
-    await tester.pump();
-    expect(tester.getSize(find.byType(NowDial)).width, greaterThanOrEqualTo(at1400));
+    final resume = find.byType(ResumeHeader);
+    expect(find.descendant(of: resume, matching: find.byType(NowDial)), findsNothing);
+    expect(tester.getSize(resume).height, lessThan(160), reason: 'a few lines, not a stage');
+    expect(find.descendant(of: resume, matching: find.byKey(const ValueKey('resume-toggle'))), findsOneWidget);
+    expect(find.descendant(of: resume, matching: find.text('or from the start · ⌥Space')), findsOneWidget);
+    expect(find.descendant(of: resume, matching: find.byKey(const ValueKey('resume-where'))), findsOneWidget);
     tester.view.physicalSize = const Size(500, 700);
     await tester.pump();
     await tester.pump();
-    expect(tester.getSize(find.byType(NowDial)).width, lessThan(at1400));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the bar plays something when nothing is loaded and answers when there is nothing', (tester) async {
