@@ -49,7 +49,8 @@ fn ascii_starts_with(text: &str, prefix: &str) -> bool {
 }
 
 fn split_ambiguous(text: &str, out: &mut Vec<String>) {
-    let separators = [" & ", " and ", ","];
+    // ID3v2.3 joins artists with `/`; like the others it splits only full names, so AC/DC stays.
+    let separators = [" & ", " and ", ",", "/"];
     let mut parts = Vec::new();
     let mut start = 0;
     let mut commas = 0;
@@ -100,6 +101,9 @@ mod tests {
             ("van Dyck, John Michael", &["van Dyck, John Michael"]),
             ("Simon Park [ 23 ]", &["Simon Park"]),
             ("Simon & Garfunkel", &["Simon & Garfunkel"]),
+            ("Roger Briggs/Mark Cromer", &["Roger Briggs", "Mark Cromer"]),
+            ("Roger Briggs / Mark Cromer", &["Roger Briggs", "Mark Cromer"]),
+            ("AC/DC", &["AC/DC"]),
             ("Earth, Wind & Fire", &["Earth, Wind & Fire"]),
             ("A; B feat. C FT. D featuring E", &["A", "B", "C", "D", "E"]),
             ("Jan Stoeckart [ 24 ]", &["Jan Stoeckart"]),
