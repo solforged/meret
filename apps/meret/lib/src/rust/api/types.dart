@@ -716,6 +716,24 @@ class ListenDto {
           counted == other.counted;
 }
 
+class ListeningWindowDto {
+  final List<ListenDto> listens;
+  final List<PlayedDto> mostPlayed;
+
+  const ListeningWindowDto({required this.listens, required this.mostPlayed});
+
+  @override
+  int get hashCode => listens.hashCode ^ mostPlayed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ListeningWindowDto &&
+          runtimeType == other.runtimeType &&
+          listens == other.listens &&
+          mostPlayed == other.mostPlayed;
+}
+
 class LookupStatusDto {
   final LookupsDto setting;
   final BigInt releases;
@@ -1875,6 +1893,7 @@ class UpNextDto {
 class UpNextItemDto {
   final BigInt token;
   final PlatformInt64? trackId;
+  final PlatformInt64? releaseId;
   final String title;
   final String subtitle;
   final BigInt? lengthMs;
@@ -1883,6 +1902,7 @@ class UpNextItemDto {
   const UpNextItemDto({
     required this.token,
     this.trackId,
+    this.releaseId,
     required this.title,
     required this.subtitle,
     this.lengthMs,
@@ -1893,6 +1913,7 @@ class UpNextItemDto {
   int get hashCode =>
       token.hashCode ^
       trackId.hashCode ^
+      releaseId.hashCode ^
       title.hashCode ^
       subtitle.hashCode ^
       lengthMs.hashCode ^
@@ -1905,6 +1926,7 @@ class UpNextItemDto {
           runtimeType == other.runtimeType &&
           token == other.token &&
           trackId == other.trackId &&
+          releaseId == other.releaseId &&
           title == other.title &&
           subtitle == other.subtitle &&
           lengthMs == other.lengthMs &&

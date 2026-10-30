@@ -112,13 +112,23 @@ impl Store {
     }
 
     pub fn history(&self, limit: u32) -> Result<Vec<ListenRow>> {
+        self.history_range(i64::MIN, i64::MAX, i64::from(limit))
+    }
+
+    /// Every listen in [start, end), without a row limit that can truncate a day.
+    pub fn history_between(&self, start_ms: i64, end_ms: i64) -> Result<Vec<ListenRow>> {
+        self.history_range(start_ms, end_ms, -1)
+    }
+
+    fn history_range(&self, start_ms: i64, end_ms: i64, limit: i64) -> Result<Vec<ListenRow>> {
         self.read(|c| {
             let mut stmt = c.prepare(&format!("SELECT l.uid, t.id, l.recording_id, rl.id,
                 COALESCE(t.title, r.title, ''), {CREDIT}, rl.title, {COVER}, l.started_at,
                 l.played_ms, COALESCE(r.length_ms, t.length_ms), {COUNTED}
                 FROM listen l {LISTEN_TRACK} WHERE l.recording_id IS NOT NULL
-                ORDER BY l.started_at DESC, l.uid DESC LIMIT ?1"))?;
-            stmt.query_map([limit], |r| Ok(ListenRow {
+                AND l.started_at >= ?1 AND l.started_at < ?2
+                ORDER BY l.started_at DESC, l.uid DESC LIMIT ?3"))?;
+            stmt.query_map(params![start_ms, end_ms, limit], |r| Ok(ListenRow {
                 uid: r.get(0)?, track: r.get::<_, Option<i64>>(1)?.map(TrackId), recording: RecordingId(r.get(2)?),
                 release: r.get::<_, Option<i64>>(3)?.map(ReleaseId), title: r.get(4)?, credit: r.get(5)?,
                 release_title: r.get(6)?, cover: r.get(7)?, started_at: r.get(8)?, played_ms: r.get::<_, i64>(9)? as u64,
@@ -128,12 +138,18 @@ impl Store {
     }
 
     pub fn most_played(&self, since_ms: i64, limit: u32) -> Result<Vec<PlayCount>> {
+        self.most_played_between(since_ms, i64::MAX, limit)
+    }
+
+    /// Counted plays in the same [start, end) window used by the listening log.
+    pub fn most_played_between(&self, start_ms: i64, end_ms: i64, limit: u32) -> Result<Vec<PlayCount>> {
         self.read(|c| {
             let mut stmt = c.prepare(&format!("SELECT t.id, r.id, rl.id, COALESCE(t.title, r.title),
                 {CREDIT}, rl.title, {COVER}, COUNT(*), MAX(l.started_at)
-                FROM listen l {LISTEN_TRACK} WHERE t.id IS NOT NULL AND l.started_at >= ?1 AND {COUNTED}
-                GROUP BY t.id ORDER BY COUNT(*) DESC, MAX(l.started_at) DESC, t.id LIMIT ?2"))?;
-            stmt.query_map(params![since_ms, limit], |r| Ok(PlayCount {
+                FROM listen l {LISTEN_TRACK} WHERE t.id IS NOT NULL
+                AND l.started_at >= ?1 AND l.started_at < ?2 AND {COUNTED}
+                GROUP BY t.id ORDER BY COUNT(*) DESC, MAX(l.started_at) DESC, t.id LIMIT ?3"))?;
+            stmt.query_map(params![start_ms, end_ms, limit], |r| Ok(PlayCount {
                 track: TrackId(r.get(0)?), recording: RecordingId(r.get(1)?), release: ReleaseId(r.get(2)?),
                 title: r.get(3)?, credit: r.get(4)?, release_title: r.get(5)?, cover: r.get(6)?, plays: r.get::<_, i64>(7)? as u64, last_played: r.get(8)?,
             }))?.collect()
@@ -155,6 +171,16 @@ impl Store {
                 release: ReleaseId(r.get(0)?), title: r.get(1)?, credit: r.get(2)?, cover: r.get(3)?, plays: r.get::<_, i64>(4)? as u64, last_played: r.get(5)?,
             }))?.collect()
         })
+    }
+
+    /// Committed play totals for one hot-column row, plus its last start time.
+    pub fn track_plays(&self, track: TrackId) -> Result<(u32, Option<i64>)> {
+        // Match load_columns: a recording's listens belong to each library
+        // track for that recording, using that track's known length fallback.
+        self.read(|c| c.query_row(&format!("SELECT COUNT(*), MAX(l.started_at)
+            FROM listen l JOIN recording r ON r.id = l.recording_id
+            JOIN track t ON t.recording_id = r.id WHERE t.id = ?1 AND {COUNTED}"),
+            [track.0], |r| Ok((r.get(0)?, r.get(1)?))))
     }
 
     /// Counted plays of a release and when it was last played, for its pane's facts.
@@ -238,6 +264,30 @@ mod tests {
         // A newer skip cannot move last played forward.
         assert!(!listen(&store, 1, 99_000, 1_000));
         assert_eq!(store.load_columns().unwrap().last_played, [2]);
+        drop(store);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn explicit_window_keeps_every_listen_and_bounds_the_aggregate() {
+        let (store, dir) = fixture();
+        store.writer.write(|tx| tx.execute_batch("
+            WITH RECURSIVE n(i) AS (VALUES(0) UNION ALL SELECT i+1 FROM n WHERE i<500)
+            INSERT INTO listen(uid,recording_id,started_at,played_ms,device)
+                SELECT 'window-' || i, 1, 1000+i, 50000, 'test' FROM n;
+            INSERT INTO listen(uid,recording_id,started_at,played_ms,device) VALUES
+                ('before',2,999,240000,'test'),
+                ('at-end',2,2000,240000,'test'),
+                ('after',2,2001,240000,'test'),
+                ('skip',2,1501,1,'test');
+        ")).unwrap();
+        let rows = store.history_between(1000, 2000).unwrap();
+        assert_eq!(rows.len(), 502, "the calendar window must not stop at 500 listens");
+        assert_eq!((rows.first().unwrap().started_at, rows.last().unwrap().started_at), (1501, 1000));
+        let played = store.most_played_between(1000, 2000, 3).unwrap();
+        assert_eq!(played.iter().map(|r| (r.track.0, r.plays, r.last_played)).collect::<Vec<_>>(), [(1, 501, 1500)]);
+        assert!(store.history_between(2000, 1000).unwrap().is_empty());
+        assert!(store.most_played_between(1000, 1000, 3).unwrap().is_empty());
         drop(store);
         std::fs::remove_dir_all(dir).unwrap();
     }

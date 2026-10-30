@@ -363,6 +363,37 @@ mod tests {
             _ => panic!(),
         }).collect::<Vec<_>>(), [(2, 1, 1), (3, 1, 2)]);
         assert!(core.rows("", &view, usize::MAX, usize::MAX).unwrap().items.is_empty());
+
+        // Unknown positions use one title/id fallback across the table,
+        // release and playback. Filenames and scan ids deliberately disagree.
+        core.store.writer.write(|tx| tx.execute_batch("
+            UPDATE medium SET position=0 WHERE edition_id=1;
+            UPDATE track SET position=0 WHERE id IN (11,12,13);
+            UPDATE recording SET title='Zulu' WHERE id=11;
+            UPDATE recording SET title='alpha' WHERE id=12;
+            UPDATE recording SET title='ALPHA' WHERE id=13;
+            UPDATE file SET rel_path='z-last.flac' WHERE id=11;
+            UPDATE file SET rel_path='y-middle.flac' WHERE id=12;
+            UPDATE file SET rel_path='a-first.flac' WHERE id=13;
+        ")).unwrap();
+        *core.columns.write() = core.store.load_columns().unwrap();
+        core.lists.lock().clear();
+        let fallback = [12, 13, 11].map(TrackId);
+        assert_eq!(&core.list("", &View::default()).unwrap().tracks[..3], &fallback);
+        let release = core.store.release_page(ReleaseId(1)).unwrap().unwrap();
+        assert_eq!(release.tracks.iter().map(|row| row.track).collect::<Vec<_>>(), fallback);
+        assert!(release.tracks.iter().all(|row| row.disc == 0 && row.number == 0), "fallback order does not invent tag numbers");
+        let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/meret/test/fixtures/tone-16-44.flac");
+        for name in ["z-last.flac", "y-middle.flac", "a-first.flac", "21.flac", "22.flac"] {
+            std::fs::copy(&fixture, dir.join(name)).unwrap();
+        }
+        let root = dir.to_string_lossy().into_owned();
+        core.store.writer.write(move |tx| tx.execute("UPDATE root SET path=?1", [root]).map(|_| ())).unwrap();
+        core.play_release(ReleaseId(1), 1).unwrap();
+        assert_eq!(core.queue().iter().map(|item| item.track.unwrap()).collect::<Vec<_>>(), fallback[1..]);
+        core.play_results("", &View::default(), 1).unwrap();
+        assert_eq!(&core.queue().iter().map(|item| item.track.unwrap()).collect::<Vec<_>>()[..2], &fallback[1..]);
+        core.stop();
         drop(core);
         std::fs::remove_dir_all(dir).unwrap();
     }

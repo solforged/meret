@@ -18,6 +18,8 @@ const keyGroups = <(String, List<(String, String)>)>[
     ('⌘2–⌘9', "Home's doors, in order"),
     ('⌘L', 'Library table'),
     ('/', 'Search, or a command'),
+    ('Tab / ⇧Tab', 'Next or previous control'),
+    ('↵ / Space', 'Activate the focused control'),
     ('Esc', 'Close Home, then the tree'),
   ]),
   ('Trail', [
@@ -52,7 +54,7 @@ class _KeysSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) => CallbackShortcuts(
     bindings: {const CharacterActivator('?'): () => Navigator.of(context).pop()},
-    child: Focus(autofocus: true, child: Dialog(
+    child: Focus(autofocus: true, skipTraversal: true, child: Dialog(
       key: const ValueKey('keys-sheet'),
       backgroundColor: Tok.panel,
       insetPadding: const EdgeInsets.all(20),
@@ -66,7 +68,8 @@ class _KeysSheet extends StatelessWidget {
         Flexible(child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
           // Two columns where there's room, one on a narrow window.
-          child: Wrap(spacing: 32, runSpacing: 18, children: [
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Wrap(spacing: 32, runSpacing: 18, children: [
             for (final (title, keys) in keyGroups) SizedBox(width: 276, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(title.toUpperCase(), style: Tok.label.copyWith(color: Tok.gold2))),
               for (final (key, does) in keys) Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -74,6 +77,16 @@ class _KeysSheet extends StatelessWidget {
                 Expanded(child: Text(does, style: Tok.body.copyWith(fontSize: 12.5, color: Tok.muted))),
               ])),
             ])),
+          ]),
+          const SizedBox(height: 18),
+          Text('Commands', style: Tok.label.copyWith(color: Tok.gold2)),
+          const SizedBox(height: 6),
+          const Text('Press / to focus the query line, then type without a leading slash.', style: Tok.body),
+          const SizedBox(height: 6),
+          const Text('play <query>', style: Tok.monoSmall),
+          const Text('Plays matching tracks from the beginning and replaces the current queue. For example: play by:Iona.', style: Tok.body),
+          const SizedBox(height: 6),
+          const Text('Queue, want and crate commands are coming later.', style: Tok.label),
           ]),
         )),
         Padding(

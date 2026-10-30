@@ -295,6 +295,7 @@ pub enum TransportDto {
 pub struct UpNextItemDto {
     pub token: u64,
     pub track_id: Option<i64>,
+    pub release_id: Option<i64>,
     pub title: String,
     /// "Joanne Hogg · Xenogears": the credit and the release, when known.
     pub subtitle: String,
@@ -968,8 +969,8 @@ impl ReleaseDto {
         let positions = |positions: &[(u32, u32)]| {
             if positions.len() == rows.len() {
                 format!("all {} tracks", rows.len())
-            } else if positions.len() > 6 {
-                format!("{} tracks", positions.len())
+            } else if positions.len() > 6 || positions.iter().any(|&(disc, number)| number == 0 || (discs.len() > 1 && disc == 0)) {
+                format!("{} {}", positions.len(), if positions.len() == 1 { "track" } else { "tracks" })
             } else {
                 let multi = discs.len() > 1;
                 positions.iter().map(|&(d, n)| if multi { format!("{d}-{n:02}") } else { n.to_string() }).collect::<Vec<_>>().join(", ")
@@ -1401,6 +1402,13 @@ pub struct PlayedDto {
     pub last_played_ms: i64,
 }
 
+/// Listening and counted plays over one caller-supplied local calendar window.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListeningWindowDto {
+    pub listens: Vec<ListenDto>,
+    pub most_played: Vec<PlayedDto>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct DormantDto {
     pub release_id: i64,
@@ -1616,6 +1624,38 @@ mod cover_tests {
         let release = ReleaseDto::from_page(page, Path::new("/tmp/meret/art"));
         assert_eq!(release.cover.as_deref(), Some("/tmp/meret/art/abcd-256.jpg"));
         assert_eq!((release.dr, release.loudness_lufs), (Some(12), Some(-20.5)));
+    }
+
+    #[test]
+    fn release_credits_count_unknown_positions_without_printing_zero() {
+        let tracks = (1..=3).map(|id| TrackRow {
+            track: TrackId(id), recording: meret_model::RecordingId(id), release: ReleaseId(9),
+            idiom: None, title: format!("Track {id}"), artist: None, artist_id: None, album: "Unnumbered".into(),
+            album_artist: None, album_artist_id: None, disc: 0, number: 0, year: None, length_ms: None,
+            codec: None, sample_rate: None, bits: None, other_formats: vec![], path: None, dr: None, loudness: None,
+        }).collect();
+        let page = ReleasePage {
+            release: ReleaseId(9), title: "Unnumbered".into(), year: None, idiom: None,
+            album_artist: None, album_artists: vec![], cover: None, tracks,
+            artists: vec![meret_store::TrackCredit {
+                agent: AgentId(1), name: "The artist".into(), positions: vec![(0, 0); 3],
+            }],
+            roles: vec![meret_store::RoleCredit {
+                role: "performer".into(), agent: AgentId(2), name: "Guest".into(), detail: Some("piano".into()),
+                source: "local_tags".into(), positions: vec![(0, 0)],
+            }],
+            works: vec![], games: vec![], plays: 0, last_played: None, dr: None, loudness_lufs: None,
+        };
+        let dto = ReleaseDto::from_page(page.clone(), Path::new("/tmp/art"));
+        assert_eq!(dto.credits.iter().map(|credit| credit.detail.as_str()).collect::<Vec<_>>(), ["all 3 tracks", "piano · 1 track"]);
+        assert!(dto.rows.iter().all(|row| row.number == 0), "display fallbacks must preserve unknown metadata");
+
+        let mut multi = page;
+        multi.tracks[0].disc = 1;
+        multi.tracks[0].number = 1;
+        multi.roles[0].positions = vec![(0, 2)];
+        let dto = ReleaseDto::from_page(multi, Path::new("/tmp/art"));
+        assert_eq!(dto.credits[1].detail, "piano · 1 track", "an unknown disc is not disc zero");
     }
 
     #[test]

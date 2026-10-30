@@ -15,6 +15,8 @@ pub(crate) struct Pending {
     pub items: Vec<QueueItem>,
     pub cursor: usize,
     pub position_ms: u64,
+    /// An explicit seek in this session overrides the idiom's resume policy.
+    pub seeked: bool,
     /// The listen open when the queue was saved, continued by a resume.
     pub listen: Option<ListenUid>,
 }
@@ -31,13 +33,36 @@ pub(crate) fn restore(core: &Core) -> Result<()> {
     let items: Vec<QueueItem> = serde_json::from_str(&saved.items_json)
         .map_err(|e| crate::CoreError::Query(format!("could not restore queue: {e}")))?;
     let Some(item) = items.get(saved.cursor) else { return Ok(()) };
+    core.player.lock().reserve_tokens_through(items.iter().map(|item| item.token).max().unwrap_or(0));
     let mut now = crate::now::describe_item(core, item);
     now.item = Some(item.token);
     now.anchor = Some(Anchor { item: item.token, position_frames: saved.position_ms, sample_rate: 1000,
         at_ns: meret_engine::clock::now_ns(), rate: 0.0 });
     core.now.send_replace(now);
-    *core.pending.lock() = Some(Pending { items, cursor: saved.cursor, position_ms: saved.position_ms, listen: saved.listen });
+    *core.pending.lock() = Some(Pending { items, cursor: saved.cursor, position_ms: saved.position_ms, seeked: false, listen: saved.listen });
     Ok(())
+}
+
+/// A restored queue has no decoder yet. Seeking changes its paused position
+/// and checkpoint without opening an output device or briefly starting audio.
+pub(crate) fn seek_pending(core: &Core, ms: u64) -> Result<bool> {
+    let mut pending = core.pending.lock();
+    let Some(saved) = pending.as_mut() else { return Ok(false) };
+    let position_ms = core.now.borrow().length_ms.map_or(ms, |length| ms.min(length));
+    let json = serde_json::to_string(&saved.items)
+        .map_err(|e| crate::CoreError::Query(format!("could not save queue: {e}")))?;
+    core.store.save_queue(json, saved.cursor, position_ms, false, &core.device_id, saved.listen)?;
+    let item = &saved.items[saved.cursor];
+    if let (Some(release), Some(recording)) = (item.release, item.recording) {
+        core.store.upsert_resume(release, recording, position_ms, &core.device_id)?;
+    }
+    saved.position_ms = position_ms;
+    saved.seeked = true;
+    core.now.send_modify(|now| now.anchor = Some(Anchor {
+        item: item.token, position_frames: position_ms, sample_rate: 1000,
+        at_ns: meret_engine::clock::now_ns(), rate: 0.0,
+    }));
+    Ok(true)
 }
 
 pub(crate) fn on_started(core: &Core, token: u64) {
@@ -117,7 +142,7 @@ fn snapshot(core: &Core, token: Option<u64>, position_ms: Option<u64>) -> Option
         let at = q.position_of(token?)?;
         (q.items.clone(), at)
     };
-    Some(Pending { items, cursor, position_ms: position_ms.unwrap_or_else(|| position(core, token)), listen: None })
+    Some(Pending { items, cursor, position_ms: position_ms.unwrap_or_else(|| position(core, token)), seeked: false, listen: None })
 }
 
 fn position(core: &Core, token: Option<u64>) -> u64 {
@@ -313,7 +338,10 @@ mod tests {
         // Past half the cue, the next checkpoint counts it once.
         wait_for("3.5 s of play", || position_ms(&running.core) >= 3500);
         running.core.pause();
-        wait_for("the pause checkpoint to count the listen", || running.core.store.history(1).unwrap()[0].counted);
+        // The store commit precedes the cache patch; wait for the published
+        // totals before checking both representations.
+        wait_for("the pause checkpoint to count the listen", || running.core.columns.read().plays.iter().sum::<u32>() == 1);
+        assert!(running.core.store.history(1).unwrap()[0].counted);
         assert_eq!(running.core.columns.read().plays.iter().sum::<u32>(), 1);
         // Quit without stopping: the listen is never finished.
         drop(running);
@@ -332,6 +360,99 @@ mod tests {
         assert!(first[0].played_ms >= 5900, "continued to {} ms", first[0].played_ms);
         assert_eq!(running.core.columns.read().plays.iter().sum::<u32>(), 1, "one play, not two");
         assert_eq!(running.core.store.load_columns().unwrap().plays.iter().sum::<u32>(), 1);
+        drop(running);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn queued_selection_restores_at_the_target_and_never_reuses_restored_tokens() {
+        let dir = fixture();
+        let store = meret_store::Store::open(&dir.join("library.db")).unwrap();
+        let rows = store.release_page(ReleaseId(1)).unwrap().unwrap().tracks;
+        let mut items = crate::queue_items(rows);
+        for (index, item) in items.iter_mut().enumerate() { item.token = index as u64 + 41; }
+        let saved_items = items.clone();
+        store.save_queue(serde_json::to_string(&items).unwrap(), 0, 2000, false, &store.device_id().unwrap(), None).unwrap();
+        drop(store);
+        let running = Running::open(&dir, 1.0);
+        let mut events = running.core.events();
+        assert!(running.core.jump_to_queued(999).is_err());
+        assert_eq!(running.core.queue(), saved_items);
+        assert!(!running.core.local.state().playing);
+        running.core.jump_to_queued(42).unwrap();
+        running.until(&mut events, |e| matches!(e, EngineEvent::Started { .. }));
+        let EngineEvent::Anchor(anchor) = running.until(&mut events, |e| matches!(e, EngineEvent::Anchor(_))) else { unreachable!() };
+        assert!(anchor.position_frames * 1000 / (anchor.sample_rate as u64) < 100, "selected item starts at zero");
+        assert_eq!(running.core.player.lock().queue().current().unwrap().recording, Some(RecordingId(2)));
+        assert!(running.core.queue().iter().all(|item| item.token > 42), "restored UI tokens cannot match replacement items");
+        let playing = running.core.local.state().item;
+        assert!(running.core.jump_to_queued(42).is_err());
+        assert_eq!(running.core.local.state().item, playing);
+        running.stop(&mut events);
+        drop(running);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn restored_transport_works_before_resume() {
+        let dir = fixture();
+        for (command, cursor, saved_ms, expected_recording, starts) in [
+            ("next", 0, 1000, 2, true),
+            ("previous", 1, 1000, 1, true),
+            ("previous", 1, 3500, 2, false),
+            ("from_start", 1, 3500, 2, true),
+        ] {
+            let store = meret_store::Store::open(&dir.join("library.db")).unwrap();
+            let rows = store.release_page(ReleaseId(1)).unwrap().unwrap().tracks;
+            let mut items = crate::queue_items(rows);
+            for (index, item) in items.iter_mut().enumerate() { item.token = index as u64 + 41; }
+            store.save_queue(serde_json::to_string(&items).unwrap(), cursor, saved_ms, false, &store.device_id().unwrap(), None).unwrap();
+            drop(store);
+            let running = Running::open(&dir, 1.0);
+            let mut events = running.core.events();
+            assert!(running.core.player.lock().queue().items.is_empty());
+            match command {
+                "next" => running.core.next().unwrap(),
+                "previous" => running.core.previous().unwrap(),
+                _ => running.core.from_start().unwrap(),
+            }
+            if starts {
+                assert_eq!(running.core.player.lock().queue().current().and_then(|item| item.recording), Some(RecordingId(expected_recording)), "{command} restores its target directly");
+                let EngineEvent::Anchor(anchor) = running.until(&mut events, |e| matches!(e, EngineEvent::Anchor(_))) else { unreachable!() };
+                assert!(anchor.position_frames * 1000 / (anchor.sample_rate as u64) < 100);
+                running.stop(&mut events);
+            } else {
+                let anchor = running.core.now.borrow().anchor.unwrap();
+                assert_eq!((anchor.position_frames, anchor.rate), (0, 0.0), "previous past three seconds rewinds while staying paused");
+                assert!(!running.core.local.state().playing);
+            }
+            drop(running);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn seeking_a_restored_queue_stays_paused_and_resumes_at_the_explicit_position() {
+        let dir = fixture();
+        let store = meret_store::Store::open(&dir.join("library.db")).unwrap();
+        let mut items = crate::queue_items(store.release_page(ReleaseId(1)).unwrap().unwrap().tracks);
+        for (index, item) in items.iter_mut().enumerate() {
+            item.token = index as u64 + 41;
+            item.idiom = Idiom::Album;
+        }
+        store.save_queue(serde_json::to_string(&items).unwrap(), 0, 1000, false, &store.device_id().unwrap(), None).unwrap();
+        drop(store);
+        let running = Running::open(&dir, 1.0);
+        running.core.seek_ms(2500);
+        let anchor = running.core.now.borrow().anchor.unwrap();
+        assert_eq!((anchor.position_frames, anchor.rate), (2500, 0.0));
+        assert!(!running.core.local.state().playing);
+        assert_eq!(running.core.store.load_queue().unwrap().unwrap().position_ms, 2500);
+        let mut events = running.core.events();
+        running.core.resume().unwrap();
+        let EngineEvent::Anchor(anchor) = running.until(&mut events, |e| matches!(e, EngineEvent::Anchor(_))) else { unreachable!() };
+        assert!((anchor.position_frames * 1000 / anchor.sample_rate as u64).abs_diff(2500) < 100, "an explicit seek overrides album resume-from-start policy");
+        running.stop(&mut events);
         drop(running);
         std::fs::remove_dir_all(dir).unwrap();
     }

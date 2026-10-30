@@ -31,6 +31,10 @@ impl Player {
         &self.zone
     }
 
+    pub fn reserve_tokens_through(&mut self, token: u64) {
+        self.queue.reserve_through(token);
+    }
+
     /// Updates queued gains and the preloaded successor. Already buffered
     /// audio keeps its gain until the next item, without interrupting playback.
     pub fn refresh_gains(&mut self, mut gain: impl FnMut(&QueueItem) -> f64) {
@@ -43,6 +47,16 @@ impl Player {
     /// Replaces the queue once a Play succeeds, skipping anything the zone
     /// can't open. An empty replacement stops playback.
     pub fn play(&mut self, items: Vec<QueueItem>, start: usize, start_ms: u64) -> Result<Option<&QueueItem>, ZoneError> {
+        self.replace(items, start, start_ms, true)
+    }
+
+    /// Loads a restored queue at one explicitly selected item. A failure
+    /// leaves the current queue and playback intact, without trying a neighbor.
+    pub fn play_exact(&mut self, items: Vec<QueueItem>, start: usize) -> Result<Option<&QueueItem>, ZoneError> {
+        self.replace(items, start, 0, false)
+    }
+
+    fn replace(&mut self, items: Vec<QueueItem>, start: usize, start_ms: u64, skip_unplayable: bool) -> Result<Option<&QueueItem>, ZoneError> {
         let mut replacement = self.queue.successor(items);
         if replacement.items.is_empty() {
             self.stop()?;
@@ -57,7 +71,7 @@ impl Player {
                 item: item.token, uri: item.uri.clone(), start_ms: position, gain_db: item.gain_db,
             }) {
                 Ok(()) => break,
-                Err(e @ ZoneError::CannotPlay(_)) => {
+                Err(e @ ZoneError::CannotPlay(_)) if skip_unplayable => {
                     self.last_error = Some(e.to_string());
                     if replacement.advance().is_none() {
                         return Err(e);
@@ -119,6 +133,27 @@ impl Player {
     /// means "restart this one" instead.
     pub fn skip_previous(&mut self) -> Result<Option<&QueueItem>, ZoneError> {
         self.jump(self.queue.cursor.saturating_sub(1), -1)
+    }
+
+    /// Plays this token directly. Stale tokens and unavailable targets do not
+    /// change the cursor or interrupt the current item.
+    pub fn jump_to(&mut self, token: u64) -> Result<&QueueItem, ZoneError> {
+        let at = self.queue.position_of(token).ok_or_else(|| ZoneError::Other("that queued item is no longer available".into()))?;
+        if at == self.queue.cursor && self.awaiting_start != Some(token) {
+            // An Up next row can become current while its click is in flight.
+            // Restart in place so Ended for the old playback cannot advance it.
+            self.zone.command(ZoneCommand::Seek { ms: 0 })?;
+            self.zone.command(ZoneCommand::Resume)?;
+            return Ok(self.queue.current().expect("selected item exists"));
+        }
+        let item = &self.queue.items[at];
+        self.zone.command(ZoneCommand::Play {
+            item: item.token, uri: item.uri.clone(), start_ms: 0, gain_db: item.gain_db,
+        })?;
+        self.queue.cursor = at;
+        self.awaiting_start = None;
+        self.preload();
+        Ok(self.queue.current().expect("selected item exists"))
     }
 
     /// Moves the cursor to `at` and plays it, stepping on in `direction`
@@ -208,7 +243,10 @@ mod tests {
                     self.0.lock().push("stop".into());
                     return Ok(());
                 }
-                _ => return Ok(()),
+                _ => {
+                    self.1.lock().push(cmd);
+                    return Ok(());
+                }
             };
             if uri == "bad" {
                 return Err(ZoneError::CannotPlay(uri.into()));
@@ -439,6 +477,40 @@ mod tests {
         // Failed replacements reserve their tokens too.
         assert_eq!(p.play(items(&["d"]), 0, 0).unwrap().map(|i| i.token), Some(6));
         assert_eq!(log(&z), ["play 6"]);
+    }
+
+    #[test]
+    fn selecting_a_token_plays_only_that_item_and_rejects_stale_or_unplayable_targets() {
+        let (mut p, z) = player();
+        p.play(items(&["a", "b", "bad", "d", "e"]), 0, 0).unwrap();
+        log(&z);
+        assert_eq!(p.jump_to(4).unwrap().token, 4);
+        assert_eq!(log(&z), ["play 4", "next 5"], "intervening tracks are never started");
+        p.jump_to(4).unwrap();
+        {
+            let commands = z.1.lock();
+            assert_eq!(&commands[commands.len() - 2..], &[ZoneCommand::Seek { ms: 0 }, ZoneCommand::Resume]);
+        }
+        assert!(log(&z).is_empty(), "a newly current token restarts without a second Play/Ended pair");
+        assert!(p.jump_to(3).is_err());
+        assert_eq!(p.queue().current().unwrap().token, 4);
+        assert!(log(&z).is_empty());
+        assert!(p.play_exact(items(&["bad", "good"]), 0).is_err());
+        assert_eq!(p.queue().current().unwrap().token, 4);
+        assert!(log(&z).is_empty(), "exact selection cannot silently play its neighbor");
+        p.play(items(&["replacement"]), 0, 0).unwrap();
+        let replacement = p.queue().current().unwrap().token;
+        log(&z);
+        assert!(p.jump_to(4).is_err());
+        assert_eq!(p.queue().current().unwrap().token, replacement);
+        assert!(log(&z).is_empty());
+
+        let (mut awaiting, zone) = player();
+        awaiting.play(items(&["a", "b", "c"]), 0, 0).unwrap();
+        awaiting.ended(1);
+        log(&zone);
+        awaiting.jump_to(2).unwrap();
+        assert_eq!(log(&zone), ["play 2", "next 3"], "an unheard successor must be opened, not seeked");
     }
 
     #[test]

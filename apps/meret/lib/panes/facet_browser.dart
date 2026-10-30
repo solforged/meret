@@ -30,9 +30,10 @@ class FacetBrowser extends StatelessWidget {
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
-        child: Row(children: [
-          Expanded(child: Text(name, style: Tok.label)),
-          Text('${column?.tracks ?? 0}', style: Tok.label.copyWith(color: Tok.dim)),
+        child: Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 2, children: [
+          Text(name, style: Tok.label),
+          Text(column == null ? 'Tracks' : '${column.tracks} ${column.tracks == 1 ? 'track' : 'tracks'}',
+            style: Tok.label.copyWith(color: Tok.dim)),
         ]),
       ),
       Expanded(child: ListView.builder(
@@ -61,7 +62,8 @@ class FacetBrowser extends StatelessWidget {
                     Expanded(child: Text(entry?.name ?? 'All', maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: Tok.body.copyWith(color: selected ? Tok.ink : Tok.muted))),
                     const SizedBox(width: 8),
-                    Text('${entry?.tracks ?? column!.tracks}', style: Tok.label.copyWith(color: Tok.dim)),
+                    Tooltip(message: '${entry?.tracks ?? column!.tracks} ${(entry?.tracks ?? column!.tracks) == 1 ? 'track' : 'tracks'}',
+                      child: Text('${entry?.tracks ?? column!.tracks}', style: Tok.label.copyWith(color: Tok.dim))),
                   ]),
                 ),
               ),

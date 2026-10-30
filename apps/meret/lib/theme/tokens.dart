@@ -14,7 +14,7 @@ abstract final class Tok {
 
   static const ink = Color(0xFFEBE6DA);
   static const muted = Color(0xFFA6AAC0);
-  static const faint = Color(0xFF6A7194);
+  static const faint = Color(0xFF858CAB);
   static const dim = Color(0xFF474E70);
 
   static const gold = Color(0xFFD2A64E);
@@ -24,11 +24,11 @@ abstract final class Tok {
   static const ok = Color(0xFF8FC2A2);
   static const warn = Color(0xFFE3A066);
 
-  // TODO(theme): bundle Instrument Sans and Geist Mono as assets.
+  // Bundled under assets/fonts with their SIL Open Font Licenses.
   static const sans = 'Instrument Sans';
   static const mono = 'Geist Mono';
 
-  static const label = TextStyle(fontFamily: mono, fontSize: 10.5, letterSpacing: 0.6, color: faint);
+  static const label = TextStyle(fontFamily: mono, fontSize: 11.5, letterSpacing: 0.4, color: faint);
   static const body = TextStyle(fontFamily: sans, fontSize: 13, color: ink, height: 1.35);
   static const title = TextStyle(fontFamily: sans, fontSize: 22, fontWeight: FontWeight.w600, color: ink);
   static const monoSmall = TextStyle(fontFamily: mono, fontSize: 11.5, color: muted);

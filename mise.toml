@@ -1,3 +1,22 @@
+[tools]
+flutter = "3.47.8"
+
+[tasks."app:setup"]
+description = "Resolve app packages with the pinned Flutter SDK"
+dir = "apps/meret"
+run = "flutter pub get"
+
+[tasks."app:test"]
+description = "Run the Flutter app tests"
+depends = ["app:bridge"]
+dir = "apps/meret"
+run = "flutter test"
+
+[tasks."app:bridge"]
+description = "Build the host Rust library used by Flutter integration tests"
+dir = "{{config_root}}"
+run = "cargo build -p meret-ffi"
+
 [tasks."app:install"]
 description = "Build the release macOS app, install it as /Applications/Meret.app and open it"
 alias = "install"
@@ -5,6 +24,11 @@ dir = "apps/meret"
 run = """
 set -euo pipefail
 flutter build macos --release
+
+# Flutter can replace App.framework after Xcode seals the outer app during
+# an incremental build. This project uses ad-hoc development signing.
+codesign --force --sign - --preserve-metadata=identifier,entitlements,flags build/macos/Build/Products/Release/meret.app
+codesign --verify --deep --strict build/macos/Build/Products/Release/meret.app
 
 # Quit any running Meret, including a debug build, so the copy isn't in use.
 osascript -e 'quit app id "io.sowilo.meret"' 2>/dev/null || true
@@ -16,6 +40,7 @@ pkill -x meret || true
 
 rm -rf /Applications/Meret.app
 ditto build/macos/Build/Products/Release/meret.app /Applications/Meret.app
+codesign --verify --deep --strict /Applications/Meret.app
 open /Applications/Meret.app
 echo "Installed /Applications/Meret.app"
 """

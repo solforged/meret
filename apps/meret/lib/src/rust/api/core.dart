@@ -46,6 +46,9 @@ Future<void> flushMemory() => RustLib.instance.api.crateApiCoreFlushMemory();
 Future<UpNextDto> upNext({required int limit}) =>
     RustLib.instance.api.crateApiCoreUpNext(limit: limit);
 
+Future<void> jumpToQueued({required BigInt token}) =>
+    RustLib.instance.api.crateApiCoreJumpToQueued(token: token);
+
 /// Adds a music folder and scans it in the background; returns the root id.
 Future<PlatformInt64> addRoot({required String path}) =>
     RustLib.instance.api.crateApiCoreAddRoot(path: path);
@@ -228,6 +231,14 @@ Future<List<ListenDto>> history({required int limit}) =>
 
 Future<List<PlayedDto>> mostPlayed({required int days, required int limit}) =>
     RustLib.instance.api.crateApiCoreMostPlayed(days: days, limit: limit);
+
+Future<ListeningWindowDto> listeningWindow({
+  required PlatformInt64 startMs,
+  required PlatformInt64 endMs,
+}) => RustLib.instance.api.crateApiCoreListeningWindow(
+  startMs: startMs,
+  endMs: endMs,
+);
 
 Future<List<DormantDto>> dormant({required int limit}) =>
     RustLib.instance.api.crateApiCoreDormant(limit: limit);

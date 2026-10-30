@@ -61,16 +61,20 @@ These images are renders of the HTML design plates, with mock data and drawn cov
 
 ## Building
 
-Meret needs macOS with Xcode, [Flutter](https://docs.flutter.dev/get-started) and Rust through rustup; `rust-toolchain.toml` pins the exact version the build uses. CocoaPods is not needed.
+Meret needs macOS with Xcode, [mise](https://mise.jdx.dev/) and Rust through rustup. `mise.toml` pins Flutter and its bundled Dart SDK; `rust-toolchain.toml` pins Rust. CocoaPods is not needed.
 
 ```sh
+mise install                          # the pinned Flutter SDK
+mise run app:setup                    # resolve packages for that SDK
 cargo test --workspace                 # the core
 cargo run -p meret-cli --release -- library add ~/Music
 cargo run -p meret-cli --release -- library ls 'year:1990s' --limit 20
 
 cd apps/meret
-flutter run -d macos                   # the app, building the Rust core through a native-assets hook
-flutter run -d macos --dart-define=MERET_FAKE=true   # mock data, no Rust
+mise exec -- flutter run -d macos      # the app, building the Rust core through a native-assets hook
+mise exec -- flutter run -d macos --dart-define=MERET_FAKE=true   # mock data, no Rust
 ```
 
-`mise run install` builds the release app and installs it as `/Applications/Meret.app`. The CLI and the app share one library in `~/Library/Application Support/io.sowilo.meret`. [Working on it](docs/architecture.md#working-on-it) lists every CLI command.
+`mise run app:test` runs the Flutter tests. `mise run install` builds the release app and installs it as `/Applications/Meret.app`. Use `mise exec -- flutter` for direct commands so a system Flutter cannot silently select a different Dart SDK. After changing SDK versions or restoring a checkout, rerun `mise run app:setup` to refresh SDK paths in `.dart_tool/package_config.json`.
+
+The CLI and the app share one library in `~/Library/Application Support/io.sowilo.meret`. [Working on it](docs/architecture.md#working-on-it) lists every CLI command.

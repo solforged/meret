@@ -56,6 +56,12 @@ pub struct ReleaseHead {
 const ALBUM_ARTIST: &str = "COALESCE(rl.album_artist_credit, (SELECT COALESCE(a.sort_name, a.name) FROM credit c JOIN agent a ON a.id = c.agent_id
     WHERE c.subject_kind = 3 AND c.subject_id = rl.id AND c.role = 'album_artist' ORDER BY c.sort LIMIT 1))";
 
+/// Shared within-release order for browsing and playback. Unknown positions
+/// follow numbered ones; titles and persistent ids provide a stable fallback
+/// independent of the selected file copy.
+pub(crate) const TRACK_ORDER: &str = "m.position = 0, m.position, t.position = 0, t.position,
+    COALESCE(t.title, r.title, '') COLLATE NOCASE, t.id";
+
 // A bitrate wins when known; unknown legacy copies fall back to codec order.
 // Lossless depth/rate never influence the lossy comparison.
 macro_rules! source_quality {
@@ -93,7 +99,8 @@ const VISIBLE_SOURCE: &str = concat!(
 impl Store {
     /// Builds the hot columns from SQLite: one row per track with a present
     /// file, in library order (album artist, unknown last; album; disc;
-    /// track), so a result's row numbers are already sorted.
+    /// track; title and id for unknown/tied positions), so a result's row
+    /// numbers are already sorted.
     pub fn load_columns(&self) -> Result<HotColumns> {
         self.read(|c| {
             let sql = format!(
@@ -122,7 +129,7 @@ impl Store {
                             JOIN track t ON t.recording_id = r.id
                             WHERE {COUNTED} GROUP BY t.id) l ON l.track_id = t.id
                  ORDER BY album_artist IS NULL, album_artist COLLATE NOCASE, rl.title COLLATE NOCASE, rl.id,
-                          m.position, t.position, f.rel_path",
+                          {TRACK_ORDER}",
                 version = crate::ANALYSIS_VERSION,
             );
             let mut stmt = c.prepare(&sql)?;

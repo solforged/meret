@@ -90,9 +90,9 @@ void main() {
       if (suggestion.note.isNotEmpty) expect(find.text(suggestion.note), findsOneWidget);
     }
     expect(find.text('macOS will ask for access'), findsWidgets);
-    expect(find.text('Bring your history'), findsOneWidget);
-    expect(find.text('Connect a service'), findsOneWidget);
-    expect(find.ancestor(of: find.text('Connect a service'), matching: find.byType(TodayDoor)), findsNothing);
+    expect(find.text('Bring your history'), findsNothing);
+    expect(find.text('Connect a service'), findsNothing);
+    expect(find.text('Upcoming features'), findsOneWidget);
 
     await tester.tap(find.text(suggestions.first.label));
     await tester.pump();
@@ -151,7 +151,7 @@ void main() {
     expect(fill(), Tok.sky);
   });
 
-  testWidgets('the empty Today stacks its columns on a narrow window', (tester) async {
+  testWidgets('empty onboarding stays focused on import at narrow widths and links to Upcoming', (tester) async {
     final core = FakeCore.empty();
     _size(tester, const Size(400, 1000));
     await tester.pumpWidget(MaterialApp(home: SettingsScope(
@@ -163,9 +163,16 @@ void main() {
     await tester.pump();
 
     expect(find.text('Collection'), findsOneWidget);
-    expect(find.text('Leads'), findsOneWidget);
-    expect(tester.getTopLeft(find.text('Leads')).dy, greaterThan(tester.getTopLeft(find.text('Collection')).dy));
+    expect(find.text('Choose a folder…'), findsOneWidget);
+    for (final obsolete in ['Coming later', 'Leads', 'Crates and trails', 'Pick up', 'Needs you']) {
+      expect(find.text(obsolete), findsNothing);
+    }
     expect(tester.takeException(), isNull);
+    final upcoming = find.byKey(const ValueKey('today-upcoming'));
+    await tester.ensureVisible(upcoming);
+    await tester.tap(upcoming);
+    await _settleOverlay(tester);
+    _expectSection(tester, 'Upcoming');
   });
 
   testWidgets('activity is a dot while all is fine, a ring while a job runs, amber when something needs you', (tester) async {

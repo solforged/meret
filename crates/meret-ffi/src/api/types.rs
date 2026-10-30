@@ -26,7 +26,7 @@ pub struct _TrailSummaryDto {
     pub played: u32,
     pub wanted: u32,
 }
-pub use meret_api::{DormantDto, ListenDto, PlayedDto};
+pub use meret_api::{DormantDto, ListenDto, ListeningWindowDto, PlayedDto};
 pub use meret_api::ResumeDto;
 pub use meret_api::{PickDto, ZoneDto};
 
@@ -206,6 +206,7 @@ pub enum _TransportDto {
 pub struct _UpNextItemDto {
     pub token: u64,
     pub track_id: Option<i64>,
+    pub release_id: Option<i64>,
     pub title: String,
     pub subtitle: String,
     pub length_ms: Option<u64>,
@@ -626,6 +627,12 @@ pub struct _DormantDto {
     pub cover: Option<String>,
     pub plays: u64,
     pub last_played_ms: i64,
+}
+
+#[frb(mirror(ListeningWindowDto))]
+pub struct _ListeningWindowDto {
+    pub listens: Vec<ListenDto>,
+    pub most_played: Vec<PlayedDto>,
 }
 
 #[frb(mirror(PickDto))]

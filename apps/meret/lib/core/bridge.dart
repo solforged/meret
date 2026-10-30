@@ -53,6 +53,7 @@ abstract interface class CoreBridge {
   Future<void> flushMemory();
   /// The queue after the playing item; ask again when Now's item changes.
   Future<UpNextDto> upNext(int limit);
+  Future<void> jumpToQueued(BigInt token);
   Future<int> addRoot(String path);
   Future<void> removeRoot(int id);
   SettingsDto settings();
@@ -68,6 +69,7 @@ abstract interface class CoreBridge {
   Future<FacetsDto> facets(String query);
   Future<List<ListenDto>> history(int limit);
   Future<List<PlayedDto>> mostPlayed(int days, int limit);
+  Future<ListeningWindowDto> listeningWindow(int startMs, int endMs);
   Future<List<DormantDto>> dormant(int limit);
   Future<List<ResumeDto>> resumePoints(int limit);
   Future<void> pickUp(PlatformInt64 releaseId);
@@ -145,6 +147,8 @@ class RustCore implements CoreBridge {
   @override
   Future<UpNextDto> upNext(int limit) => rust.upNext(limit: limit);
   @override
+  Future<void> jumpToQueued(BigInt token) => rust.jumpToQueued(token: token);
+  @override
   Future<int> addRoot(String path) async => (await rust.addRoot(path: path)).toInt();
   @override
   Future<void> removeRoot(int id) => rust.removeRoot(id: PlatformInt64Util.from(id));
@@ -176,6 +180,9 @@ class RustCore implements CoreBridge {
   Future<List<ListenDto>> history(int limit) => rust.history(limit: limit);
   @override
   Future<List<PlayedDto>> mostPlayed(int days, int limit) => rust.mostPlayed(days: days, limit: limit);
+  @override
+  Future<ListeningWindowDto> listeningWindow(int startMs, int endMs) => rust.listeningWindow(
+    startMs: PlatformInt64Util.from(startMs), endMs: PlatformInt64Util.from(endMs));
   @override
   Future<List<DormantDto>> dormant(int limit) => rust.dormant(limit: limit);
   @override
@@ -1493,6 +1500,7 @@ class FakeCore implements CoreBridge {
           UpNextItemDto(
             token: token,
             trackId: row.trackId,
+            releaseId: row.releaseId,
             title: row.title,
             subtitle: '${row.artist} · ${row.album}',
             lengthMs: row.lengthMs,
@@ -1500,6 +1508,14 @@ class FakeCore implements CoreBridge {
       ],
       remaining: BigInt.from(rest.length),
     );
+  }
+
+  @override
+  Future<void> jumpToQueued(BigInt token) async {
+    final at = _queue.indexWhere((item) => item.$1 == token);
+    if (at < 0) throw 'that queued item is no longer available';
+    _cursor = at;
+    _playRow(_queue[at]);
   }
 
 
@@ -1636,6 +1652,32 @@ class FakeCore implements CoreBridge {
           );
         })(),
     ];
+  }
+
+  @override
+  Future<ListeningWindowDto> listeningWindow(int startMs, int endMs) async {
+    final listens = (await history(0xffffffff)).where((listen) =>
+      listen.startedAtMs.toInt() >= startMs && listen.startedAtMs.toInt() < endMs).toList();
+    final groups = <PlatformInt64, List<ListenDto>>{};
+    for (final listen in listens) {
+      if (listen.counted && listen.trackId != null && listen.releaseId != null) {
+        groups.putIfAbsent(listen.trackId!, () => []).add(listen);
+      }
+    }
+    final mostPlayed = groups.values.map((rows) {
+      rows.sort((a, b) => b.startedAtMs.compareTo(a.startedAtMs));
+      final latest = rows.first;
+      return PlayedDto(trackId: latest.trackId!, recordingId: latest.recordingId,
+        releaseId: latest.releaseId!, title: latest.title, credit: latest.credit,
+        releaseTitle: latest.releaseTitle ?? '', cover: latest.cover,
+        plays: BigInt.from(rows.length), lastPlayedMs: latest.startedAtMs);
+    }).toList()..sort((a, b) {
+      final plays = b.plays.compareTo(a.plays);
+      if (plays != 0) return plays;
+      final recency = b.lastPlayedMs.compareTo(a.lastPlayedMs);
+      return recency != 0 ? recency : a.trackId.compareTo(b.trackId);
+    });
+    return ListeningWindowDto(listens: listens, mostPlayed: mostPlayed.take(3).toList());
   }
 
   @override

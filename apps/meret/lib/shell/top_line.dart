@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../theme/action_target.dart';
 import '../theme/tokens.dart';
 import 'window_chrome.dart';
 
@@ -46,7 +47,11 @@ class TopLine extends StatelessWidget {
   static const height = 52.0;
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder(
+  Widget build(BuildContext context) => FocusTraversalGroup(
+    // Query and LCD trade visual positions when the query takes focus. Keep
+    // their traversal order stable so Tab cannot cycle between those slots.
+    policy: WidgetOrderTraversalPolicy(),
+    child: ValueListenableBuilder(
     valueListenable: WindowChrome.instance.fullScreen,
     builder: (context, _, _) => Container(
       height: height,
@@ -98,7 +103,7 @@ class TopLine extends StatelessWidget {
                   children: [
                     LayoutId(id: _Slot.left, child: left),
                     // Too narrow to say anything, the LCD gives its room away.
-                    LayoutId(id: _Slot.lcd, child: LayoutBuilder(builder: (_, slot) => slot.maxWidth < _CentreSlot.pill * 0.6 ? const SizedBox.shrink() : lcd)),
+                    LayoutId(id: _Slot.lcd, child: LayoutBuilder(builder: (_, slot) => slot.maxWidth < _CentreSlot.pill ? const SizedBox.shrink() : lcd)),
                     LayoutId(id: _Slot.query, child: query),
                     LayoutId(id: _Slot.right, child: activity),
                   ],
@@ -108,6 +113,7 @@ class TopLine extends StatelessWidget {
           );
         }),
       ]),
+    ),
     ),
   );
 }
@@ -201,9 +207,11 @@ class _Step extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
-    child: InkWell(
+    excludeFromSemantics: true,
+    child: ActionTarget(
       onTap: onTap,
-      canRequestFocus: false,
+      semanticLabel: tooltip,
+      excludeChildSemantics: true,
       child: SizedBox(width: 26, height: 26, child: Center(child: Text(
         glyph,
         style: Tok.body.copyWith(fontSize: 18, height: 1, color: onTap == null ? Tok.dim : Tok.muted),

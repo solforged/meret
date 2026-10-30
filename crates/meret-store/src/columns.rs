@@ -149,6 +149,15 @@ impl HotColumns {
         }
     }
 
+    /// Reconciles committed play totals, including a corrected final listen
+    /// position that falls below the counting threshold.
+    pub fn set_play_stats(&mut self, track: TrackId, plays: u32, last_played_s: i64) {
+        if let Some(&row) = self.track_rows.get(&track) {
+            self.plays[row] = plays;
+            self.last_played[row] = last_played_s;
+        }
+    }
+
     /// Applies committed recording values and completed editions' DR fallbacks.
     pub fn patch_analysis(&mut self, patches: &[AnalysisPatch]) {
         for patch in patches {

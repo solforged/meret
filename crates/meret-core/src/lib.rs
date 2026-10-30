@@ -690,7 +690,11 @@ impl Core {
         self.play_at(items, 0, 0)
     }
 
-    fn play_at(&self, mut items: Vec<QueueItem>, cursor: usize, start_ms: u64) -> Result<()> {
+    fn play_at(&self, items: Vec<QueueItem>, cursor: usize, start_ms: u64) -> Result<()> {
+        self.play_at_mode(items, cursor, start_ms, false)
+    }
+
+    fn play_at_mode(&self, mut items: Vec<QueueItem>, cursor: usize, start_ms: u64, exact: bool) -> Result<()> {
         let level = self.settings().level;
         for item in &mut items {
             item.gain_db = match item.track {
@@ -700,7 +704,7 @@ impl Core {
         }
         self.memory_state.lock().stopping = false;
         let mut player = self.player.lock();
-        let result = player.play(items, cursor, start_ms).map(|_| ());
+        let result = if exact { player.play_exact(items, cursor) } else { player.play(items, cursor, start_ms) }.map(|_| ());
         if let Some(error) = player.take_error() {
             self.now.send_modify(|n| n.error = Some(error));
         }
@@ -731,7 +735,7 @@ impl Core {
     fn play_pending(&self, from_start: bool) -> Result<bool> {
         let pending = self.pending.lock().take();
         let Some(saved) = pending else { return Ok(false) };
-        let position = if from_start { 0 } else {
+        let position = if from_start { 0 } else if saved.seeked { saved.position_ms } else {
             meret_player::resume::resume_point(saved.items[saved.cursor].idiom, saved.position_ms, &[]).position_ms
         };
         // Picking up where the last run stopped is the same listen; from the
@@ -739,9 +743,9 @@ impl Core {
         *self.carried_listen.lock() = saved.listen.zip(saved.items[saved.cursor].recording)
             .filter(|_| !from_start)
             .map(|(uid, recording)| listens::Carried { uid, recording });
-        if let Err(error) = self.play_at(saved.items, saved.cursor, position) {
+        if let Err(error) = self.play_at(saved.items.clone(), saved.cursor, position) {
             self.carried_listen.lock().take();
-            memory::restore(self)?;
+            *self.pending.lock() = Some(saved);
             return Err(error);
         }
         Ok(true)
@@ -770,13 +774,71 @@ impl Core {
     }
 
     pub fn seek_ms(&self, ms: u64) {
-        let _ = self.local.command(ZoneCommand::Seek { ms });
+        match memory::seek_pending(self, ms) {
+            Ok(true) => {}
+            Ok(false) => { let _ = self.local.command(ZoneCommand::Seek { ms }); }
+            Err(error) => self.now.send_modify(|now| now.error = Some(error.to_string())),
+        }
     }
 
     /// The next playable item in the queue; at its end, playback stops.
     pub fn next(&self) -> Result<()> {
+        if self.step_pending(true)? { return Ok(()) }
         let mut player = self.player.lock();
         let result = player.skip_next().map(|_| ());
+        if let Some(error) = player.take_error() {
+            self.now.send_modify(|n| n.error = Some(error));
+        }
+        Ok(result?)
+    }
+
+    /// Restores at the requested neighbor, so navigation never starts the
+    /// saved item just to advance past it or create a spurious listen.
+    fn step_pending(&self, forward: bool) -> Result<bool> {
+        let Some(saved) = self.pending.lock().take() else { return Ok(false) };
+        let mut at = if forward { saved.cursor + 1 } else { saved.cursor.saturating_sub(1) };
+        if at >= saved.items.len() {
+            *self.pending.lock() = Some(saved);
+            self.stop();
+            return Ok(true);
+        }
+        let result = if forward {
+            self.play_at(saved.items.clone(), at, 0)
+        } else {
+            loop {
+                match self.play_at_mode(saved.items.clone(), at, 0, true) {
+                    Err(CoreError::Zone(meret_player::ZoneError::CannotPlay(_))) if at > 0 => at -= 1,
+                    result => break result,
+                }
+            }
+        };
+        if let Err(error) = result {
+            *self.pending.lock() = Some(saved);
+            return Err(error);
+        }
+        Ok(true)
+    }
+
+    /// Plays one queued token from its start, preserving the queue. A stale
+    /// token is rejected before playback changes, including after restoration.
+    pub fn jump_to_queued(&self, token: u64) -> Result<()> {
+        let restored = {
+            let mut pending = self.pending.lock();
+            if let Some(saved) = pending.as_ref() {
+                let at = saved.items.iter().position(|item| item.token == token)
+                    .ok_or_else(|| CoreError::Query("that queued item is no longer available".into()))?;
+                Some((pending.take().expect("checked"), at))
+            } else { None }
+        };
+        if let Some((saved, at)) = restored {
+            if let Err(error) = self.play_at_mode(saved.items.clone(), at, 0, true) {
+                *self.pending.lock() = Some(saved);
+                return Err(error);
+            }
+            return Ok(());
+        }
+        let mut player = self.player.lock();
+        let result = player.jump_to(token).map(|_| ());
         if let Some(error) = player.take_error() {
             self.now.send_modify(|n| n.error = Some(error));
         }
@@ -786,6 +848,9 @@ impl Core {
     /// Restarts the playing item when it's more than `PREVIOUS_RESTART_MS`
     /// in, as every player does; otherwise the item before it.
     pub fn previous(&self) -> Result<()> {
+        let restart_pending = self.pending.lock().as_ref().is_some_and(|saved| saved.position_ms > PREVIOUS_RESTART_MS);
+        if restart_pending && memory::seek_pending(self, 0)? { return Ok(()) }
+        if self.step_pending(false)? { return Ok(()) }
         let mut player = self.player.lock();
         let playing = player.queue().current().map(|i| i.token);
         let position_ms = {

@@ -4,6 +4,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 
 import '../core/bridge.dart';
 import '../core/when.dart';
+import '../theme/action_target.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'threads.dart';
@@ -15,7 +16,7 @@ String playsFact(BigInt plays, PlatformInt64? lastPlayedMs) {
   return lastPlayedMs == null ? count : '$count · last ${dayWord(lastPlayedMs.toInt())}';
 }
 
-/// One primary action, with a second choice or the planned Want and Crate actions.
+/// One primary action, with an optional second choice.
 class PaneActions extends StatelessWidget {
   const PaneActions({super.key, required this.primary, required this.onPrimary, this.primaryKey, this.secondary, this.onSecondary});
   final String primary;
@@ -26,13 +27,9 @@ class PaneActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(spacing: 8, runSpacing: 8, children: [
-    PaneActionButton(key: primaryKey, label: primary, hint: secondary == null ? 'Space' : '', primary: true, onTap: onPrimary),
+    PaneActionButton(key: primaryKey, label: primary, primary: true, onTap: onPrimary),
     if (secondary case final label?)
-      PaneActionButton(label: label, hint: '', onTap: onSecondary)
-    else ...[
-      const PaneActionButton(label: 'Want', hint: 'W', later: true),
-      const PaneActionButton(label: 'Crate', hint: 'C', later: true),
-    ],
+      PaneActionButton(label: label, onTap: onSecondary),
   ]);
 }
 
@@ -86,8 +83,11 @@ class PaneActionButton extends StatelessWidget {
     final enabled = onTap != null;
     final button = Door(
       enabled: enabled,
-      builder: (context, hover) => GestureDetector(
+      builder: (context, hover) => ActionTarget(
         onTap: onTap,
+        semanticLabel: label,
+        excludeChildSemantics: true,
+        focusColor: primary ? Tok.sky : Tok.gold,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
           decoration: BoxDecoration(
@@ -300,29 +300,23 @@ class PaneSpine extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: onTap != null,
-    label: title,
-    child: MouseRegion(
-      cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          decoration: const BoxDecoration(color: Tok.void_, border: Border(right: BorderSide(color: Tok.line))),
-          alignment: Alignment.topCenter,
-          padding: const EdgeInsets.only(top: 14),
-          child: RotatedBox(
-            quarterTurns: 3,
-            child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Flexible(child: Text(title, style: Tok.body.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500, color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis)),
-              if (meta case final meta?) ...[
-                const SizedBox(width: 8),
-                Text(meta, style: Tok.body.copyWith(fontSize: 12.5, color: Tok.dim), maxLines: 1),
-              ],
-            ]),
-          ),
-        ),
+  Widget build(BuildContext context) => ActionTarget(
+    semanticLabel: 'Go to $title',
+    excludeChildSemantics: true,
+    onTap: onTap,
+    child: Container(
+      decoration: const BoxDecoration(color: Tok.void_, border: Border(right: BorderSide(color: Tok.line))),
+      alignment: Alignment.topCenter,
+      padding: const EdgeInsets.only(top: 14),
+      child: RotatedBox(
+        quarterTurns: 3,
+        child: Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Flexible(child: Text(title, style: Tok.body.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500, color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          if (meta case final meta?) ...[
+            const SizedBox(width: 8),
+            Text(meta, style: Tok.body.copyWith(fontSize: 12.5, color: Tok.dim), maxLines: 1),
+          ],
+        ]),
       ),
     ),
   );

@@ -7,6 +7,7 @@ import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../home/home.dart';
 import '../home/today.dart';
+import '../home/trail_browser.dart';
 import '../now/history_sheet.dart';
 import '../now/lcd.dart';
 import '../now/now_pane.dart';
@@ -62,12 +63,17 @@ class _StopKey extends GlobalKey<State<StatefulWidget>> {
 Widget _fadeThrough(Widget child, Animation<double> animation) =>
     FadeTransition(opacity: CurvedAnimation(parent: animation, curve: const Interval(0.5, 1)), child: child);
 
-Widget _stacked(Widget? current, List<Widget> previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]);
+Widget _stacked(Widget? current, List<Widget> previous) => Stack(fit: StackFit.expand, children: [
+  for (final child in previous) ExcludeFocus(child: child),
+  ?current,
+]);
 
 class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   late final PlayheadClock _clock = PlayheadClock(this);
   final _queryFocus = FocusNode();
   final _surfaceFocus = FocusNode(debugLabel: 'surface');
+  FocusNode? _homeReturnFocus;
+  FocusNode? _treeReturnFocus;
   late final Outside _outside = Outside(widget.core);
   StreamSubscription<NowDto>? _nowSub;
   StreamSubscription<StatusDto>? _statusSub;
@@ -114,6 +120,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   /// class's default (pinned from 1800 pt). [_nowShown] is the last build's answer.
   bool? _nowPanel;
   bool _nowShown = false;
+  bool _nowOverlay = false;
 
   @override
   void initState() {
@@ -183,6 +190,17 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     });
   }
 
+  void _restoreFocusAfterFrame(FocusNode? focus) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+      if (focus?.context != null && focus!.canRequestFocus) {
+        focus.requestFocus();
+      } else {
+        _reclaimFocus();
+      }
+    });
+  }
+
   void _openSettings() {
     final context = _settingsContext;
     if (context != null) showSettings(context);
@@ -193,6 +211,19 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       _report(_playSomething());
     } else {
       widget.core.transport(_clock.playing ? const TransportDto.pause() : const TransportDto.resume());
+    }
+  }
+
+  /// Space activates a focused control; on the surface it controls playback.
+  void _space() {
+    if (_queryFocus.hasFocus) return;
+    final context = FocusManager.instance.primaryFocus?.context;
+    const intent = ActivateIntent();
+    final action = context == null ? null : Actions.maybeFind<ActivateIntent>(context);
+    if (action != null && action.isEnabled(intent)) {
+      Actions.invoke(context!, intent);
+    } else {
+      _toggle();
     }
   }
 
@@ -285,6 +316,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     setState(() {
       _navigationError = null;
       _homeOver = false;
+      if (_nowOverlay) _nowPanel = false;
       if (closeTree) _treeOnly = false;
       if (trail != null) {
         _memoryVersion++;
@@ -377,16 +409,26 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   }
 
   /// `N`: the Now panel beside the panes.
-  void _toggleNow() => setState(() => _nowPanel = !_nowShown);
+  void _toggleNow() {
+    setState(() => _nowPanel = !_nowShown);
+    _reclaimFocusAfterFrame();
+  }
 
   /// `⌘1`: inside a trail, the Home column over it; again, Today. The
   /// trail stays open under both, and `]` returns to it.
   void _showHome() {
+    if (_nowOverlay) setState(() => _nowPanel = false);
     if (_trail != null && !_frontOnly && !_treeOnly && !_homeOver && !_phone) {
-      setState(() => _homeOver = true);
+      _openHome();
       return;
     }
     _showToday();
+  }
+
+  void _openHome() {
+    _homeReturnFocus = FocusManager.instance.primaryFocus;
+    setState(() => _homeOver = true);
+    _reclaimFocusAfterFrame();
   }
 
   void _showToday() {
@@ -402,7 +444,17 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   /// Escape, `]` or a click on the dimmed panes.
   void _closeHome() {
-    if (_homeOver) setState(() => _homeOver = false);
+    if (!_homeOver) return;
+    setState(() => _homeOver = false);
+    _restoreFocusAfterFrame(_homeReturnFocus);
+    _homeReturnFocus = null;
+  }
+
+  Future<void> _allTrails() async {
+    final context = _settingsContext;
+    if (context == null) return;
+    final uid = await showTrailBrowser(context, widget.core);
+    if (mounted && uid != null) await _navigate(() => widget.core.openTrail(uid));
   }
 
   /// A Home door: Today, a play, or a new tree, as a search starts one.
@@ -413,6 +465,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       case DoorKind.playSomething: _report(_playSomething());
       case DoorKind.query: _report(_start(TargetDto.search(query: door.query!)));
       case DoorKind.trail: _report(_navigate(() => widget.core.openTrail(door.uid!)));
+      case DoorKind.allTrails: _report(_allTrails());
       case DoorKind.later: break;
     }
   }
@@ -436,23 +489,35 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   void _toggleTree() {
     if (_editing || _trail == null) return;
+    final closing = _treeOnly;
+    if (!closing) _treeReturnFocus = FocusManager.instance.primaryFocus;
     _navigationVersion++;
     setState(() {
       _frontOnly = false;
       _homeOver = false;
+      if (_nowOverlay) _nowPanel = false;
       _treeOnly = !_treeOnly;
       _navigationError = null;
     });
-    _reclaimFocusAfterFrame();
+    if (closing) {
+      _restoreFocusAfterFrame(_treeReturnFocus);
+      _treeReturnFocus = null;
+    } else {
+      _reclaimFocusAfterFrame();
+    }
   }
 
-  /// Escape closes the Home column first, then the tree view.
+  /// Escape closes the narrow Now overlay, Home column, or tree view.
   void _closeTree() {
     if (_editing) return;
-    if (_homeOver) {
+    if (_nowOverlay) {
+      _toggleNow();
+    } else if (_homeOver) {
       _closeHome();
     } else if (_treeOnly) {
       setState(() => _treeOnly = false);
+      _restoreFocusAfterFrame(_treeReturnFocus);
+      _treeReturnFocus = null;
     }
   }
 
@@ -570,10 +635,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         setState(() => _settings = settings);
         _settingsChanges.value++;
       },
-      // No Tab ring: every control has its key or its click. Traversal is
-      // off below, and Tab itself is swallowed so it cannot walk focus out
-      // of the surface to the route's scope, where the keys would die.
-      child: LightScope(light: light, child: FocusTraversalGroup(descendantsAreTraversable: false, child: Shortcuts(
+      child: LightScope(light: light, child: FocusTraversalGroup(child: Shortcuts(
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.slash): _Focus(),
         SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): _Toggle(),
@@ -601,13 +663,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         SingleActivator(LogicalKeyboardKey.keyL, meta: true): _Table(),
         SingleActivator(LogicalKeyboardKey.keyS, meta: true): _Keep(),
         SingleActivator(LogicalKeyboardKey.comma, meta: true): _Settings(),
-        SingleActivator(LogicalKeyboardKey.tab): DoNothingAndStopPropagationIntent(),
-        SingleActivator(LogicalKeyboardKey.tab, shift: true): DoNothingAndStopPropagationIntent(),
       },
       child: Actions(
         actions: {
           _Focus: CallbackAction<_Focus>(onInvoke: (_) => _queryFocus.requestFocus()),
-          _Toggle: CallbackAction<_Toggle>(onInvoke: (_) { if (!_queryFocus.hasFocus) _toggle(); return null; }),
+          _Toggle: CallbackAction<_Toggle>(onInvoke: (_) { _space(); return null; }),
           _PlaySomething: CallbackAction<_PlaySomething>(onInvoke: (_) => _report(_playSomething())),
           _FromStart: CallbackAction<_FromStart>(onInvoke: (_) => _fromStart()),
           _History: CallbackAction<_History>(onInvoke: (_) => _history()),
@@ -627,6 +687,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         child: Focus(
           focusNode: _surfaceFocus,
           autofocus: true,
+          skipTraversal: true,
           child: ColoredBox(
             color: Tok.void_,
             child: LayoutBuilder(builder: (context, box) {
@@ -637,6 +698,22 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               final along = trail == null ? const <StopDto>[] : _row(trail);
               final stops = {for (final stop in trail?.stops ?? const <StopDto>[]) stop.index: stop};
               final aheadStops = {for (final stop in along.skip(path.length)) stop.index};
+              final hasMusic = (_status?.tracks ?? BigInt.zero) > BigInt.zero;
+              WindowChrome.instance.setMenuAvailability({
+                'home': true, 'table': true, 'search': true,
+                'back': trail != null && !_frontOnly,
+                'forward': trail != null && (_frontOnly || _homeOver || along.length > path.length),
+                'previousBranch': trail != null && trail.branches.length > 1,
+                'nextBranch': trail != null && trail.branches.length > 1,
+                'tree': trail != null, 'keep': trail != null,
+                'prune': trail?.branches.any((branch) => !branch.current && branch.prunable) ?? false,
+                'toggle': _now?.anchor != null || hasMusic,
+                'playSomething': hasMusic,
+                'fromStart': _now?.anchor != null,
+                'playBranch': trail != null && hasMusic,
+                'playTree': trail != null && hasMusic,
+                'now': true, 'history': true, 'keys': true,
+              });
               // The row holds the trail's path, the stops ahead and the parked
               // stops whatever page lies over it, so nothing is thrown away by a page.
               // A new tree, or the previous one, fades through like a page: the
@@ -684,6 +761,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                         )
                       : null;
               _nowShown = !phone && (_nowPanel ?? wc.pinnedNow);
+              _nowOverlay = _nowShown && wc == WidthClass.foldable;
+              final nowWidth = wc.nowWidth ?? WidthClass.panel;
               // Plate 06: the column beside Today, the rail inside a trail, and
               // the column over the rail on ⌘1. The panes never move for Home.
               final homeWidth = phone ? 0.0 : showToday ? Home.column : Home.rail;
@@ -705,8 +784,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   // Under Home or Today the "] back to" line names the trail, so the chip waits.
                   chip: trail == null || !_decided || (!phone && (_homeOver || showToday)) ? null : ({compact = false, star = false}) => TrailChip(trail: trail, onTree: _toggleTree, compact: compact, star: star),
                 ),
-                Expanded(child: Row(children: [
-                  Expanded(child: Stack(fit: StackFit.expand, children: [
+                Expanded(child: Stack(fit: StackFit.expand, children: [
+                  Positioned.fill(
+                    right: _nowShown && !_nowOverlay ? nowWidth : 0,
+                    child: ExcludeFocus(excluding: _nowOverlay,
+                      child: ExcludeSemantics(excluding: _nowOverlay,
+                        child: IgnorePointer(ignoring: _nowOverlay,
+                          child: Stack(fit: StackFit.expand, children: [
                     Padding(padding: EdgeInsets.only(left: homeWidth), child: Column(children: [
                       if (_navigationError != null)
                         Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
@@ -737,21 +821,28 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                         width: homeOpen ? Home.column : Home.rail,
                         child: Home(
                           doors: _doors, open: homeOpen, onDoor: _door,
-                          onOpen: () => setState(() => _homeOver = true),
+                          onOpen: _openHome,
                           litQuery: showToday ? null : trail.rootQuery,
                           todayLit: showToday,
                         ),
                       )),
-                  ])),
+                  ]))))),
+                  if (_nowOverlay)
+                    Positioned.fill(child: GestureDetector(
+                      key: const ValueKey('now-scrim'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _toggleNow,
+                      child: const ColoredBox(color: Colors.black54),
+                    )),
                   // Retain loaded details: async remounts clamp a restored scroll offset.
-                  Visibility(
+                  Positioned(key: const ValueKey('now-panel-position'), top: 0, bottom: 0, right: 0, child: Visibility(
                     visible: _nowShown, maintainState: true, maintainAnimation: false, maintainSize: false,
-                    child: SizedBox(width: wc.nowWidth ?? WidthClass.panel, child: NowPane(
+                    child: SizedBox(width: nowWidth, child: NowPane(
                       core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
                       settingsChanges: _settingsChanges,
                       onRelease: (id) => _report(_start(TargetDto.release(id: id))),
                     )),
-                  ),
+                  )),
                 ])),
                 // Phones keep a player bar under the thumb; desktops have the LCD.
                 if (phone) NowBar(

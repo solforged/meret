@@ -28,13 +28,18 @@ void main() {
     final core = FakeCore();
     await _surface(tester, core);
 
-    for (final section in SettingsSection.values) {
-      showSettings(tester.element(find.byType(Today)), section: section);
+    for (final size in [const Size(1920, 1100), const Size(600, 700)]) {
+      tester.view.physicalSize = size;
       await _settle(tester);
-      expect(find.byKey(ValueKey('settings-section-${section.name}')), findsOneWidget);
-      expect(await core.trail(), isNull);
-      await tester.tap(find.byTooltip('Close Settings'));
-      await _settle(tester);
+      for (final section in SettingsSection.values) {
+        showSettings(tester.element(find.byType(Today)), section: section);
+        await _settle(tester);
+        expect(find.byKey(ValueKey('settings-section-${section.name}')), findsOneWidget);
+        expect(await core.trail(), isNull);
+        expect(tester.takeException(), isNull, reason: '${section.name} at $size');
+        await tester.tap(find.byTooltip('Close Settings'));
+        await _settle(tester);
+      }
     }
     expect(tester.takeException(), isNull);
   });
@@ -221,9 +226,11 @@ void main() {
     await _surface(tester, core);
     showSettings(tester.element(find.byType(Today)), section: SettingsSection.sources);
     await _settle(tester);
-    for (final name in ['This Mac', 'MusicBrainz', 'Spotify', 'Music Assistant', 'Roon', 'Bandcamp', 'YouTube', 'Qobuz', 'ListenBrainz', 'Last.fm']) {
+    for (final name in ['This Mac', 'MusicBrainz']) {
       expect(find.text(name), findsWidgets);
     }
+    expect(find.text('Spotify'), findsNothing);
+    expect(find.byKey(const ValueKey('settings-nav-history')), findsNothing);
     expect(find.text('Recordings and credits'), findsNothing);
     await tester.tap(find.text('MusicBrainz').last);
     await tester.pump();
@@ -237,9 +244,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-nav-lookups')));
     await tester.pump();
     expect(find.byType(Switch), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('settings-nav-files')));
+    await tester.tap(find.byKey(const ValueKey('settings-nav-upcoming')));
     await tester.pump();
     expect(find.byType(Switch), findsNothing);
+    expect(find.text('Import listening history'), findsOneWidget);
+    expect(find.text('Spotify'), findsOneWidget);
   });
 }
 

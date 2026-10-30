@@ -289,6 +289,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ListenDto dco_decode_listen_dto(dynamic raw);
 
   @protected
+  ListeningWindowDto dco_decode_listening_window_dto(dynamic raw);
+
+  @protected
   LookupStatusDto dco_decode_lookup_status_dto(dynamic raw);
 
   @protected
@@ -755,6 +758,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ListenDto sse_decode_listen_dto(SseDeserializer deserializer);
+
+  @protected
+  ListeningWindowDto sse_decode_listening_window_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   LookupStatusDto sse_decode_lookup_status_dto(SseDeserializer deserializer);
@@ -1320,6 +1328,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_listen_dto(ListenDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_listening_window_dto(
+    ListeningWindowDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_lookup_status_dto(

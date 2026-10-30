@@ -12,7 +12,64 @@ import 'package:meret/shell/window_chrome.dart';
 import 'package:meret/theme/light.dart';
 
 void main() {
-  testWidgets('KEYS-1 Escape dismisses suggestions then empties and unfocuses, or does so at once without suggestions', (tester) async {
+  testWidgets('clicking the docked query focuses its text field', (tester) async {
+    await _surface(tester, _KeysCore());
+    await tester.pump(const Duration(milliseconds: 300));
+    final field = find.byType(TextField);
+    final focus = tester.widget<QueryLine>(find.byType(QueryLine)).focus;
+    expect(focus.hasFocus, isFalse);
+    await tester.tap(field);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(focus.hasFocus, isTrue);
+  });
+
+  testWidgets('native Edit commands use the focused query or dialog text model', (tester) async {
+    var clipboard = '';
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      switch (call.method) {
+        case 'Clipboard.setData':
+          clipboard = (call.arguments as Map)['text'] as String;
+          return null;
+        case 'Clipboard.getData':
+          return {'text': clipboard};
+        case 'Clipboard.hasStrings':
+          return {'value': clipboard.isNotEmpty};
+      }
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    final core = _KeysCore();
+    await core.startTrail(const TargetDto.search(query: 'Iona'));
+    await _surface(tester, core);
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    Future<void> checkEditing(Finder field) async {
+      await tester.enterText(field, 'alpha beta');
+      await tester.pump(const Duration(seconds: 1));
+      final controller = tester.widget<TextField>(field).controller!;
+      await _nativeEdit(tester, 'selectAll:');
+      expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 10));
+      await _nativeEdit(tester, 'copy:');
+      expect(clipboard, 'alpha beta');
+      await _nativeEdit(tester, 'cut:');
+      expect(controller.text, isEmpty);
+      await _nativeEdit(tester, 'paste:');
+      expect(controller.text, 'alpha beta');
+    }
+
+    await checkEditing(find.byType(TextField));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await _modified(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyS);
+    await checkEditing(find.byKey(const ValueKey('trail-name')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
+  });
+
+  testWidgets('KEYS-1 Escape dismisses suggestions then unfocuses while preserving the draft', (tester) async {
     await _surface(tester, _KeysCore());
     final field = find.byType(TextField);
     final focus = tester.widget<QueryLine>(find.byType(QueryLine)).focus;
@@ -28,7 +85,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(focus.hasFocus, isFalse);
-    expect(tester.widget<TextField>(field).controller!.text, '', reason: 'nothing stale promises an Enter');
+    expect(tester.widget<TextField>(field).controller!.text, 'o');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.slash);
     await tester.pump();
@@ -39,7 +96,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();
       expect(focus.hasFocus, isFalse);
-      expect(tester.widget<TextField>(field).controller!.text, '');
+      expect(tester.widget<TextField>(field).controller!.text, input);
     }
   });
 
@@ -193,6 +250,9 @@ void main() {
         expect(find.descendant(of: sheet, matching: find.text(does)), findsOneWidget, reason: does);
       }
     }
+    expect(find.descendant(of: sheet, matching: find.text('play <query>')), findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text('Press / to focus the query line, then type without a leading slash.')), findsOneWidget);
+    expect(find.descendant(of: sheet, matching: find.text('Queue, want and crate commands are coming later.')), findsOneWidget);
     // Behind the sheet the surface's keys are dead.
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
@@ -219,6 +279,11 @@ void main() {
     expect(handled, isFalse, reason: '? must reach text input');
     expect(sheet, findsNothing);
   });
+}
+
+Future<void> _nativeEdit(WidgetTester tester, String command) async {
+  WindowChrome.instance.edit(command);
+  await tester.pump();
 }
 
 /// `?` as a US keyboard sends it: shift and the slash key.
