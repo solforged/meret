@@ -58,7 +58,7 @@ void main() {
     expect(queue.kind, QueryKind.command);
     expect(queue.canonical, 'queue year:2010');
     await expectLater(core.runCommand(queue.canonical), throwsA(contains("queue isn't built yet")));
-    await core.runCommand(core.parse('play release:nothing-here').canonical);
+    await expectLater(core.runCommand(core.parse('play release:nothing-here').canonical), throwsA('No tracks match'));
   });
 
   test('playing a FLAC streams Now with a bit-perfect path and a moving anchor', () async {
@@ -181,7 +181,7 @@ void main() {
     final core = RustCore();
     await _scanFixture(core);
     final row = ((await core.rows('', _libraryView, 0, 1)).items.single as ItemDto_Track).row;
-    final previous = await core.startTrail(TargetDto.search(query: row.title));
+    await core.startTrail(TargetDto.search(query: row.title));
     final root = await core.startTrail(const TargetDto.search(query: ''));
     final releaseTrail = await core.follow(root.current, TargetDto.release(id: row.releaseId), ThreadKind.appearsOn, 'local_tags');
     final releaseStop = releaseTrail.current;
@@ -213,10 +213,7 @@ void main() {
     expect(back.stops.where((stop) => stop.onPath), hasLength(2));
     expect(await core.trailForward(), isNull, reason: 'the briefly opened person is folded away');
     expect((await core.trailGo(root.current)).stops.where((stop) => stop.onPath), hasLength(1));
-    final previousTrail = (await core.trailBack())!;
-    expect(previousTrail.rootQuery, previous.rootQuery);
-    expect(previousTrail.current, previous.current);
-    expect((await core.trailForward())!.current, root.current);
+    expect(await core.trailBack(), isNull, reason: 'the first stop of a trail has no stop behind it; [ never reaches the older trail');
     expect((await core.trailForward())!.current, releaseStop);
     final reopened = await core.follow(releaseStop, credit.to, credit.kind, credit.provider);
     expect(reopened.current, personStop);

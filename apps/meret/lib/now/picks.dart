@@ -5,14 +5,17 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 
 import '../core/bridge.dart';
 import '../theme/tokens.dart';
+import 'folder_error.dart';
 import 'now_pane.dart';
 
 /// The core's ranked picks, with its reason and playback plan left intact.
+/// With none, it says why in the core's words; [actions] adds the one that answers it.
 class PlaySomething extends StatefulWidget {
-  const PlaySomething({super.key, required this.core, required this.now, this.onRelease});
+  const PlaySomething({super.key, required this.core, required this.now, this.onRelease, this.actions = true});
   final CoreBridge core;
   final NowDto? now;
   final Future<void> Function(PlatformInt64)? onRelease;
+  final bool actions;
 
   @override
   State<PlaySomething> createState() => _PlaySomethingState();
@@ -20,7 +23,11 @@ class PlaySomething extends StatefulWidget {
 
 class _PlaySomethingState extends State<PlaySomething> {
   List<PickDto>? _picks;
+  NothingToPlayDto? _nothing;
   String? _error;
+
+  /// A pick that would not play: it names the file, and Settings ▸ Folders is the answer.
+  String? _playError;
   int _generation = 0;
   StreamSubscription<StatusDto>? _statusSub;
   BigInt? _libraryVersion;
@@ -62,9 +69,11 @@ class _PlaySomethingState extends State<PlaySomething> {
     final generation = ++_generation;
     try {
       final picks = await widget.core.picks(3);
+      final nothing = picks.isEmpty ? await widget.core.nothingToPlay() : null;
       if (!mounted || generation != _generation) return;
       setState(() {
         _picks = picks;
+        _nothing = nothing;
         _error = null;
       });
     } catch (error) {
@@ -74,12 +83,15 @@ class _PlaySomethingState extends State<PlaySomething> {
 
   Future<void> _play(PickDto pick) async {
     if (_playing != null) return;
-    setState(() => _playing = pick.releaseId);
+    setState(() {
+      _playing = pick.releaseId;
+      _playError = null;
+    });
     try {
       await widget.core.playPick(pick.releaseId);
       if (mounted) await _load();
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _playError = error.toString());
     } finally {
       if (mounted) setState(() => _playing = null);
     }
@@ -139,16 +151,22 @@ class _PlaySomethingState extends State<PlaySomething> {
   );
 
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    const NowSection(title: 'Or play something'),
-    if (_error != null) Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
-    ),
-    if (_picks == null && _error == null)
-      const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text('Finding something to play…', style: Tok.label)),
-    if (_picks?.isEmpty == true)
-      const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text('Nothing to play yet', style: Tok.label)),
-    for (final pick in _picks ?? const <PickDto>[]) _cell(pick, first: identical(pick, _picks!.first)),
-  ]);
+  Widget build(BuildContext context) {
+    // Nothing until the picks are in: a loading line would flash on Today's first frames.
+    if (_picks == null && _error == null && _playError == null) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const NowSection(title: 'Or play something'),
+      if (_error != null) Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
+      ),
+      if (_playError != null)
+        FolderError(message: _playError!, actionKey: const ValueKey('now-pick-check-folders')),
+      if (_picks?.isEmpty == true)
+        _nothing == null
+          ? const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text('Nothing to play yet', style: Tok.label))
+          : NothingToPlayNote(reason: _nothing!, core: widget.core, actions: widget.actions),
+      for (final pick in _picks ?? const <PickDto>[]) _cell(pick, first: identical(pick, _picks!.first)),
+    ]);
+  }
 }

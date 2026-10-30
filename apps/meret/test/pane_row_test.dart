@@ -35,6 +35,13 @@ void main() {
     expect(layout(3, focus: 2, start: 5).start, 0, reason: 'a shorter row pulls the window back');
   });
 
+  test('the ghost marks where a follow opens, so it waits until nothing is ahead of the focus', () {
+    expect(layout(2).ghost, (1120, 608));
+    expect(layout(2, focus: 0).ghost, isNull, reason: 'after [ a follow takes the dimmed pane\'s slot, not the one after it');
+    expect(layout(3, focus: 1, width: 2200).ghost, isNull);
+    expect(layout(3, focus: 2, width: 2200).ghost, isNotNull);
+  });
+
   test('room the spines leave peeks at the stop ahead instead of a dead strip', () {
     // Now open on a laptop: 1345 pt holds two 560 pt panes, a spine either side and 133 pt more.
     final row = layout(4, focus: 2, width: 1345, maxVisible: 3);

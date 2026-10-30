@@ -10,12 +10,14 @@ import 'window_chrome.dart';
 /// forward along the trail and the trail chip at the left, activity at the
 /// right, and one centre slot shared by whatever you're doing. With
 /// something loaded the LCD holds the window's centre and the query waits
-/// docked at the right; `/` grows the query over the centre and folds the LCD
-/// to a pill beside it. With nothing loaded and Now closed the query has
+/// docked at the right; `/` grows the query leftward from there and folds the
+/// LCD to a pill at its left, so nothing slides under a pointer that clicked
+/// the field. With nothing loaded and Now closed the query has
 /// the centre. The
 /// LCD opens the Now panel, so the line has no Now button of its own. It is
 /// also the window's title bar: the window buttons sit at its left, and its
-/// empty space moves the window.
+/// empty space moves the window. Tab runs left, LCD, query, activity whatever
+/// the query is doing, so Shift+Tab is its exact reverse.
 class TopLine extends StatelessWidget {
   const TopLine({
     super.key, required this.query, required this.queryFocus, required this.lcd, required this.activity,
@@ -48,9 +50,9 @@ class TopLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => FocusTraversalGroup(
-    // Query and LCD trade visual positions when the query takes focus. Keep
-    // their traversal order stable so Tab cannot cycle between those slots.
-    policy: WidgetOrderTraversalPolicy(),
+    // Explicit orders: the slots' positions move with the query's focus, so a
+    // geometric order would differ between one Tab and the next.
+    policy: OrderedTraversalPolicy(),
     child: ValueListenableBuilder(
     valueListenable: WindowChrome.instance.fullScreen,
     builder: (context, _, _) => Container(
@@ -78,13 +80,14 @@ class TopLine extends StatelessWidget {
             );
           }
           final chip = this.chip;
+          final star = box.maxWidth < 800;
           final left = Row(mainAxisSize: MainAxisSize.min, children: [
             _Step(key: const ValueKey('top-back'), glyph: '‹', tooltip: 'Back along the trail  [', onTap: onBack),
             _Step(key: const ValueKey('top-forward'), glyph: '›', tooltip: 'Forward  ]', onTap: onForward),
             // T and the Go menu reach the tree when there's no room for the star.
             if (chip != null) ...[
               const SizedBox(width: 8),
-              Flexible(child: chip(compact: box.maxWidth < 1000, star: box.maxWidth < 800)),
+              Flexible(child: chip(compact: box.maxWidth < 1000, star: star)),
             ],
           ]);
           return ListenableBuilder(
@@ -93,19 +96,25 @@ class TopLine extends StatelessWidget {
               final searching = queryFocus.hasFocus;
               // Built once per change of state, not per frame of the slide.
               final lcd = this.lcd(folded: searching);
-              final activity = this.activity(quiet: searching);
+              // Narrow, the dot alone leaves the LCD its room; the words wait in its tooltip.
+              final activity = this.activity(quiet: searching || box.maxWidth < 720);
               return TweenAnimationBuilder<double>(
                 tween: Tween(end: searching ? 1 : 0),
                 duration: kMotion,
                 curve: Curves.easeOut,
                 builder: (context, t, _) => CustomMultiChildLayout(
-                  delegate: _CentreSlot(t: t, showLcd: showLcd, inset: inset),
+                  // The chip's words change with every stop and fork, so the LCD
+                  // plans around the room it may take; only a star is a fixed size.
+                  delegate: _CentreSlot(t: t, showLcd: showLcd, inset: inset, holdChip: chip != null && !star),
                   children: [
-                    LayoutId(id: _Slot.left, child: left),
+                    LayoutId(id: _Slot.left, child: FocusTraversalOrder(order: const NumericFocusOrder(0), child: left)),
                     // Too narrow to say anything, the LCD gives its room away.
-                    LayoutId(id: _Slot.lcd, child: LayoutBuilder(builder: (_, slot) => slot.maxWidth < _CentreSlot.pill ? const SizedBox.shrink() : lcd)),
-                    LayoutId(id: _Slot.query, child: query),
-                    LayoutId(id: _Slot.right, child: activity),
+                    LayoutId(id: _Slot.lcd, child: FocusTraversalOrder(
+                      order: const NumericFocusOrder(1),
+                      child: LayoutBuilder(builder: (_, slot) => slot.maxWidth < _CentreSlot.pill ? const SizedBox.shrink() : lcd),
+                    )),
+                    LayoutId(id: _Slot.query, child: FocusTraversalOrder(order: const NumericFocusOrder(2), child: query)),
+                    LayoutId(id: _Slot.right, child: FocusTraversalOrder(order: const NumericFocusOrder(3), child: activity)),
                   ],
                 ),
               );
@@ -121,12 +130,18 @@ class TopLine extends StatelessWidget {
 enum _Slot { left, lcd, query, right }
 
 /// Places the line's four parts. [t] runs from resting (0) to searching (1),
-/// and the LCD and query slide between their two places along it.
+/// and the LCD and query slide between their two places along it. The
+/// query keeps its right edge for good, so a pointer that clicked the docked
+/// field is still over the field when it has grown; the LCD goes left.
 class _CentreSlot extends MultiChildLayoutDelegate {
-  _CentreSlot({required this.t, required this.showLcd, required this.inset});
+  _CentreSlot({required this.t, required this.showLcd, required this.inset, required this.holdChip});
   final double t;
   final bool showLcd;
   final double inset;
+
+  /// The left slot holds a chip whose text changes: plan around the whole
+  /// room it may take, not the width it has now.
+  final bool holdChip;
 
   static const _gap = 14.0;
   static const _lcdHeight = 46.0;
@@ -135,13 +150,16 @@ class _CentreSlot extends MultiChildLayoutDelegate {
   static const _wide = 560.0;
   static const _lcdMax = 760.0;
 
-  /// The LCD folded beside a search: the transport and the time.
+  /// Least a held chip keeps: the steps and the star.
+  static const _leftLeast = 104.0;
+
+  /// The LCD folded beside a search: the transport and the time. It is also the
+  /// least the LCD shows at rest, so even at 600 pt it stays within reach.
   static const pill = 210.0;
 
   /// Narrower than this on the centre, the LCD centres between its
-  /// neighbours instead; narrower than [_lcdLeast], it folds away.
+  /// neighbours instead; narrower than [pill], it folds away.
   static const _lcdCentred = 360.0;
-  static const _lcdLeast = 240.0;
 
   @override
   void performLayout(Size size) {
@@ -150,13 +168,19 @@ class _CentreSlot extends MultiChildLayoutDelegate {
     final centre = w / 2;
 
     // The chip takes up to a fifth of the line; activity keeps its words, up to a quarter.
-    final left = layoutChild(_Slot.left, BoxConstraints(maxWidth: (w * 0.22).clamp(120.0, 380.0) + 60, maxHeight: h));
-    positionChild(_Slot.left, Offset(inset, (h - left.height) / 2));
     final right = layoutChild(_Slot.right, BoxConstraints(maxWidth: (w * 0.25).clamp(40.0, 380.0), maxHeight: h));
     positionChild(_Slot.right, Offset(w - 12 - right.width, (h - right.height) / 2));
-
-    final from = inset + left.width + _gap;
     final to = w - 12 - right.width - _gap;
+    final docked = (w * 0.18).clamp(120.0, _docked);
+
+    // A held chip has one width however its words run, but never more than
+    // leaves the LCD its pill: the chip's name gives way, the LCD does not.
+    var leftMax = (w * 0.22).clamp(120.0, 380.0) + 60;
+    if (holdChip && showLcd) leftMax = math.min(leftMax, math.max(_leftLeast, to - docked - _gap - pill - _gap - inset));
+    final left = layoutChild(_Slot.left, BoxConstraints(maxWidth: leftMax, maxHeight: h));
+    positionChild(_Slot.left, Offset(inset, (h - left.height) / 2));
+
+    final from = inset + (holdChip ? leftMax : left.width) + _gap;
     Rect row(double x, double width, double height) => Rect.fromLTWH(x, (h - height) / 2, math.max(0, width), height);
 
     // The query on the centre as far as its neighbours allow.
@@ -165,7 +189,6 @@ class _CentreSlot extends MultiChildLayoutDelegate {
       return row(math.max(from, math.min(centre - width / 2, end - width)), width, _queryHeight);
     }
 
-    final docked = (w * 0.18).clamp(120.0, _docked);
     final restQuery = showLcd ? row(to - docked, docked, _queryHeight) : wide(to);
 
     // At rest the LCD sits on the window's centre, as wide as the nearer side allows.
@@ -176,17 +199,19 @@ class _CentreSlot extends MultiChildLayoutDelegate {
       if (half * 2 >= _lcdCentred) {
         final width = math.min(_lcdMax, half * 2);
         restLcd = row(centre - width / 2, width, _lcdHeight);
-      } else if (room - from >= _lcdLeast) {
+      } else if (room - from >= pill) {
         final width = math.min(_lcdMax, room - from);
         restLcd = row(from + (room - from - width) / 2, width, _lcdHeight);
       }
     }
 
-    // Searching, the LCD folds to a pill at the right and the query takes the centre.
-    final pillLcd = showLcd ? row(to - pill, pill, _lcdHeight) : null;
-    final searchQuery = wide(pillLcd == null ? to : pillLcd.left - _gap);
+    // Searching, the query grows leftward from its docked right edge and the
+    // LCD folds to a pill at its left. With no LCD the query has the centre either way.
+    final searchWidth = math.min(_wide, math.max(docked, to - from - pill - _gap));
+    final searchQuery = showLcd ? row(to - searchWidth, searchWidth, _queryHeight) : restQuery;
+    final pillLcd = showLcd ? row(searchQuery.left - _gap - pill, pill, _lcdHeight) : null;
 
-    final lcd = showLcd ? Rect.lerp(restLcd ?? row(to, 0, _lcdHeight), pillLcd, t)! : Rect.zero;
+    final lcd = showLcd ? Rect.lerp(restLcd ?? row(pillLcd!.left, 0, _lcdHeight), pillLcd, t)! : Rect.zero;
     layoutChild(_Slot.lcd, BoxConstraints.tight(lcd.size));
     positionChild(_Slot.lcd, lcd.topLeft);
     final query = Rect.lerp(restQuery, searchQuery, t)!;
@@ -195,7 +220,7 @@ class _CentreSlot extends MultiChildLayoutDelegate {
   }
 
   @override
-  bool shouldRelayout(_CentreSlot old) => old.t != t || old.showLcd != showLcd || old.inset != inset;
+  bool shouldRelayout(_CentreSlot old) => old.t != t || old.showLcd != showLcd || old.inset != inset || old.holdChip != holdChip;
 }
 
 class _Step extends StatelessWidget {

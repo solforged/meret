@@ -33,6 +33,27 @@ void main() {
     expect(_rowCovered(tester), isFalse);
   });
 
+  testWidgets('the tree says how to leave: a Close button, and [ ] Esc only close it', (tester) async {
+    final core = await _surface(tester);
+    await _key(tester, LogicalKeyboardKey.keyT);
+    final close = find.byKey(const ValueKey('tree-close'));
+    expect(close, findsOneWidget);
+    expect(find.descendant(of: close, matching: find.text('Close')), findsOneWidget);
+    expect(find.descendant(of: close, matching: find.textContaining('Esc')), findsOneWidget);
+    expect(find.textContaining('last visited'), findsOneWidget);
+    await tester.tap(close);
+    await tester.pumpAndSettle();
+    expect(find.byType(TreePane), findsNothing);
+    for (final key in [LogicalKeyboardKey.bracketLeft, LogicalKeyboardKey.bracketRight, LogicalKeyboardKey.escape]) {
+      await _key(tester, LogicalKeyboardKey.keyT);
+      expect(find.byType(TreePane), findsOneWidget);
+      await _key(tester, key);
+      expect(find.byType(TreePane), findsNothing, reason: '$key closes the tree');
+    }
+    expect(core.stepped, isEmpty, reason: 'closing the tree is not also a step along the trail');
+    expect((await core.trail())!.current, 3);
+  });
+
   testWidgets('T ignores modifiers, text editing and the absence of a trail', (tester) async {
     await _surface(tester);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
@@ -82,11 +103,11 @@ void main() {
     expect(find.byType(TreePane), findsNothing);
   });
 
-  testWidgets('facts count all stops, folded peeks and repeated actions, then refresh after pruning', (tester) async {
+  testWidgets('facts count the stops you stayed on, folded peeks apart, and repeated actions, then refresh after pruning', (tester) async {
     final core = await _surface(tester);
     await _key(tester, LogicalKeyboardKey.keyT);
     var facts = tester.widget<TreePaneFacts>(find.byType(TreePaneFacts));
-    expect((facts.stops, facts.branches, facts.peeks, facts.wants, facts.played), (6, 3, 1, 2, 3));
+    expect((facts.stops, facts.branches, facts.peeks, facts.wants, facts.played), (5, 3, 1, 2, 3));
     final tree = find.byType(TreePane);
     expect(find.descendant(of: tree, matching: find.text('played ×2 · ♥ want ×2')), findsOneWidget);
     expect(find.descendant(of: tree, matching: find.text('open for 4s')), findsOneWidget);
@@ -102,7 +123,7 @@ void main() {
     expect(find.byKey(const ValueKey('tree-branch-5')), findsNothing);
     expect(find.byKey(const ValueKey('tree-stop-5')), findsNothing);
     facts = tester.widget<TreePaneFacts>(find.byType(TreePaneFacts));
-    expect((facts.stops, facts.branches, facts.peeks), (5, 2, 1));
+    expect((facts.stops, facts.branches, facts.peeks), (4, 2, 1));
     expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.stops, hasLength(5));
   });
 
@@ -153,9 +174,10 @@ void main() {
     expect(positions.values.every((position) => (Offset.zero & size).contains(position)), isTrue);
   });
 
-  test('two branch rows stay 88 pixels apart even in a taller canvas', () {
+  test('two branch rows stay 104 pixels apart even in a taller canvas', () {
     final source = _fixture();
     final trail = TrailDto(
+      uid: 'tree', whenMs: source.whenMs,
       current: source.current, kept: false, meetings: source.meetings,
       stops: source.stops.where((stop) => stop.index < 4).toList(),
       branches: source.branches.take(2).toList(),
@@ -163,8 +185,8 @@ void main() {
     final painter = ConstellationPainter(trail);
     final width = painter.contentWidth(1195);
     final positions = painter.layoutPositions(Size(width, painter.contentHeight));
-    expect(positions[2]!.dy - positions[3]!.dy, 88);
-    expect(painter.contentHeight, 184);
+    expect(positions[2]!.dy - positions[3]!.dy, 104);
+    expect(painter.contentHeight, 228);
     expect(painter.layoutPositions(Size(width, 900))[2]!.dy, positions[2]!.dy);
   });
 
@@ -173,18 +195,18 @@ void main() {
     await _key(tester, LogicalKeyboardKey.keyT);
     final drawing = find.byWidgetPredicate((widget) => widget is CustomPaint && widget.painter is ConstellationPainter);
     final paint = tester.renderObject<RenderCustomPaint>(drawing);
-    expect(paint, paints..something((method, arguments) => method == #drawCircle && arguments[1] == 9.0 && (arguments[2] as Paint).color.toARGB32() == Tok.gold2.toARGB32()));
+    expect(paint, paints..something((method, arguments) => method == #drawCircle && arguments[1] == 12.0 && (arguments[2] as Paint).color.toARGB32() == Tok.gold2.toARGB32()));
     expect(paint, paints..something((method, arguments) => method == #drawCircle && arguments[1] == 1.0 && (arguments[2] as Paint).color.toARGB32() == Tok.gold2.toARGB32()));
     final painter = tester.widget<CustomPaint>(drawing).painter as ConstellationPainter;
     final positions = painter.layoutPositions(paint.size);
     final label = TextPainter(
-      text: TextSpan(text: 'appears on', style: Tok.label.copyWith(fontSize: 10.5, fontStyle: FontStyle.italic, color: Tok.gold2)),
+      text: TextSpan(text: 'appears on', style: Tok.label.copyWith(fontSize: 12, fontStyle: FontStyle.italic, color: Tok.gold2)),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: 190);
     for (final index in [1, 2]) {
       final stop = painter.trail.stops.firstWhere((stop) => stop.index == index);
       final middle = (positions[stop.index]! + positions[stop.parent]!) / 2;
-      final origin = middle - Offset(label.width / 2, label.height + 8);
+      final origin = middle - Offset(label.width / 2, label.height + 10);
       expect(paint, paints..something((method, arguments) => method == #drawParagraph && arguments[1] == origin));
     }
     label.dispose();
@@ -195,7 +217,7 @@ void main() {
   testWidgets('long node titles ellipsize within their columns and stay clear of edge labels', (tester) async {
     const longTitle = 'Reeds Beyond the Copper Meridian Original Soundtrack';
     final trail = TrailDto(
-      current: 2, kept: false, branches: const [], meetings: const [],
+      uid: 'tree', whenMs: PlatformInt64Util.from(0), current: 2, kept: false, branches: const [], meetings: const [],
       stops: [
         _stop(0, null, 'Mira Fen', TargetDto.person(id: PlatformInt64Util.from(1)), onPath: true),
         _stop(1, 0, longTitle, TargetDto.release(id: PlatformInt64Util.from(1)), onPath: true),
@@ -309,17 +331,17 @@ void main() {
       final position = drawing.center;
       if (input == 'wheel') {
         await tester.sendEventToBinding(PointerScrollEvent(
-          position: position, scrollDelta: const Offset(0, 600), kind: PointerDeviceKind.mouse,
+          position: position, scrollDelta: const Offset(0, 900), kind: PointerDeviceKind.mouse,
         ));
       } else if (input == 'trackpad') {
         final gesture = await tester.createGesture(kind: PointerDeviceKind.trackpad);
         await gesture.panZoomStart(position);
         await gesture.panZoomUpdate(position, pan: const Offset(0, -20));
         await gesture.panZoomUpdate(position, pan: const Offset(0, -300));
-        await gesture.panZoomUpdate(position, pan: const Offset(0, -600));
+        await gesture.panZoomUpdate(position, pan: const Offset(0, -900));
         await gesture.panZoomEnd();
       } else {
-        await tester.dragFrom(position, const Offset(0, -600));
+        await tester.dragFrom(position, const Offset(0, -900));
       }
       await tester.pumpAndSettle();
       expect(controller.offset, greaterThan(0));
@@ -337,7 +359,7 @@ void main() {
     expect(tester.widget<TreePaneFacts>(find.byType(TreePaneFacts)).peeks, 1);
     expect(find.text('3 branches · 1 peek'), findsOneWidget);
     final withoutPeeks = TrailDto(
-      current: source.current, kept: false, meetings: source.meetings, branches: source.branches,
+      uid: 'tree', whenMs: source.whenMs, current: source.current, kept: false, meetings: source.meetings, branches: source.branches,
       stops: source.stops.where((stop) => !stop.isPeek).toList(),
     );
     await tester.pumpWidget(MaterialApp(home: TreePaneFacts(trail: withoutPeeks)));
@@ -382,7 +404,7 @@ Future<_TreeCore> _surface(WidgetTester tester, {Size size = const Size(1600, 10
 }
 
 TrailDto _fixture() => TrailDto(
-  current: 3, kept: false,
+  uid: 'tree', whenMs: PlatformInt64Util.from(DateTime(2026, 10, 20, 18, 6).millisecondsSinceEpoch), current: 3, kept: false,
   stops: [
     _stop(0, null, 'Mira Fen', TargetDto.person(id: PlatformInt64Util.from(1)), onPath: true, fork: true),
     _stop(1, 0, 'Copper gardens', TargetDto.release(id: PlatformInt64Util.from(1)), onPath: true, fork: true),
@@ -418,6 +440,19 @@ class _TreeCore extends FakeCore {
   final pruned = <int>[];
   final played = <bool>[];
   final names = <String?>[];
+  final stepped = <String>[];
+
+  @override
+  Future<TrailDto?> trailBack() async {
+    stepped.add('back');
+    return null;
+  }
+
+  @override
+  Future<TrailDto?> trailForward() async {
+    stepped.add('forward');
+    return null;
+  }
 
   @override
   Stream<NowDto> now() => Stream.value(const NowDto(title: '', subtitle: '', path: []));
@@ -436,7 +471,7 @@ class _TreeCore extends FakeCore {
       node = nodes[node.parent];
     }
     return _tree = TrailDto(
-      current: stop, kept: _tree.kept, name: _tree.name, meetings: _tree.meetings,
+      uid: _tree.uid, whenMs: _tree.whenMs, current: stop, kept: _tree.kept, name: _tree.name, meetings: _tree.meetings,
       stops: [for (final node in _tree.stops) StopDto(
         index: node.index, parent: node.parent, target: node.target, title: node.title, via: node.via,
         onPath: path.contains(node.index), isFork: node.isFork, isPeek: node.isPeek && node.index != stop,
@@ -456,7 +491,7 @@ class _TreeCore extends FakeCore {
     if (!branch.prunable) throw 'cannot prune this branch';
     pruned.add(leaf);
     return _tree = TrailDto(
-      current: _tree.current, kept: _tree.kept, name: _tree.name,
+      uid: _tree.uid, whenMs: _tree.whenMs, current: _tree.current, kept: _tree.kept, name: _tree.name,
       stops: _tree.stops.where((stop) => stop.index != leaf).toList(),
       branches: _tree.branches.where((branch) => branch.leaf != leaf).toList(),
       meetings: _tree.meetings.where((pair) => pair.$1 != leaf && pair.$2 != leaf).toList(),
@@ -473,7 +508,7 @@ class _TreeCore extends FakeCore {
   Future<TrailDto> keepTrail({String? name}) async {
     names.add(name);
     return _tree = TrailDto(
-      current: _tree.current, kept: true, name: name,
+      uid: _tree.uid, whenMs: _tree.whenMs, current: _tree.current, kept: true, name: name,
       stops: _tree.stops, branches: _tree.branches, meetings: _tree.meetings,
     );
   }

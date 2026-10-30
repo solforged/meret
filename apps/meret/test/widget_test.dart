@@ -428,12 +428,12 @@ void main() {
     expect(tester.getBottomLeft(picks).dy, lessThan(tester.getTopLeft(memory).dy));
   });
 
-  testWidgets('an empty library explains that there is nothing to pick', (tester) async {
+  testWidgets('an empty library explains that there is nothing to pick and where to start', (tester) async {
     await _surface(tester, FakeCore.empty());
     final section = find.byType(PlaySomething);
     expect(section, findsOneWidget);
     expect(find.descendant(of: section, matching: find.text('Or play something')), findsOneWidget);
-    final empty = find.descendant(of: section, matching: find.text('Nothing to play yet'));
+    final empty = find.descendant(of: section, matching: find.text('Add a music folder'));
     expect(empty, findsOneWidget);
     expect(tester.widget<Text>(empty).style, Tok.label);
     expect(find.descendant(of: section, matching: find.byType(NowDoor)), findsNothing);
@@ -685,7 +685,7 @@ void main() {
     final ys = [for (final label in order) tester.getTopLeft(find.descendant(of: column, matching: find.text(label))).dy];
     expect([...ys]..sort(), ys, reason: 'All tracks, then by tracks owned');
     final scores = find.byKey(const ValueKey('home-idiom-idiom:score'));
-    expect(find.descendant(of: scores, matching: find.text('212')), findsOneWidget);
+    expect(find.descendant(of: scores, matching: find.text('1,840 tracks')), findsOneWidget, reason: 'every Library count is tracks');
     for (final section in ['LISTEN', 'LIBRARY', 'TRAILS', 'OUT THERE']) {
       expect(find.descendant(of: column, matching: find.text(section)), findsOneWidget, reason: section);
     }
@@ -1225,7 +1225,7 @@ void main() {
     expect(trail.stops.first.isFork, isTrue);
   });
 
-  testWidgets('back and forward round trip, then back at the root shows only Front', (tester) async {
+  testWidgets('back and forward round trip, then [ at the first stop stays on the trail', (tester) async {
     final core = FakeCore();
     final row = await _firstTrack(core);
     await _surface(tester, core);
@@ -1242,13 +1242,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['All tracks', row.album]);
-    for (var i = 0; i < 2; i++) {
-      await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-    }
-    expect(_paneTitles(tester), hasLength(1));
-    expect(find.byType(Today), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_paneTitles(tester), ['All tracks']);
+    expect(find.byType(Today), findsNothing, reason: '[ never leaves the trail, not even for Today');
+    expect(find.byType(TrailChip), findsOneWidget);
   });
 
   testWidgets('a release row and Enter play the release from that index', (tester) async {

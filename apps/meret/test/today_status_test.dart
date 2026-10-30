@@ -92,7 +92,7 @@ void main() {
     expect(find.text('macOS will ask for access'), findsWidgets);
     expect(find.text('Bring your history'), findsNothing);
     expect(find.text('Connect a service'), findsNothing);
-    expect(find.text('Upcoming features'), findsOneWidget);
+    expect(find.text('Upcoming features'), findsNothing);
 
     await tester.tap(find.text(suggestions.first.label));
     await tester.pump();
@@ -151,7 +151,7 @@ void main() {
     expect(fill(), Tok.sky);
   });
 
-  testWidgets('empty onboarding stays focused on import at narrow widths and links to Upcoming', (tester) async {
+  testWidgets('empty onboarding stays focused on import at narrow widths', (tester) async {
     final core = FakeCore.empty();
     _size(tester, const Size(400, 1000));
     await tester.pumpWidget(MaterialApp(home: SettingsScope(
@@ -168,11 +168,7 @@ void main() {
       expect(find.text(obsolete), findsNothing);
     }
     expect(tester.takeException(), isNull);
-    final upcoming = find.byKey(const ValueKey('today-upcoming'));
-    await tester.ensureVisible(upcoming);
-    await tester.tap(upcoming);
-    await _settleOverlay(tester);
-    _expectSection(tester, 'Upcoming');
+    expect(find.byKey(const ValueKey('today-upcoming')), findsNothing);
   });
 
   testWidgets('activity is a dot while all is fine, a ring while a job runs, amber when something needs you', (tester) async {

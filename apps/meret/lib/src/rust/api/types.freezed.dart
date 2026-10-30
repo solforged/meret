@@ -120,11 +120,11 @@ return track(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( GroupDto field0)?  group,TResult Function( int ordinal,  TrackRowDto row)?  track,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( GroupDto field0)?  group,TResult Function( int ordinal,  TrackRowDto row,  int discs)?  track,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ItemDto_Group() when group != null:
 return group(_that.field0);case ItemDto_Track() when track != null:
-return track(_that.ordinal,_that.row);case _:
+return track(_that.ordinal,_that.row,_that.discs);case _:
   return orElse();
 
 }
@@ -142,11 +142,11 @@ return track(_that.ordinal,_that.row);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( GroupDto field0)  group,required TResult Function( int ordinal,  TrackRowDto row)  track,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( GroupDto field0)  group,required TResult Function( int ordinal,  TrackRowDto row,  int discs)  track,}) {final _that = this;
 switch (_that) {
 case ItemDto_Group():
 return group(_that.field0);case ItemDto_Track():
-return track(_that.ordinal,_that.row);}
+return track(_that.ordinal,_that.row,_that.discs);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -160,11 +160,11 @@ return track(_that.ordinal,_that.row);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( GroupDto field0)?  group,TResult? Function( int ordinal,  TrackRowDto row)?  track,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( GroupDto field0)?  group,TResult? Function( int ordinal,  TrackRowDto row,  int discs)?  track,}) {final _that = this;
 switch (_that) {
 case ItemDto_Group() when group != null:
 return group(_that.field0);case ItemDto_Track() when track != null:
-return track(_that.ordinal,_that.row);case _:
+return track(_that.ordinal,_that.row,_that.discs);case _:
   return null;
 
 }
@@ -244,11 +244,12 @@ as GroupDto,
 
 
 class ItemDto_Track extends ItemDto {
-  const ItemDto_Track({required this.ordinal, required this.row}): super._();
+  const ItemDto_Track({required this.ordinal, required this.row, required this.discs}): super._();
   
 
  final  int ordinal;
  final  TrackRowDto row;
+ final  int discs;
 
 /// Create a copy of ItemDto
 /// with the given fields replaced by the non-null parameter values.
@@ -260,18 +261,18 @@ $ItemDto_TrackCopyWith<ItemDto_Track> get copyWith => _$ItemDto_TrackCopyWithImp
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is ItemDto_Track&&(identical(other.ordinal, ordinal) || other.ordinal == ordinal)&&(identical(other.row, row) || other.row == row));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ItemDto_Track&&(identical(other.ordinal, ordinal) || other.ordinal == ordinal)&&(identical(other.row, row) || other.row == row)&&(identical(other.discs, discs) || other.discs == discs));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,ordinal,row);
+    return Object.hash(runtimeType,ordinal,row,discs);
 }
 
 @override
 String toString() {
-    return 'ItemDto.track(ordinal: $ordinal, row: $row)';
+    return 'ItemDto.track(ordinal: $ordinal, row: $row, discs: $discs)';
 }
 
 
@@ -282,7 +283,7 @@ abstract mixin class $ItemDto_TrackCopyWith<$Res> implements $ItemDtoCopyWith<$R
   factory $ItemDto_TrackCopyWith(ItemDto_Track value, $Res Function(ItemDto_Track) _then) = _$ItemDto_TrackCopyWithImpl;
 @useResult
 $Res call({
- int ordinal, TrackRowDto row
+ int ordinal, TrackRowDto row, int discs
 });
 
 
@@ -299,11 +300,12 @@ class _$ItemDto_TrackCopyWithImpl<$Res>
 
 /// Create a copy of ItemDto
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? ordinal = null,Object? row = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? ordinal = null,Object? row = null,Object? discs = null,}) {
   return _then(ItemDto_Track(
 ordinal: null == ordinal ? _self.ordinal : ordinal // ignore: cast_nullable_to_non_nullable
 as int,row: null == row ? _self.row : row // ignore: cast_nullable_to_non_nullable
-as TrackRowDto,
+as TrackRowDto,discs: null == discs ? _self.discs : discs // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 

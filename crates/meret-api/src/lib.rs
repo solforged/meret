@@ -89,7 +89,11 @@ impl Api {
     pub fn run_command(&self, input: &str) -> Result<(), String> {
         match parse(input).map_err(|e| e.to_string())? {
             Input::Command(meret_query::Command::Play { query }) => {
-                self.core.play_results(&query.to_string(), &View::default(), 0).map_err(|e| e.to_string())
+                let query = query.to_string();
+                if self.core.list(&query, &View::default()).map_err(|e| e.to_string())?.tracks.is_empty() {
+                    return Err("No tracks match".into());
+                }
+                self.core.play_results(&query, &View::default(), 0).map_err(|e| e.to_string())
             }
             Input::Command(c) => Err(format!("{} isn't built yet", verb(&c))),
             Input::Search(_) => Err("a search, not a command".into()),
@@ -167,7 +171,7 @@ impl Api {
             offset,
             items: page.items.into_iter().map(|item| match item {
                 PageItem::Group(g) => ItemDto::Group(GroupDto::from_group(g, &art_dir)),
-                PageItem::Track { ordinal, row } => ItemDto::Track { ordinal, row: row.into() },
+                PageItem::Track { ordinal, row, discs } => ItemDto::Track { ordinal, row: row.into(), discs },
             }).collect(),
         })
     }
@@ -291,6 +295,28 @@ impl Api {
         self.trail_dto(&t)
     }
 
+    /// A search stop's filters rewrite its query. The trail's root search
+    /// takes it, so the heading, the trail's name and a later return to the
+    /// stop all show the refined search.
+    pub fn refine_search(&self, query: &str) -> Result<TrailDto, String> {
+        let canonical = match parse(query) {
+            Ok(Input::Search(q)) => q.to_string(),
+            Ok(Input::Command(_)) => return Err("a command, not a search".into()),
+            Err(e) => return Err(e.to_string()),
+        };
+        let t = {
+            let mut history = self.core.trail.lock();
+            let trail = history.current_mut().ok_or("there's no trail to refine")?;
+            if trail.root_query.is_none() {
+                return Err("this trail doesn't start from a search".into());
+            }
+            trail.root_query = Some(canonical);
+            trail.clone()
+        };
+        self.core.save_trails().map_err(|e| e.to_string())?;
+        Ok(self.trail_dto(&t))
+    }
+
     /// Follows a thread from stop `from_stop`, the pane it was picked in.
     /// From a pane before the last, this starts a branch. `provider` is the
     /// thread's `provider`, so the strip can say where it came from.
@@ -320,13 +346,14 @@ impl Api {
         Ok(self.trail_dto(&t))
     }
 
-    /// `[`: one stop back, or the previous trail's saved stop at the root.
+    /// `[`: one stop back along the open trail. None at its first stop (it
+    /// never leaves the trail). With no trail open it enters the newest one.
     pub fn trail_back(&self) -> Option<TrailDto> {
         self.move_history(|history, now| history.back(now))
     }
 
-    /// `]`: the next trail's root at a saved departure stop, otherwise the
-    /// newest child that hasn't folded into a peek.
+    /// `]`: the newest child that hasn't folded into a peek, a dimmed pane
+    /// ahead included. None at the end of the trail.
     pub fn trail_forward(&self) -> Option<TrailDto> {
         self.move_history(|history, now| history.forward(now))
     }
@@ -366,10 +393,21 @@ impl Api {
         self.core.play_trail(whole).map(|n| n as u32).map_err(|e| e.to_string())
     }
 
-    /// A trail picked on the Front becomes active at the stop it was left on.
+    /// A trail picked from Home's lists or the tree becomes the newest and
+    /// opens at the stop it was left on.
     pub fn open_trail(&self, uid: &str) -> Result<TrailDto, String> {
         let uid = meret_model::TrailUid(uid.parse().map_err(|_| format!("{uid} isn't a trail id"))?);
-        self.move_history(|history, now| history.open(&uid, now)).ok_or_else(|| "that trail is no longer in the history".to_string())
+        let t = {
+            let mut history = self.core.trail.lock();
+            if !history.open(&uid, now_ms()) {
+                return Err("that trail is no longer in the history".to_string());
+            }
+            history.current().ok_or("that trail is no longer in the history")?.clone()
+        };
+        if let Err(error) = self.core.save_trail_history() {
+            tracing::error!(%error, "saving trail history");
+        }
+        Ok(self.trail_dto(&t))
     }
 
     fn move_along(&self, step: impl FnOnce(&mut meret_graph::Trail, i64) -> bool) -> Option<TrailDto> {
@@ -377,7 +415,6 @@ impl Api {
     }
 
     fn move_history(&self, step: impl FnOnce(&mut meret_graph::TrailHistory, i64) -> bool) -> Option<TrailDto> {
-        let previous = self.core.trail.lock().active_index();
         let t = {
             let mut history = self.core.trail.lock();
             if !step(&mut history, now_ms()) {
@@ -385,12 +422,6 @@ impl Api {
             }
             history.current()?.clone()
         };
-        if let Some(previous) = previous
-            && Some(previous) != self.core.trail.lock().active_index()
-            && let Err(error) = self.core.save_trail_at(previous)
-        {
-            tracing::error!(%error, "saving departed trail");
-        }
         if let Err(error) = self.core.save_trails() {
             tracing::error!(%error, "saving trail navigation");
         }
@@ -399,16 +430,18 @@ impl Api {
 
     /// Built outside the trail's lock: naming stops reads the store.
     fn trail_dto(&self, t: &meret_graph::Trail) -> TrailDto {
-        TrailDto::from_trail(t, now_ms(), |target| {
-            let name = match target {
-                TargetDto::Search { query } => Ok(Some(meret_core::search_title(query))),
-                TargetDto::Release { id } => self.core.store.release_title(ReleaseId(*id)),
-                TargetDto::Person { id } => self.core.store.agent_name(AgentId(*id)),
-                TargetDto::Work { id } => self.core.store.work_title(WorkId(*id)),
-                TargetDto::Game { id } => self.core.store.game_title(GameId(*id)),
-            };
-            name.ok().flatten().unwrap_or_else(|| "gone".into())
-        })
+        TrailDto::from_trail(t, now_ms(), |target| self.stop_title(target))
+    }
+
+    fn stop_title(&self, target: &TargetDto) -> String {
+        let name = match target {
+            TargetDto::Search { query } => Ok(Some(meret_core::search_title(query))),
+            TargetDto::Release { id } => self.core.store.release_title(ReleaseId(*id)),
+            TargetDto::Person { id } => self.core.store.agent_name(AgentId(*id)),
+            TargetDto::Work { id } => self.core.store.work_title(WorkId(*id)),
+            TargetDto::Game { id } => self.core.store.game_title(GameId(*id)),
+        };
+        name.ok().flatten().unwrap_or_else(|| "gone".into())
     }
 
     /// A release pane.
@@ -481,29 +514,12 @@ impl Api {
 }
 
 impl Api {
-    /// The Front's saved trees, newest history position first.
+    /// Every saved trail, the one last visited first. Counts and times come
+    /// from the trail itself, so they match the chip and the tree.
     pub fn trail_history(&self, limit: u32) -> Result<Vec<TrailSummaryDto>, String> {
-        self.core.store.trail_summaries(limit).map_err(|e| e.to_string())?.into_iter().map(|summary| {
-            let title = |entity| -> Result<String, String> {
-                let name = match entity {
-                    EntityRef::Search => return Ok(meret_core::search_title(summary.root_query.as_deref().unwrap_or_default())),
-                    EntityRef::Release(id) => self.core.store.release_title(id),
-                    EntityRef::Agent(id) => self.core.store.agent_name(id),
-                    EntityRef::Work(id) => self.core.store.work_title(id),
-                    EntityRef::Game(id) => self.core.store.game_title(id),
-                    _ => return Ok("gone".into()),
-                };
-                Ok(name.map_err(|e| e.to_string())?.unwrap_or_else(|| "gone".into()))
-            };
-            let root = title(summary.root)?;
-            let leaf = title(summary.leaf)?;
-            Ok(TrailSummaryDto {
-                uid: summary.uid.to_string(), name: summary.name,
-                title: if summary.root == summary.leaf { root } else { format!("{root} → {leaf}") },
-                stops: summary.stops, branches: summary.branches, when_ms: summary.created_at,
-                kept: summary.kept, played: summary.played, wanted: summary.wanted,
-            })
-        }).collect()
+        let now = now_ms();
+        let trails: Vec<meret_graph::Trail> = self.core.trail.lock().entries().rev().take(limit as usize).cloned().collect();
+        Ok(trails.iter().map(|trail| TrailSummaryDto::from_trail(trail, now, |target| self.stop_title(target))).collect())
     }
 
     /// Keeps the whole active tree, optionally naming it.
@@ -630,6 +646,17 @@ impl Api {
         Ok(pick)
     }
 
+    /// None while Play something has a pick; otherwise why it hasn't.
+    pub fn nothing_to_play(&self) -> Result<Option<NothingToPlayDto>, String> {
+        self.core.nothing_to_play(now_ms()).map(|n| n.map(Into::into)).map_err(|e| e.to_string())
+    }
+
+    /// The tracks whose files have gone, by folder and path: what the
+    /// Front's "Missing files" line counts.
+    pub fn missing_files(&self) -> Result<Vec<MissingFileDto>, String> {
+        self.core.store.missing_tracks().map(|rows| rows.into_iter().map(Into::into).collect()).map_err(|e| e.to_string())
+    }
+
     /// Play on: every zone and what it does to the sound.
     pub fn zones(&self) -> Result<Vec<ZoneDto>, String> {
         self.core.zones().map(|zones| zones.into_iter().map(Into::into).collect()).map_err(|e| e.to_string())
@@ -668,6 +695,7 @@ mod trail_memory_tests {
         let before = api.trail_history(10).unwrap();
         assert_eq!(before.len(), 2);
         assert_eq!(before[0].title, "fixture → Fixture person");
+        assert_eq!(before[0].route, "fixture → Fixture release → Fixture person");
         assert_eq!(before[0].stops, 3);
         assert!(before[0].kept);
         let reopened = meret_store::Store::open(&dir.join("library.db")).unwrap();
@@ -679,10 +707,36 @@ mod trail_memory_tests {
         assert_eq!(api.trail_back().map(still), Some(still(expected)));
         assert_eq!(api.trail_history(10).unwrap(), before);
         assert_eq!(api.trail_back().unwrap().current, release.current);
-        assert_eq!(reopened.load_trails().unwrap()[1].0.current(), release.current as usize);
+        assert_eq!(reopened.load_trails().unwrap()[1].current(), release.current as usize);
         drop(reopened);
+        door_visits_reuse_a_bare_trail_and_every_list_counts_alike(&api);
         branches_switch_with_alt_brackets_and_only_a_branch_you_left_prunes(&core, &api, &dir);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Runs inside the test above: the core is one per process.
+    fn door_visits_reuse_a_bare_trail_and_every_list_counts_alike(api: &Api) {
+        let door = || api.start_trail(TargetDto::Search { query: "".into() });
+        let first = door();
+        let others = api.start_trail(TargetDto::Search { query: "other door".into() });
+        let listed = api.trail_history(u32::MAX).unwrap().len();
+        let again = door();
+        assert_eq!(again.uid, first.uid, "the door's trail comes back instead of a copy");
+        assert_eq!(api.trail_history(u32::MAX).unwrap().len(), listed);
+        assert_ne!(again.uid, others.uid);
+        assert!(api.trail_back().is_none(), "the first stop is the end of `[`");
+        assert_eq!(api.trail().unwrap().uid, first.uid);
+        assert!(api.trail_forward().is_none());
+
+        // An older trail opens where it was left, becomes the newest, and says so in the list.
+        let older = api.trail_history(u32::MAX).unwrap().last().unwrap().uid.clone();
+        let opened = api.open_trail(&older).unwrap();
+        let history = api.trail_history(u32::MAX).unwrap();
+        assert_eq!((history[0].uid.as_str(), history[0].when_ms), (older.as_str(), opened.when_ms));
+        assert!(history.windows(2).all(|pair| pair[0].when_ms >= pair[1].when_ms), "newest first, by the time shown");
+        // The list counts what the chip counts.
+        let stops = opened.stops.iter().filter(|s| !s.is_peek).count() as u32;
+        assert_eq!((history[0].stops, history[0].branches), (stops, opened.branches.len() as u32));
     }
 
     /// Runs inside the test above: the core is one per process.
@@ -711,7 +765,7 @@ mod trail_memory_tests {
         assert_eq!(pruned.branches.len(), 1);
         assert!(api.trail_sibling(1).is_none(), "no fork left");
         let saved = meret_store::Store::open(&dir.join("library.db")).unwrap().load_trails().unwrap();
-        assert!(saved.iter().find(|t| t.0.uid == uid).unwrap().0.stop(two).pruned);
+        assert!(saved.iter().find(|t| t.uid == uid).unwrap().stop(two).pruned);
         assert!(api.play_trail(true).is_err(), "nothing here has a file");
     }
 }

@@ -426,6 +426,26 @@ impl Store {
             Ok((total, hits.into_iter().take(limit).map(|(_, h)| h).collect()))
         })
     }
+
+    /// How many discs each release has, as its page counts them, for
+    /// labelling a track `2-01` on a multi-disc release and `01` on a single disc.
+    pub fn release_discs(&self, releases: &[ReleaseId]) -> Result<std::collections::HashMap<ReleaseId, u32>> {
+        self.read(|c| {
+            let mut found = std::collections::HashMap::with_capacity(releases.len());
+            for chunk in releases.chunks(500) {
+                let marks = vec!["?"; chunk.len()].join(",");
+                let sql = format!(
+                    "SELECT e.release_id, COUNT(DISTINCT m.position) FROM edition e JOIN medium m ON m.edition_id = e.id
+                     JOIN track t ON t.medium_id = m.id WHERE e.release_id IN ({marks}) GROUP BY e.release_id"
+                );
+                for row in c.prepare(&sql)?.query_map(params_from_iter(chunk.iter().map(|r| r.0)), |r| Ok((ReleaseId(r.get(0)?), r.get::<_, u32>(1)?)))? {
+                    let (release, discs) = row?;
+                    found.insert(release, discs);
+                }
+            }
+            Ok(found)
+        })
+    }
 }
 
 /// The credit roles a query role reads. The scan writes a file's artist

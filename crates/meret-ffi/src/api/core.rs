@@ -178,6 +178,11 @@ pub fn start_trail(to: TargetDto) -> Result<TrailDto, String> {
     Ok(api()?.start_trail(to))
 }
 
+/// Rewrites the current trail's search with the filters applied to its stop.
+pub fn refine_search(query: String) -> Result<TrailDto, String> {
+    api()?.refine_search(&query)
+}
+
 /// Follows a thread from stop `from_stop`, the pane it was picked in; from
 /// a pane before the last, this starts a branch. `provider` is the thread's.
 pub fn follow(from_stop: u32, to: TargetDto, via: ThreadKind, provider: String) -> Result<TrailDto, String> {
@@ -301,6 +306,23 @@ pub fn play_something() -> Result<Option<PickDto>, String> {
 /// A pick clicked in Now: plays that release from the top with its why.
 pub fn play_pick(release_id: i64) -> Result<PickDto, String> {
     api()?.play_pick(release_id)
+}
+
+/// `None` while Play something has a pick; otherwise why it hasn't.
+pub fn nothing_to_play() -> Result<Option<NothingToPlayDto>, String> {
+    api()?.nothing_to_play()
+}
+
+/// The tracks whose files have gone, which the Front's "Missing files" counts.
+pub fn missing_files() -> Result<Vec<MissingFileDto>, String> {
+    api()?.missing_files()
+}
+
+/// Walks every folder again in the background; the status line's library
+/// version moves when it finishes.
+pub fn rescan() -> Result<(), String> {
+    api()?.rescan();
+    Ok(())
 }
 
 /// Play on: every zone and what it does to the sound.

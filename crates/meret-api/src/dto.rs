@@ -521,7 +521,8 @@ pub struct RowsDto {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ItemDto {
     Group(GroupDto),
-    Track { ordinal: u32, row: TrackRowDto },
+    /// `discs` is how many discs the track's release has: `2-01` on several, `01` on one.
+    Track { ordinal: u32, row: TrackRowDto, discs: u32 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -696,7 +697,7 @@ impl From<Search> for SearchDto {
 pub struct FrontDto {
     pub tracks: u64,
     pub releases: u64,
-    /// Idioms with at least one release, in the order of idioms.md.
+    /// Idioms with at least one track, in the order of idioms.md.
     pub idioms: Vec<IdiomLineDto>,
     /// What you own by format, largest first; the lines don't overlap.
     pub formats: Vec<FrontLineDto>,
@@ -725,6 +726,8 @@ pub struct FrontLineDto {
     pub count: u64,
     pub note: String,
     pub query: Option<String>,
+    /// The line opens the table of tracks whose files have gone, not a search.
+    pub missing_files: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -746,6 +749,59 @@ pub struct RootDto {
     pub online: bool,
     pub tracks: u64,
     pub label: String,
+    /// Files in the folder that are another copy of a track it already holds.
+    pub duplicates: u64,
+    /// Files that were in the folder and have gone.
+    pub missing: u64,
+}
+
+/// A track whose file has gone: the file to look for and where it was.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MissingFileDto {
+    pub track_id: i64,
+    pub release_id: i64,
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: String,
+    /// The path inside its folder.
+    pub file: String,
+    pub folder: String,
+}
+
+impl From<meret_store::MissingTrack> for MissingFileDto {
+    fn from(m: meret_store::MissingTrack) -> Self {
+        MissingFileDto {
+            track_id: m.track.0, release_id: m.release.0, title: m.title, artist: m.artist,
+            album: m.album, file: m.file, folder: m.folder,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NothingToPlayKind {
+    NoMusic,
+    FoldersOffline,
+    PlayedAll,
+}
+
+/// Why Play something has nothing to offer, in the words every surface uses.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NothingToPlayDto {
+    pub kind: NothingToPlayKind,
+    pub label: String,
+}
+
+impl From<meret_core::NothingToPlay> for NothingToPlayDto {
+    fn from(n: meret_core::NothingToPlay) -> Self {
+        NothingToPlayDto {
+            kind: match n {
+                meret_core::NothingToPlay::NoMusic => NothingToPlayKind::NoMusic,
+                meret_core::NothingToPlay::FoldersOffline => NothingToPlayKind::FoldersOffline,
+                meret_core::NothingToPlay::PlayedAll => NothingToPlayKind::PlayedAll,
+            },
+            label: n.label().into(),
+        }
+    }
 }
 
 impl From<Front> for FrontDto {
@@ -765,13 +821,14 @@ impl From<Front> for FrontDto {
             tracks: f.tracks_by_idiom[0] as u64,
             query: None,
         });
-        idioms.retain(|l| l.releases > 0);
+        idioms.retain(|l| l.tracks > 0);
 
         let line = |label: &str, count, note: &str, query: Option<&str>| FrontLineDto {
             label: label.into(),
             count,
             note: note.into(),
             query: query.map(Into::into),
+            missing_files: false,
         };
         let mut formats: Vec<_> = f.formats.into_iter()
             .map(|f| line(f.label, f.count, f.note, f.query))
@@ -783,7 +840,7 @@ impl From<Front> for FrontDto {
         let mut needs_you = vec![
             line("Unreadable files", f.facts.unreadable, "", None),
             line("No artist tag", f.facts.no_artist, "", None),
-            line("Missing files", f.facts.missing, "", None),
+            FrontLineDto { missing_files: true, ..line("Missing files", f.facts.missing, "", None) },
             line("Offline folders", offline, "", None),
         ];
         needs_you.retain(|l| l.count > 0);
@@ -811,7 +868,13 @@ impl From<Front> for FrontDto {
             roots: f
                 .roots
                 .into_iter()
-                .map(|r| RootDto { id: r.id.0, path: r.path.display().to_string(), online: r.online, tracks: r.tracks, label: r.label })
+                .map(|r| {
+                    let facts = f.facts.roots.iter().find(|facts| facts.root == r.id);
+                    RootDto {
+                        id: r.id.0, path: r.path.display().to_string(), online: r.online, tracks: r.tracks, label: r.label,
+                        duplicates: facts.map_or(0, |facts| facts.duplicates), missing: facts.map_or(0, |facts| facts.missing),
+                    }
+                })
                 .collect(),
             lookups: None,
         }
@@ -1275,27 +1338,66 @@ pub struct BranchDto {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrailDto {
+    /// The same string as `TrailSummaryDto::uid`.
+    pub uid: String,
     pub root_query: Option<String>,
     pub current: u32,
+    /// Every stop that isn't pruned, folded peeks included; the ones that
+    /// count are those with `is_peek` false.
     pub stops: Vec<StopDto>,
     pub meetings: Vec<(u32, u32)>,
     /// The current branch first, then newest first.
     pub branches: Vec<BranchDto>,
     pub kept: bool,
     pub name: Option<String>,
+    /// When you last moved in this trail, the time every list shows.
+    pub when_ms: i64,
 }
 
+/// One trail in a list (Home's Trails, All trails). It counts and dates
+/// exactly as `TrailDto` does, so a list, the chip and the tree agree.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrailSummaryDto {
     pub uid: String,
+    /// The root, then the stop you're on: "Tyranny → Justin E. Bell".
     pub title: String,
+    /// The stops that count: not pruned, not folded peeks.
     pub stops: u32,
+    /// Branches, peeks folded away.
     pub branches: u32,
+    /// When you last moved in it; the list is newest first by this.
     pub when_ms: i64,
     pub kept: bool,
     pub name: Option<String>,
+    /// Stops with something played, and with a want, on them.
     pub played: u32,
     pub wanted: u32,
+    /// The titles of the stops that count, in the order they were first
+    /// opened, joined with " → ".
+    pub route: String,
+}
+
+impl TrailSummaryDto {
+    /// `title` names a stop as `TrailDto::from_trail`'s does.
+    pub fn from_trail(t: &Trail, now: i64, title: impl Fn(&TargetDto) -> String) -> Self {
+        let name = |i: usize| title(&TargetDto::of(t.stop(i).entity, t.root_query.as_deref()));
+        let visible = t.visible(now);
+        let root = name(0);
+        let leaf = name(t.current());
+        let with = |action| t.stops().iter().filter(|s| s.actions.contains(&action)).count() as u32;
+        TrailSummaryDto {
+            uid: t.uid.to_string(),
+            title: if t.current() == 0 { root } else { format!("{root} → {leaf}") },
+            stops: visible.len() as u32,
+            branches: t.branches(now).len() as u32,
+            when_ms: t.last_visited(),
+            kept: t.kept,
+            name: t.name.clone(),
+            played: with(meret_graph::Action::Played),
+            wanted: with(meret_graph::Action::Wanted),
+            route: visible.into_iter().map(name).collect::<Vec<_>>().join(" → "),
+        }
+    }
 }
 
 impl TrailDto {
@@ -1352,6 +1454,7 @@ impl TrailDto {
             })
             .collect();
         TrailDto {
+            uid: t.uid.to_string(),
             root_query: t.root_query.clone(),
             current: t.current() as u32,
             stops,
@@ -1359,6 +1462,7 @@ impl TrailDto {
             branches,
             kept: t.kept,
             name: t.name.clone(),
+            when_ms: t.last_visited(),
         }
     }
 }

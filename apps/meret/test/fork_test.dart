@@ -14,22 +14,57 @@ import 'package:meret/shell/window_chrome.dart';
 import 'package:meret/theme/tokens.dart';
 
 void main() {
-  testWidgets('fork rows open their leaves and mark the current branch', (tester) async {
+  testWidgets('the header fork control lists branches, opens their leaves and marks the current branch', (tester) async {
     final core = await _forkSurface(tester);
+    expect(find.byKey(const ValueKey('fork-0-2')), findsNothing, reason: 'the branch list is a popup, never part of the pane');
+    expect(find.descendant(of: _forkControl(), matching: find.text('⑂ 2')), findsOneWidget, reason: 'two branches leave the root');
+    await tester.tap(_forkControl());
+    await tester.pumpAndSettle();
     final oldBranch = find.byKey(const ValueKey('fork-0-2'));
     final current = find.byKey(const ValueKey('fork-0-3'));
     expect(find.descendant(of: oldBranch, matching: find.text('Low tide')), findsOneWidget);
     expect(tester.widget<Text>(find.descendant(of: current, matching: find.text('Cinder orchard'))).style!.color, Tok.gold);
-    final root = find.descendant(of: find.byType(PaneRow), matching: find.byType(Pane)).first;
-    expect(find.descendant(of: root, matching: find.text('⑂ 2')), findsOneWidget, reason: 'two branches leave the root');
     await tester.tap(oldBranch);
     await tester.pumpAndSettle();
     expect(core.visited, [2]);
     expect((await core.trail())!.current, 2);
     expect(_titles(tester), ['Nera Vale', 'Glass harbour', 'Low tide']);
+    expect(find.byKey(const ValueKey('fork-0-2')), findsNothing, reason: 'choosing closes the popup');
   });
 
-  testWidgets('search-root forks show branch rows and mark followed person and release hits', (tester) async {
+  testWidgets('a fork never moves the row that was clicked or anything else in the pane', (tester) async {
+    tester.view.physicalSize = const Size(1800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final core = _ForkCore();
+    await core.startTrail(TargetDto.person(id: PlatformInt64Util.from(1)));
+    await core.follow(0, TargetDto.release(id: PlatformInt64Util.from(1)), ThreadKind.appearsOn, 'local_tags');
+    await tester.pumpWidget(MeretApp(core: core));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+    await tester.pumpAndSettle();
+    expect((await core.trail())!.current, 0, reason: 'the person pane is current, the release dimmed ahead');
+    expect(find.byKey(const ValueKey('pane-forks')), findsNothing);
+
+    final person = find.byType(PersonPane);
+    final other = find.descendant(of: person, matching: find.byWidgetPredicate(
+      (widget) => widget is ThreadLine && widget.thread.to == TargetDto.release(id: PlatformInt64Util.from(2)),
+    ));
+    final first = find.descendant(of: person, matching: find.byWidgetPredicate(
+      (widget) => widget is ThreadLine && widget.thread.to == TargetDto.release(id: PlatformInt64Util.from(1)),
+    ));
+    final title = find.descendant(of: find.byType(PaneRow), matching: find.text('Nera Vale')).first;
+    final before = [tester.getTopLeft(other).dy, tester.getTopLeft(first).dy, tester.getTopLeft(title).dy, tester.getSize(person).height];
+    await tester.tap(other);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pane-forks')), findsOneWidget, reason: 'the fork shows in the header');
+    final after = [tester.getTopLeft(other).dy, tester.getTopLeft(first).dy, tester.getTopLeft(title).dy, tester.getSize(person).height];
+    expect(after, before, reason: 'forking shifts nothing vertically');
+  });
+
+  testWidgets('search-root forks open from the search pane header', (tester) async {
     tester.view.physicalSize = const Size(1800, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -45,48 +80,34 @@ void main() {
     await tester.pumpAndSettle();
     core.visited.clear();
 
-    final search = find.byType(SearchPane);
-    final oldBranch = find.descendant(of: search, matching: find.byKey(const ValueKey('fork-0-2')));
+    expect(find.descendant(of: find.byType(SearchPane), matching: find.byKey(const ValueKey('pane-forks'))), findsNothing, reason: 'the control is in the header, not the table');
+    await tester.tap(_forkControl());
+    await tester.pumpAndSettle();
+    final oldBranch = find.byKey(const ValueKey('fork-0-2'));
     expect(find.descendant(of: oldBranch, matching: find.text('Low tide')), findsOneWidget);
-    expect(find.descendant(of: search, matching: find.byKey(const ValueKey('fork-0-3'))), findsOneWidget);
-    final current = find.descendant(of: search, matching: find.byKey(const ValueKey('fork-0-4')));
+    expect(find.byKey(const ValueKey('fork-0-3')), findsOneWidget);
+    final current = find.byKey(const ValueKey('fork-0-4'));
     expect(tester.widget<Text>(find.descendant(of: current, matching: find.text('Cinder orchard'))).style!.color, Tok.gold);
-    final personHit = find.byKey(const ValueKey('search-hit-person-1'));
-    final releaseHit = find.byKey(const ValueKey('search-hit-release-1'));
-    expect(find.descendant(of: personHit, matching: find.text('⑂ → Nera Vale')), findsOneWidget);
-    expect(find.descendant(of: releaseHit, matching: find.text('⑂ → Low tide')), findsOneWidget);
-    expect(find.descendant(
-      of: find.byKey(const ValueKey('search-hit-release-2')), matching: find.byType(Text),
-    ).evaluate().map((element) => (element.widget as Text).data), ['Cinder orchard']);
-
-    await tester.ensureVisible(oldBranch);
     await tester.tap(oldBranch);
     await tester.pumpAndSettle();
     expect(core.visited, [2]);
     expect((await core.trail())!.current, 2);
     expect(_titles(tester), ['tide', 'Glass harbour', 'Low tide']);
-
-    await tester.ensureVisible(personHit);
-    await tester.tap(personHit);
-    await tester.pumpAndSettle();
-    expect((await core.trail())!.current, 3);
-    expect((await core.trail())!.stops, hasLength(5));
-    expect(find.descendant(of: personHit, matching: find.text('⑂ → Nera Vale')), findsNothing);
   });
 
-  testWidgets('an off-path thread names its newest leaf and still revisits its child', (tester) async {
+  testWidgets('an off-path thread says where it led on hover and still revisits its child', (tester) async {
     final core = await _forkSurface(tester);
     final person = find.byType(PersonPane);
     final thread = find.descendant(of: person, matching: find.byWidgetPredicate(
       (widget) => widget is ThreadLine && widget.thread.to == TargetDto.release(id: PlatformInt64Util.from(1)),
     ));
-    final mark = find.descendant(of: thread, matching: find.text('⑂ → Low tide'));
-    expect(mark, findsOneWidget);
-    await tester.tap(mark);
+    expect(find.descendant(of: thread, matching: find.byKey(const ValueKey('arrow-forked'))), findsOneWidget);
+    expect(find.descendant(of: thread, matching: find.byTooltip('⑂ → Low tide')), findsOneWidget);
+    await tester.tap(thread);
     await tester.pumpAndSettle();
     expect((await core.trail())!.current, 1);
     expect((await core.trail())!.stops, hasLength(4));
-    expect(find.descendant(of: thread, matching: find.text('⑂ → Low tide')), findsNothing);
+    expect(find.descendant(of: thread, matching: find.byKey(const ValueKey('arrow-forked'))), findsNothing);
   });
 
   testWidgets('option brackets switch siblings to the last stop and ignore text editing', (tester) async {
@@ -105,8 +126,22 @@ void main() {
     expect((await core.trail())!.current, 3);
   });
 
+  testWidgets('option brackets switch branches at the fork stop itself', (tester) async {
+    final core = await _forkSurface(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+    await tester.pumpAndSettle();
+    expect((await core.trail())!.current, 0, reason: 'one stop back from Cinder orchard is the fork');
+    await _key(tester, LogicalKeyboardKey.bracketRight, modifier: LogicalKeyboardKey.altLeft);
+    expect(core.siblings, [1]);
+    expect((await core.trail())!.current, 2, reason: 'the other branch, at its last stop');
+    await _key(tester, LogicalKeyboardKey.bracketLeft, modifier: LogicalKeyboardKey.altLeft);
+    expect((await core.trail())!.current, 3);
+  });
+
   testWidgets('a fork prune removes that branch and refreshes the chip and pane', (tester) async {
     final core = await _forkSurface(tester);
+    await tester.tap(_forkControl());
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('prune-0-2')));
     await tester.pumpAndSettle();
     expect(core.pruned, [2]);
@@ -156,6 +191,11 @@ void main() {
     expect((await core.trail())!.branches.last.actions, ['played']);
   });
 }
+
+Finder _forkControl() => find.descendant(
+  of: find.descendant(of: find.byType(PaneRow), matching: find.byType(Pane)).first,
+  matching: find.byKey(const ValueKey('pane-forks')),
+);
 
 List<String> _titles(WidgetTester tester) => tester.widget<PaneRow>(find.byType(PaneRow)).children
     .cast<Pane>().map((pane) => pane.title).toList();

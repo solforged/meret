@@ -356,17 +356,23 @@ class FrontLineDto {
   final BigInt count;
   final String note;
   final String? query;
+  final bool missingFiles;
 
   const FrontLineDto({
     required this.label,
     required this.count,
     required this.note,
     this.query,
+    required this.missingFiles,
   });
 
   @override
   int get hashCode =>
-      label.hashCode ^ count.hashCode ^ note.hashCode ^ query.hashCode;
+      label.hashCode ^
+      count.hashCode ^
+      note.hashCode ^
+      query.hashCode ^
+      missingFiles.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -376,7 +382,8 @@ class FrontLineDto {
           label == other.label &&
           count == other.count &&
           note == other.note &&
-          query == other.query;
+          query == other.query &&
+          missingFiles == other.missingFiles;
 }
 
 class GameDto {
@@ -606,6 +613,7 @@ sealed class ItemDto with _$ItemDto {
   const factory ItemDto.track({
     required int ordinal,
     required TrackRowDto row,
+    required int discs,
   }) = ItemDto_Track;
 }
 
@@ -786,6 +794,69 @@ class LookupStatusDto {
 }
 
 enum LookupsDto { unasked, allowed, off }
+
+class MissingFileDto {
+  final PlatformInt64 trackId;
+  final PlatformInt64 releaseId;
+  final String title;
+  final String? artist;
+  final String album;
+  final String file;
+  final String folder;
+
+  const MissingFileDto({
+    required this.trackId,
+    required this.releaseId,
+    required this.title,
+    this.artist,
+    required this.album,
+    required this.file,
+    required this.folder,
+  });
+
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      releaseId.hashCode ^
+      title.hashCode ^
+      artist.hashCode ^
+      album.hashCode ^
+      file.hashCode ^
+      folder.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MissingFileDto &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          releaseId == other.releaseId &&
+          title == other.title &&
+          artist == other.artist &&
+          album == other.album &&
+          file == other.file &&
+          folder == other.folder;
+}
+
+class NothingToPlayDto {
+  final NothingToPlayKind kind;
+  final String label;
+
+  const NothingToPlayDto({required this.kind, required this.label});
+
+  @override
+  int get hashCode => kind.hashCode ^ label.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NothingToPlayDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          label == other.label;
+}
+
+enum NothingToPlayKind { noMusic, foldersOffline, playedAll }
 
 class NowDto {
   final PlatformInt64? trackId;
@@ -1291,6 +1362,8 @@ class RootDto {
   final bool online;
   final BigInt tracks;
   final String label;
+  final BigInt duplicates;
+  final BigInt missing;
 
   const RootDto({
     required this.id,
@@ -1298,6 +1371,8 @@ class RootDto {
     required this.online,
     required this.tracks,
     required this.label,
+    required this.duplicates,
+    required this.missing,
   });
 
   @override
@@ -1306,7 +1381,9 @@ class RootDto {
       path.hashCode ^
       online.hashCode ^
       tracks.hashCode ^
-      label.hashCode;
+      label.hashCode ^
+      duplicates.hashCode ^
+      missing.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1317,7 +1394,9 @@ class RootDto {
           path == other.path &&
           online == other.online &&
           tracks == other.tracks &&
-          label == other.label;
+          label == other.label &&
+          duplicates == other.duplicates &&
+          missing == other.missing;
 }
 
 class RowsDto {
@@ -1764,6 +1843,7 @@ class TrackRowDto {
 }
 
 class TrailDto {
+  final String uid;
   final String? rootQuery;
   final int current;
   final List<StopDto> stops;
@@ -1771,8 +1851,10 @@ class TrailDto {
   final List<BranchDto> branches;
   final bool kept;
   final String? name;
+  final PlatformInt64 whenMs;
 
   const TrailDto({
+    required this.uid,
     this.rootQuery,
     required this.current,
     required this.stops,
@@ -1780,30 +1862,35 @@ class TrailDto {
     required this.branches,
     required this.kept,
     this.name,
+    required this.whenMs,
   });
 
   @override
   int get hashCode =>
+      uid.hashCode ^
       rootQuery.hashCode ^
       current.hashCode ^
       stops.hashCode ^
       meetings.hashCode ^
       branches.hashCode ^
       kept.hashCode ^
-      name.hashCode;
+      name.hashCode ^
+      whenMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is TrailDto &&
           runtimeType == other.runtimeType &&
+          uid == other.uid &&
           rootQuery == other.rootQuery &&
           current == other.current &&
           stops == other.stops &&
           meetings == other.meetings &&
           branches == other.branches &&
           kept == other.kept &&
-          name == other.name;
+          name == other.name &&
+          whenMs == other.whenMs;
 }
 
 class TrailSummaryDto {
@@ -1816,6 +1903,7 @@ class TrailSummaryDto {
   final String? name;
   final int played;
   final int wanted;
+  final String route;
 
   const TrailSummaryDto({
     required this.uid,
@@ -1827,6 +1915,7 @@ class TrailSummaryDto {
     this.name,
     required this.played,
     required this.wanted,
+    required this.route,
   });
 
   @override
@@ -1839,7 +1928,8 @@ class TrailSummaryDto {
       kept.hashCode ^
       name.hashCode ^
       played.hashCode ^
-      wanted.hashCode;
+      wanted.hashCode ^
+      route.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1854,7 +1944,8 @@ class TrailSummaryDto {
           kept == other.kept &&
           name == other.name &&
           played == other.played &&
-          wanted == other.wanted;
+          wanted == other.wanted &&
+          route == other.route;
 }
 
 @freezed

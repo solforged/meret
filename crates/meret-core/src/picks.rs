@@ -30,6 +30,28 @@ pub struct Pick {
     pub why: Why,
 }
 
+/// Why Play something has nothing to offer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NothingToPlay {
+    /// The library holds no tracks.
+    NoMusic,
+    /// Nothing is left to offer, and a folder isn't mounted.
+    FoldersOffline,
+    /// Everything playable has been played, and none has come round again.
+    PlayedAll,
+}
+
+impl NothingToPlay {
+    /// The words the app and the CLI both use.
+    pub fn label(self) -> &'static str {
+        match self {
+            NothingToPlay::NoMusic => "Add a music folder",
+            NothingToPlay::FoldersOffline => "Folders offline",
+            NothingToPlay::PlayedAll => "Nothing to play yet",
+        }
+    }
+}
+
 impl Core {
     /// Up to `limit` picks, best first, never the same release twice and
     /// never the one loaded in the queue: Now already shows that.
@@ -68,12 +90,28 @@ impl Core {
         Ok(picks)
     }
 
+    /// None while Play something has a pick, otherwise why it hasn't. An
+    /// unmounted folder is named whenever one exists: what's left to play
+    /// may be in it.
+    pub fn nothing_to_play(&self, now_ms: i64) -> Result<Option<NothingToPlay>> {
+        if !self.picks(1, now_ms)?.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(if self.columns.read().is_empty() {
+            NothingToPlay::NoMusic
+        } else if meret_library::roots(&self.store)?.iter().any(|root| !root.online) {
+            NothingToPlay::FoldersOffline
+        } else {
+            NothingToPlay::PlayedAll
+        }))
+    }
+
     /// The newest trails' titles and the releases each reached, newest trail
     /// and newest stop first.
     fn recent_trail_releases(&self) -> Result<Vec<(String, Vec<ReleaseId>)>> {
         let recent: Vec<_> = {
             let history = self.trail.lock();
-            history.entries().rev().take(RECENT_TRAILS).map(|(trail, _)| {
+            history.entries().rev().take(RECENT_TRAILS).map(|trail| {
                 let stops = trail.stops();
                 let mut releases: Vec<ReleaseId> = Vec::new();
                 for stop in stops.iter().rev() {

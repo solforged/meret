@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
 import '../settings/settings_window.dart';
@@ -27,6 +28,9 @@ class Activity extends StatefulWidget {
 class _ActivityState extends State<Activity> {
   final _menu = MenuController();
   final _focus = FocusNode();
+
+  /// Holds the popover's rows, so Tab can step into and out of them.
+  final _rows = FocusNode(debugLabel: 'activity rows', canRequestFocus: false, skipTraversal: true);
   List<RootDto>? _roots;
   Object? _rootsError;
   BigInt? _rootsVersion;
@@ -45,8 +49,41 @@ class _ActivityState extends State<Activity> {
 
   @override
   void dispose() {
+    _rows.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  /// Tab on the dot while the popover is open goes into its first row.
+  KeyEventResult _fromDot(FocusNode node, KeyEvent event) {
+    if (!_menu.isOpen || event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.tab || HardwareKeyboard.instance.isShiftPressed) {
+      return KeyEventResult.ignored;
+    }
+    final first = _rows.traversalDescendants.firstOrNull;
+    if (first == null) return KeyEventResult.ignored;
+    first.requestFocus();
+    return KeyEventResult.handled;
+  }
+
+  /// Tab past the last row closes the popover and goes on from the dot; Shift+Tab
+  /// before the first goes back to the dot with it open.
+  KeyEventResult _inRows(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.tab) return KeyEventResult.ignored;
+    final rows = _rows.traversalDescendants.toList();
+    final at = rows.indexOf(FocusManager.instance.primaryFocus ?? node);
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      if (at != 0) return KeyEventResult.ignored;
+      _focus.requestFocus();
+    } else {
+      if (at != rows.length - 1) return KeyEventResult.ignored;
+      _menu.close();
+      _focus.requestFocus();
+      // Focus moves in a microtask; step on once the dot has it.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_focus.hasPrimaryFocus) _focus.nextFocus();
+      });
+    }
+    return KeyEventResult.handled;
   }
 
   /// Folders come from the core's library summary; read again when the library changes.
@@ -100,7 +137,7 @@ class _ActivityState extends State<Activity> {
   );
 
   List<Widget> _popover(StatusDto? status) => [
-    SizedBox(width: 340, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+    Focus(focusNode: _rows, onKeyEvent: _inRows, child: SizedBox(width: 340, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
       if (status == null)
         const Padding(padding: EdgeInsets.all(12), child: Text('Starting…', style: Tok.label))
       else ...[
@@ -148,7 +185,7 @@ class _ActivityState extends State<Activity> {
           ]),
         ),
       ),
-    ])),
+    ]))),
   ];
 
   @override
@@ -177,7 +214,7 @@ class _ActivityState extends State<Activity> {
       menuChildren: _popover(status),
       builder: (context, controller, _) => Semantics(
         label: words.isEmpty ? 'Every source is fine' : words,
-        child: Tooltip(message: widget.quiet ? words : '', child: TextButton(
+        child: Tooltip(message: widget.quiet ? words : '', child: Focus(canRequestFocus: false, skipTraversal: true, onKeyEvent: _fromDot, child: TextButton(
           key: const ValueKey('activity'),
           focusNode: _focus,
           onPressed: () => controller.isOpen ? controller.close() : controller.open(),
@@ -185,7 +222,9 @@ class _ActivityState extends State<Activity> {
             padding: const EdgeInsets.symmetric(horizontal: 9),
             minimumSize: const Size(26, 26),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            shape: RoundedRectangleBorder(side: BorderSide(color: words.isEmpty ? Colors.transparent : colour.withValues(alpha: 0.35))),
+            // The outline goes with the words, at once: never an empty box round a dot.
+            animationDuration: Duration.zero,
+            shape: RoundedRectangleBorder(side: BorderSide(color: words.isEmpty || widget.quiet ? Colors.transparent : colour.withValues(alpha: 0.35))),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             if (busy)
@@ -196,21 +235,25 @@ class _ActivityState extends State<Activity> {
               ))
             else
               _Dot(needs.isEmpty ? Tok.ok : Tok.warn, key: const ValueKey('activity-dot')),
-            // The words slide away with the query's slide, so the line never jumps.
-            Flexible(child: AnimatedSize(
-              duration: kMotion,
-              curve: Curves.easeOut,
-              alignment: Alignment.centerLeft,
-              child: words.isEmpty || widget.quiet ? const SizedBox(height: 11) : Padding(
-                padding: const EdgeInsets.only(left: 7),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 320),
-                  child: Text(words, key: const ValueKey('activity-words'), style: Tok.label.copyWith(color: colour), maxLines: 1, overflow: TextOverflow.ellipsis),
+            // The words slide away with the query's slide, so the line never jumps;
+            // with none to say the pill is the dot at once.
+            if (words.isEmpty)
+              const SizedBox(height: 11)
+            else
+              Flexible(child: AnimatedSize(
+                duration: kMotion,
+                curve: Curves.easeOut,
+                alignment: Alignment.centerLeft,
+                child: widget.quiet ? const SizedBox(height: 11) : Padding(
+                  padding: const EdgeInsets.only(left: 7),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    child: Text(words, key: const ValueKey('activity-words'), style: Tok.label.copyWith(color: colour), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
                 ),
-              ),
-            )),
+              )),
           ]),
-        )),
+        ))),
       ),
     );
   }

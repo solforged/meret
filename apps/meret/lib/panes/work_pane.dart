@@ -148,10 +148,9 @@ class _WorkPaneState extends State<WorkPane> {
                       kind: ThreadKind.appearsOn, label: 'appears on', source: 'tags', provider: 'local_tags',
                       to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
                     )),
-                    child: TrailRow(target: TargetDto.release(id: row.releaseId), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    child: TrailRow(target: TargetDto.release(id: row.releaseId), child:
                       Text(row.album, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      TrailThreadMark(target: TargetDto.release(id: row.releaseId)),
-                    ])),
+                    ),
                   ),
                 ),
               ])),
@@ -186,7 +185,6 @@ class _WorkPaneState extends State<WorkPane> {
           PaneActions(primary: 'Play', onPrimary: work.rows.isEmpty ? null : () => _play(0), primaryKey: const ValueKey('work-play')),
           if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
         ])),
-        const ForksHere(),
         ..._section('Credits', work.composerLinks),
         if (work.partOf case final parent?) ..._section('Part of', [parent]),
         ..._section('Parts', work.parts),

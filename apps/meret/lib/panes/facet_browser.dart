@@ -16,23 +16,24 @@ class FacetBrowser extends StatelessWidget {
     child: DecoratedBox(
       decoration: BoxDecoration(border: Border.all(color: Tok.line)),
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Expanded(child: _column('Idiom', facets?.idioms)),
+        Expanded(child: _column('Idiom', facets?.idioms, 'idiom', 'idioms')),
         const VerticalDivider(width: 1, color: Tok.line),
-        Expanded(child: _column('People', facets?.people)),
+        Expanded(child: _column('People', facets?.people, 'person', 'people')),
         const VerticalDivider(width: 1, color: Tok.line),
-        Expanded(child: _column('Releases', facets?.releases)),
+        Expanded(child: _column('Releases', facets?.releases, 'release', 'releases')),
       ]),
     ),
   );
 
-  Widget _column(String name, FacetColumnDto? column) => ColoredBox(
+  /// The heading counts what the column lists; the All row counts its tracks.
+  Widget _column(String name, FacetColumnDto? column, String one, String many) => ColoredBox(
     color: Tok.sky,
     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
         child: Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 2, children: [
           Text(name, style: Tok.label),
-          Text(column == null ? 'Tracks' : '${column.tracks} ${column.tracks == 1 ? 'track' : 'tracks'}',
+          Text(column == null ? '' : '${column.entries.length} ${column.entries.length == 1 ? one : many}',
             style: Tok.label.copyWith(color: Tok.dim)),
         ]),
       ),

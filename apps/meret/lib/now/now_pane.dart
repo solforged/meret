@@ -10,21 +10,22 @@ import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../core/when.dart';
 import '../draw/body_painter.dart';
-import '../settings/settings_window.dart';
+import '../panes/release_mark.dart';
 import '../theme/action_target.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'zones.dart';
+import 'folder_error.dart';
 import 'picks.dart';
 import 'signal_path.dart';
 
 /// Now: what's playing, the transport, the signal path and the queue.
 /// Pinned at the right from 1800 px, opened beside the panes below that; [NowBar] on a phone. [nothingToPlay]
-/// is the reply when play found nothing: the title slot says so.
+/// is why play has nothing to play, when it hasn't: the title slot says so.
 class NowPane extends StatelessWidget {
   const NowPane({
     super.key, required this.core, required this.now, required this.clock, required this.onToggle,
-    this.onRelease, this.settingsChanges, this.nothingToPlay = false,
+    this.onRelease, this.settingsChanges, this.nothingToPlay,
   });
 
   final CoreBridge core;
@@ -33,7 +34,7 @@ class NowPane extends StatelessWidget {
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
   final Listenable? settingsChanges;
-  final bool nothingToPlay;
+  final NothingToPlayDto? nothingToPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +55,8 @@ class NowPane extends StatelessWidget {
         const SizedBox(height: 8),
         Text(nowTitle(n, nothingToPlay: nothingToPlay), style: Tok.title.copyWith(fontSize: 17), maxLines: 2, overflow: TextOverflow.ellipsis),
         Text(n?.subtitle ?? '', style: Tok.body.copyWith(color: Tok.muted, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (!loaded && nothingToPlay != null)
+          NothingToPlayNote(reason: nothingToPlay!, core: core, label: false, padding: EdgeInsets.zero),
         if (n?.releaseId != null && onRelease != null)
           Align(alignment: Alignment.centerLeft, child: TextButton.icon(
             key: const ValueKey('now-open-release'),
@@ -63,17 +66,8 @@ class NowPane extends StatelessWidget {
           )),
         if (n != null) NowFacts(now: n),
         _WhySlot(n?.why),
-        if (n?.error case final error?) Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SelectableText(error, style: Tok.label.copyWith(color: Tok.warn)),
-            TextButton(
-              key: const ValueKey('now-check-folders'),
-              onPressed: () => showSettings(context, section: SettingsSection.folders),
-              child: const Text('Check music folders'),
-            ),
-          ]),
-        ),
+        if (n?.error case final error?)
+          FolderError(message: error, actionKey: const ValueKey('now-check-folders'), padding: const EdgeInsets.only(top: 4)),
         const SizedBox(height: 10),
         // The LCD above carries previous, play and next; the pane keeps a
         // seek bar wide enough to aim, which the LCD's hairline isn't.
@@ -99,7 +93,7 @@ class NowPane extends StatelessWidget {
               UpNext(core: core, now: n, onRelease: onRelease),
             ],
             const SizedBox(height: 12),
-            PlaySomething(core: core, now: n, onRelease: onRelease),
+            PlaySomething(core: core, now: n, onRelease: onRelease, actions: loaded || nothingToPlay == null),
             const SizedBox(height: 12),
             NowMemory(core: core, now: n, resumeLimit: 3, historyLimit: 3, onRelease: onRelease),
             const SizedBox(height: 12),
@@ -139,10 +133,10 @@ class NowDial extends StatelessWidget {
   );
 }
 
-/// The title slot's words: the loaded title, "Nothing playing", or the
-/// reply to a play that found nothing.
-String nowTitle(NowDto? now, {required bool nothingToPlay}) {
-  if (now?.anchor == null && nothingToPlay) return 'Nothing to play yet';
+/// The title slot's words: the loaded title, "Nothing playing", or why
+/// play has nothing to play.
+String nowTitle(NowDto? now, {NothingToPlayDto? nothingToPlay}) {
+  if (now?.anchor == null && nothingToPlay != null) return nothingToPlay.label;
   return now?.title.isNotEmpty == true ? now!.title : 'Nothing playing';
 }
 
@@ -257,6 +251,9 @@ class _NowMemoryState extends State<NowMemory> {
   List<ResumeDto> _resumes = const [];
   List<ListenDto> _history = const [];
   String? _error;
+
+  /// A pick up that failed: it names the file, and Settings ▸ Folders is the answer.
+  String? _pickUpError;
   int _generation = 0;
 
   @override
@@ -285,6 +282,7 @@ class _NowMemoryState extends State<NowMemory> {
         _resumes = results[0] as List<ResumeDto>;
         _history = results[1] as List<ListenDto>;
         _error = null;
+        _pickUpError = null;
       });
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _error = error.toString());
@@ -292,11 +290,12 @@ class _NowMemoryState extends State<NowMemory> {
   }
 
   Future<void> _pickUp(ResumeDto point) async {
+    setState(() => _pickUpError = null);
     try {
       await widget.core.pickUp(point.releaseId);
       if (mounted) await _load();
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _pickUpError = error.toString());
     }
   }
 
@@ -310,6 +309,8 @@ class _NowMemoryState extends State<NowMemory> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
     ),
+    if (_pickUpError != null)
+      FolderError(message: _pickUpError!, actionKey: const ValueKey('now-pick-up-check-folders')),
     if (_pickUps.isNotEmpty) ...[
       const NowSection(title: 'Pick up'),
       for (final point in _pickUps)
@@ -446,12 +447,12 @@ class _NowDoorState extends State<NowDoor> {
 
 /// Now as a bar, below the panes, when the window is too narrow to pin it.
 /// The title opens the full pane as a sheet, where Space still toggles.
-/// [nothingToPlay] is the reply when play found nothing: the title slot
-/// says so until something loads.
+/// [nothingToPlay] is why play has nothing to play: the title slot says so
+/// until something loads.
 class NowBar extends StatelessWidget {
   const NowBar({
     super.key, required this.core, required this.now, required this.clock, required this.onToggle,
-    this.onRelease, this.settingsChanges, this.nothingToPlay = false,
+    this.onRelease, this.settingsChanges, this.nothingToPlay,
   });
   final CoreBridge core;
   final NowDto? now;
@@ -459,7 +460,7 @@ class NowBar extends StatelessWidget {
   final VoidCallback onToggle;
   final Future<void> Function(PlatformInt64)? onRelease;
   final Listenable? settingsChanges;
-  final bool nothingToPlay;
+  final NothingToPlayDto? nothingToPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -474,7 +475,7 @@ class NowBar extends StatelessWidget {
         final seek = box.maxWidth >= 560;
         final volume = box.maxWidth >= 760;
         return Row(children: [
-          Transport(core: core, now: n, clock: clock, onToggle: onToggle, compact: true),
+          Transport(core: core, now: n, clock: clock, onToggle: onToggle, compact: true, nothingToPlay: nothingToPlay),
           const SizedBox(width: 12),
           Expanded(
             child: ActionTarget(
@@ -552,15 +553,16 @@ class NowBar extends StatelessWidget {
 }
 
 /// Previous, play or pause, next, and the time. Previous and next are off
-/// until something has been queued; play always answers, and with nothing
-/// loaded it plays something.
+/// until something has been queued; play answers, and with nothing loaded it
+/// plays something, so it is off too when [nothingToPlay] says there is nothing.
 class Transport extends StatelessWidget {
-  const Transport({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.compact = false, this.id = 'now'});
+  const Transport({super.key, required this.core, required this.now, required this.clock, required this.onToggle, this.compact = false, this.id = 'now', this.nothingToPlay});
   final CoreBridge core;
   final NowDto? now;
   final PlayheadClock clock;
   final VoidCallback onToggle;
   final bool compact;
+  final NothingToPlayDto? nothingToPlay;
 
   /// Prefixes the buttons' keys: `now-toggle`, or `lcd-toggle` in the LCD.
   final String id;
@@ -568,6 +570,7 @@ class Transport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final loaded = now?.anchor != null;
+    final stuck = !loaded && nothingToPlay != null;
     final length = now?.lengthMs?.toDouble();
     final accent = Light.of(context).accent;
     final buttons = Row(mainAxisSize: MainAxisSize.min, children: [
@@ -582,10 +585,10 @@ class Transport extends StatelessWidget {
         builder: (_, _) => _TransportButton(
           key: ValueKey('$id-toggle'),
           icon: clock.playing ? Icons.pause : Icons.play_arrow,
-          tooltip: clock.playing ? 'Pause' : 'Play',
+          tooltip: stuck ? nothingToPlay!.label : clock.playing ? 'Pause' : 'Play',
           size: compact ? 22 : 28,
           color: accent,
-          onPressed: onToggle,
+          onPressed: stuck ? null : onToggle,
         ),
       ),
       _TransportButton(
@@ -764,6 +767,8 @@ class _UpNextState extends State<UpNext> {
     if (item.releaseId != null && widget.onRelease != null) {
       try {
         await widget.onRelease!(item.releaseId!);
+        // After the pane has opened, so the release marks this row, not a bare page.
+        if (item.trackId != null) ReleaseMark.instance.mark(item.releaseId!.toInt(), item.trackId!.toInt());
       } catch (error) {
         if (mounted) setState(() => _error = error.toString());
       }
@@ -795,10 +800,11 @@ class _UpNextState extends State<UpNext> {
         _ when more > 0 => '$remaining track${remaining == 1 ? '' : 's'}',
         _ => null,
       }),
-      if (_error != null) Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
-      ),
+      // A failed load has Try again; a play or open that failed names the file and points at the folders.
+      if (_error != null)
+        upNext == null
+          ? Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)))
+          : FolderError(message: _error!, actionKey: const ValueKey('up-next-check-folders'), padding: const EdgeInsets.symmetric(vertical: 6)),
       if (upNext == null && _loading) const Text('Reading the queue…', style: Tok.label),
       if (upNext == null && _error != null)
         TextButton(onPressed: _loading ? null : _load, child: const Text('Try again')),

@@ -10,6 +10,7 @@ import '../draw/facts.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'pane.dart';
+import 'release_mark.dart';
 
 /// A release's local edition, tracklist and sourced credits.
 class ReleasePane extends StatefulWidget {
@@ -31,9 +32,14 @@ class ReleasePane extends StatefulWidget {
 
 class _ReleasePaneState extends State<ReleasePane> {
   final _focus = FocusNode();
+  final _scroll = ScrollController();
   ReleaseDto? _release;
   String? _error;
   int? _selected;
+
+  /// The row Up next asked to see; it carries [_markedKey] so the pane can scroll to it.
+  int? _marked;
+  final _markedKey = GlobalKey();
   int _generation = 0;
   bool _allCredits = false;
 
@@ -43,6 +49,7 @@ class _ReleasePaneState extends State<ReleasePane> {
   @override
   void initState() {
     super.initState();
+    ReleaseMark.instance.addListener(_takeMark);
     _load();
   }
 
@@ -53,6 +60,7 @@ class _ReleasePaneState extends State<ReleasePane> {
       // Another release: nothing loaded applies, start over.
       _release = null;
       _selected = null;
+      _marked = null;
       _allCredits = false;
       _load();
     } else if (old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) {
@@ -63,8 +71,40 @@ class _ReleasePaneState extends State<ReleasePane> {
 
   @override
   void dispose() {
+    ReleaseMark.instance.removeListener(_takeMark);
     _focus.dispose();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  /// Selects the row a queued track asked to be seen at, and brings it into view.
+  void _takeMark() {
+    final release = _release;
+    if (release == null) return;
+    final track = ReleaseMark.instance.take(widget.id.toInt());
+    final at = track == null ? -1 : release.rows.indexWhere((row) => row.trackId.toInt() == track);
+    if (at < 0) return;
+    setState(() {
+      _selected = at;
+      _marked = at;
+    });
+    _reveal(at, release.rows.length, 0);
+  }
+
+  /// The tracklist is lazy: land near the row so it builds (the extent estimate
+  /// sharpens with each landing), then bring it exactly into view.
+  void _reveal(int at, int total, int attempt) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final context = _markedKey.currentContext;
+      if (context != null) {
+        Scrollable.ensureVisible(context, duration: Duration.zero);
+      } else if (_scroll.hasClients && attempt < 6) {
+        final extent = _scroll.position.maxScrollExtent;
+        _scroll.jumpTo((extent * at / total).clamp(0.0, extent));
+        _reveal(at, total, attempt + 1);
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -77,6 +117,7 @@ class _ReleasePaneState extends State<ReleasePane> {
         _error = null;
         if (_selected case final selected? when selected >= release.rows.length) _selected = null;
       });
+      _takeMark();
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _error = error.toString());
     }
@@ -133,6 +174,7 @@ class _ReleasePaneState extends State<ReleasePane> {
           behavior: HitTestBehavior.opaque,
           onTap: () => _play(index),
           child: Container(
+            key: _marked == index ? _markedKey : null,
             padding: const EdgeInsets.symmetric(vertical: 5),
             decoration: BoxDecoration(
               color: lit ? light.wash : _selected == index || hover ? Tok.panel2 : Colors.transparent,
@@ -153,10 +195,9 @@ class _ReleasePaneState extends State<ReleasePane> {
                     child: GestureDetector(
                       key: ValueKey('release-work-$index'),
                       onTap: () => _follow(work),
-                      child: TrailRow(target: work.to, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      child: TrailRow(target: work.to, via: work.label, child:
                         Text(work.title, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        TrailThreadMark(target: work.to),
-                      ])),
+                      ),
                     ),
                   ),
                 ],
@@ -187,21 +228,26 @@ class _ReleasePaneState extends State<ReleasePane> {
   Widget build(BuildContext context) {
     final release = _release;
     if (release == null) return paneReading(widget.title, _error ?? 'Reading release…', error: _error != null);
+    // The page lists present files, so a release with none is offline: no
+    // zeroes, no Play, no empty tracklist.
+    final offline = release.rows.isEmpty;
     final facts = [
       if (release.idiom != null) release.idiom!,
       if (release.year != null) '${release.year}',
-      '${release.tracks} ${release.tracks == 1 ? 'track' : 'tracks'}',
-      '${release.discs} ${release.discs == 1 ? 'disc' : 'discs'}',
-      _time(release.lengthMs),
-      if (release.dr != null) 'DR ${release.dr}',
-      if (release.loudnessLufs != null) '${release.loudnessLufs!.toStringAsFixed(1)} LUFS',
+      if (!offline) ...[
+        '${release.tracks} ${release.tracks == 1 ? 'track' : 'tracks'}',
+        '${release.discs} ${release.discs == 1 ? 'disc' : 'discs'}',
+        _time(release.lengthMs),
+        if (release.dr != null) 'DR ${release.dr}',
+        if (release.loudnessLufs != null) '${release.loudnessLufs!.toStringAsFixed(1)} LUFS',
+      ],
       playsFact(release.plays, release.lastPlayedMs),
       ...release.formats,
     ];
     return Focus(
       focusNode: _focus,
       onKeyEvent: _key,
-      child: CustomScrollView(slivers: [
+      child: CustomScrollView(controller: _scroll, slivers: [
         SliverToBoxAdapter(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             if (release.cover case final cover?) ...[
@@ -215,16 +261,17 @@ class _ReleasePaneState extends State<ReleasePane> {
               const SizedBox(height: 8),
               Facts(facts, style: Tok.label),
               const SizedBox(height: 10),
-              PaneActions(
+              if (offline)
+                Text('Offline', key: const ValueKey('release-offline'), style: Tok.label.copyWith(color: Tok.warn))
+              else PaneActions(
                 primary: 'Play',
-                onPrimary: release.rows.isEmpty ? null : () => _play(0),
+                onPrimary: () => _play(0),
                 primaryKey: const ValueKey('release-play'),
               ),
             ])),
           ]),
           if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
         ])),
-        const ForksHere(),
         // Credits before the tracklist, so their threads stay in reach on a long release.
         if (release.credits.isNotEmpty) SliverToBoxAdapter(child: _heading('Credits')),
         SliverList(delegate: SliverChildBuilderDelegate(
@@ -244,13 +291,15 @@ class _ReleasePaneState extends State<ReleasePane> {
             childCount: release.games.length,
           )),
         ],
-        SliverToBoxAdapter(child: _heading('Tracklist')),
-        SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (_, i) => _row(release.rows[i], i, release.artist, release.rowWorks[i]),
-            childCount: release.rows.length,
+        if (!offline) ...[
+          SliverToBoxAdapter(child: _heading('Tracklist')),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (_, i) => _row(release.rows[i], i, release.artist, release.rowWorks[i]),
+              childCount: release.rows.length,
+            ),
           ),
-        ),
+        ],
         const SliverToBoxAdapter(child: SizedBox(height: 20)),
       ]),
     );
@@ -289,10 +338,7 @@ class WrittenCredit extends StatelessWidget {
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
               onTap: () => onFollow(match.person),
-              child: TrailRow(target: match.person.to, child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(written.substring(match.start, match.end), style: Tok.body.copyWith(color: Tok.muted)),
-                TrailThreadMark(target: match.person.to),
-              ])),
+              child: Text(written.substring(match.start, match.end), style: Tok.body.copyWith(color: Tok.muted)),
             ),
           ),
         ),
@@ -325,7 +371,7 @@ class ThreadLine extends StatelessWidget {
       builder: (context, hover) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onFollow,
-        child: TrailRow(target: thread.to, child: Container(
+        child: TrailRow(target: thread.to, via: thread.label, child: Container(
           padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(color: hover ? Tok.panel2 : Colors.transparent, border: const Border(bottom: BorderSide(color: Tok.line))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -335,13 +381,12 @@ class ThreadLine extends StatelessWidget {
               const SizedBox(width: 8),
               Text(thread.source, style: Tok.label.copyWith(color: Tok.dim, fontSize: 10)),
               const SizedBox(width: 10),
-              ThreadArrow(target: thread.to, hover: hover),
+              ThreadArrow(target: thread.to, via: thread.label, hover: hover),
             ]),
             if (thread.detail.isNotEmpty) Padding(
               padding: const EdgeInsets.only(left: _label, top: 2),
               child: Text(thread.detail, style: Tok.label),
             ),
-            Padding(padding: const EdgeInsets.only(left: _label), child: TrailThreadMark(target: thread.to)),
           ]),
         )),
       ),

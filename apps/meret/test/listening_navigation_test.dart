@@ -29,10 +29,10 @@ void main() {
     final core = FakeCore.empty();
     final now = await core.now().first;
     await _page(tester, PlaySomething(core: core, now: now));
-    expect(find.text('Nothing to play yet'), findsOneWidget);
+    expect(find.text('Add a music folder'), findsOneWidget);
     await core.addRoot('/Imported music');
     await tester.pumpAndSettle();
-    expect(find.text('Nothing to play yet'), findsNothing);
+    expect(find.text('Add a music folder'), findsNothing);
     expect(find.byType(NowDoor), findsNWidgets(3));
     expect((await core.now().first).anchor, now.anchor, reason: 'library status alone refreshed the picks');
   });

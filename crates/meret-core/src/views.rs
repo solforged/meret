@@ -59,7 +59,8 @@ pub struct GroupRow {
 #[derive(Clone, Debug, PartialEq)]
 pub enum PageItem {
     Group(GroupRow),
-    Track { ordinal: u32, row: TrackRow },
+    /// `discs` is how many discs the track's release has: a label is `2-01` on several, `01` on one.
+    Track { ordinal: u32, row: TrackRow, discs: u32 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -123,8 +124,14 @@ impl Core {
         let mut tracks: HashMap<_, _> = self.store.track_rows(&track_ids)?.into_iter().map(|r| (r.track, r)).collect();
         let mut heads = self.store.release_heads(&release_ids)?;
         let mut art = self.store.release_art(&release_ids)?;
+        let track_releases: Vec<ReleaseId> = tracks.values().map(|row| row.release).collect::<std::collections::HashSet<_>>().into_iter().collect();
+        let discs = self.store.release_discs(&track_releases)?;
         let items = page.iter().filter_map(|item| match item {
-            Item::Track(i) => Some(PageItem::Track { ordinal: *i, row: tracks.remove(&list.tracks[*i as usize])? }),
+            Item::Track(i) => {
+                let row = tracks.remove(&list.tracks[*i as usize])?;
+                let discs = discs.get(&row.release).copied().unwrap_or(1);
+                Some(PageItem::Track { ordinal: *i, row, discs })
+            }
             Item::Group { release, tracks, length_ms, formats, .. } => {
                 let head = heads.remove(release)?;
                 Some(PageItem::Group(GroupRow {
@@ -359,7 +366,7 @@ mod tests {
         assert_eq!(old.cover.as_ref().unwrap().hash, "ab");
         let middle = core.rows("", &view, 4, 2).unwrap();
         assert_eq!(middle.items.iter().map(|item| match item {
-            PageItem::Track { ordinal, row } => (*ordinal, row.disc, row.number),
+            PageItem::Track { ordinal, row, .. } => (*ordinal, row.disc, row.number),
             _ => panic!(),
         }).collect::<Vec<_>>(), [(2, 1, 1), (3, 1, 2)]);
         assert!(core.rows("", &view, usize::MAX, usize::MAX).unwrap().items.is_empty());

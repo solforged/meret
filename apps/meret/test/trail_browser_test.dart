@@ -110,6 +110,9 @@ void main() {
     expect(action.semanticLabel, contains(_oldQuery));
     expect(action.semanticLabel, contains(trailSummaryContext(summary)));
     final target = find.descendant(of: row, matching: find.byType(GestureDetector));
+    // Keyboard focus, as Tab leaves it: a pointer's focus shows no tooltip.
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+    addTearDown(() => FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic);
     Focus.of(tester.element(target)).requestFocus();
     await tester.pumpAndSettle();
     expect(find.text('$_oldName\n$_oldQuery\n${trailSummaryContext(summary)}'), findsOneWidget);

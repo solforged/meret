@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 /// Where each pane of a row sits: a window of full panes around the focus,
@@ -133,8 +134,34 @@ class PaneRow extends StatefulWidget {
       x[i] = at0;
       at0 += widths[i];
     }
-    final ghost = rightNeed == 0 && leftover >= ghostMin ? (at0, leftover) : null;
+    // A follow from a pane with stops ahead opens in the next one's slot, not
+    // after the last, so the ghost waits until nothing is ahead of the focus.
+    final ghost = rightNeed == 0 && at == count - 1 && leftover >= ghostMin ? (at0, leftover) : null;
     return RowLayout(start: s, full: n, pane: pane, x: x, widths: widths, ghost: ghost);
+  }
+
+  /// How opaque the pane that holds [box] is painted right now, 0 to 1: the
+  /// fades above it and the row's own motion for it, up to [upTo]. A pane
+  /// that is parked, or not yet started, is 0.
+  static double paintedOpacity(RenderObject box, {RenderObject? upTo}) {
+    var opacity = 1.0;
+    RenderObject child = box;
+    for (var node = box.parent; node != null && node != upTo; child = node, node = node.parent) {
+      if (node is RenderOpacity) {
+        opacity *= node.opacity;
+      } else if (node is RenderAnimatedOpacity) {
+        opacity *= node.opacity.value;
+      } else if (node is RenderOffstage && node.offstage) {
+        return 0;
+      } else if (node is RenderFlow && node.delegate is _PaneFlow) {
+        var index = 0;
+        for (var sibling = node.firstChild; sibling != null && sibling != child; sibling = (sibling.parentData! as FlowParentData).nextSibling) {
+          index++;
+        }
+        return opacity * (node.delegate as _PaneFlow).opacityOf(index);
+      }
+    }
+    return opacity;
   }
 
   @override
@@ -384,6 +411,16 @@ class _PaneFlow extends FlowDelegate {
 
   @override
   bool shouldRelayout(_PaneFlow old) => !listEquals(old.widths, widths);
+
+  /// How opaque child [i] is painted: 0 when it is parked or has not started.
+  double opacityOf(int i) {
+    if (i >= keys.length) return 1;
+    if (!paints.contains(i)) return 0;
+    final key = keys[i];
+    final motion = clock.isAnimating && key != null ? motions[key] : null;
+    if (motion != null) return motion.at(clock.value * length).opacity;
+    return placed.containsKey(key) ? 1 : 0;
+  }
 
   @override
   bool shouldRepaint(_PaneFlow old) => true;

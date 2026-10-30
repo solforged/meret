@@ -100,6 +100,8 @@ enum LibraryCmd {
     ShowRelease { id: i64 },
     /// Print the Front, as the app's first pane shows it.
     Front,
+    /// Print the tracks whose files have gone, as the Front's Missing files lists them.
+    Missing,
     /// Print every listen, newest first, including uncounted skips.
     History {
         #[arg(long, default_value_t = 20)]
@@ -265,6 +267,7 @@ fn main() -> Result<()> {
                 LibraryCmd::Analyse { wait } => library::analyse(&api, &rt, wait),
                 LibraryCmd::ShowRelease { id } => library::show_release(&api, &rt, id),
                 LibraryCmd::Front => library::front(&api, &rt),
+                LibraryCmd::Missing => library::missing(&api, &rt),
                 LibraryCmd::History { limit } => library::history(&api, limit),
                 LibraryCmd::Volume { scalar, .. } => {
                     let volume = match scalar { Some(value) => api.set_volume(value), None => api.volume() }

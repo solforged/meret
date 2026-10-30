@@ -13,7 +13,7 @@ import 'package:meret/theme/tokens.dart';
 
 void main() {
   testWidgets('meetings paint dots between stars, and the tree draws peeks too', (tester) async {
-    final trail = TrailDto(rootQuery: '', current: 2, kept: false, branches: const [], stops: [
+    final trail = TrailDto(uid: 't', whenMs: PlatformInt64Util.from(0), rootQuery: '', current: 2, kept: false, branches: const [], stops: [
       _stop(0, null, true),
       _stop(1, 0, true),
       _stop(2, 1, true),
@@ -30,7 +30,7 @@ void main() {
     expect(paint, paints..something(meeting));
     final positions = painter.layoutPositions(const Size(800, 64));
     expect(positions.keys, containsAll([2, 3, 4]));
-    final noMeeting = ConstellationPainter(TrailDto(rootQuery: '', current: 2, kept: false, branches: const [], stops: trail.stops, meetings: const []));
+    final noMeeting = ConstellationPainter(TrailDto(uid: 't', whenMs: PlatformInt64Util.from(0), rootQuery: '', current: 2, kept: false, branches: const [], stops: trail.stops, meetings: const []));
     await tester.pumpWidget(MaterialApp(home: CustomPaint(
       key: const ValueKey('constellation'), painter: noMeeting,
     )));
@@ -38,31 +38,52 @@ void main() {
       isNot(paints..something(meeting)));
   });
 
-  testWidgets('bracket at a new search root restores the previous trail and its chip', (tester) async {
+  testWidgets('bracket at the first stop stays on the trail and flashes its chip', (tester) async {
     tester.view.physicalSize = const Size(1800, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final core = FakeCore();
+    final core = _KeepingCore();
     final first = await core.startTrail(const TargetDto.search(query: 'Iona'));
     final hit = (await core.search('Iona')).people.first;
-    final previous = await core.follow(first.current, TargetDto.person(id: hit.id), ThreadKind.matched, 'library');
-    await core.startTrail(const TargetDto.search(query: 'year:1998'));
+    await core.follow(first.current, TargetDto.person(id: hit.id), ThreadKind.matched, 'library');
+    final opened = await core.startTrail(const TargetDto.search(query: 'year:1998'));
     await tester.pumpWidget(MeretApp(core: core));
     await tester.pump();
     await _restoreTrail(tester);
     expect(_titles(tester), ['year:1998']);
+    Color border() => ((tester.widget<Container>(find.descendant(of: find.byType(TrailChip), matching: find.byType(Container)).first)).decoration as BoxDecoration).border!.top.color;
+    expect(border(), Tok.rule);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(_titles(tester), ['Iona', hit.title]);
-    final chip = tester.widget<TrailChip>(find.byType(TrailChip));
-    expect(chip.trail.rootQuery, previous.rootQuery);
-    expect(chip.trail.current, previous.current);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(_titles(tester), ['year:1998'], reason: '[ never leaves the trail');
+    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.uid, opened.uid);
+    expect(border(), isNot(Tok.rule), reason: 'the chip flashes instead');
+    await tester.pumpAndSettle();
+    expect(border(), Tok.rule);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(_titles(tester), ['year:1998']);
-    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.current, 0);
+    await tester.pumpAndSettle();
+    expect(_titles(tester), ['year:1998'], reason: '] has no stop ahead and never jumps to another trail');
+    expect(tester.widget<TrailChip>(find.byType(TrailChip)).trail.uid, opened.uid);
+  });
+
+  testWidgets('the chip names the stop you are at, and follows [ and ]', (tester) async {
+    _desktop(tester);
+    final core = _KeepingCore();
+    final root = await core.startTrail(const TargetDto.search(query: 'Iona'));
+    final hit = (await core.search('Iona')).people.first;
+    await core.follow(root.current, TargetDto.person(id: hit.id), ThreadKind.matched, 'library');
+    await tester.pumpWidget(MeretApp(core: core));
+    await tester.pumpAndSettle();
+    await _restoreTrail(tester);
+    String name() => tester.widget<Text>(find.byKey(const ValueKey('trail-chip-name'))).data!;
+    expect(name(), contains(hit.title));
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+    await tester.pumpAndSettle();
+    expect(name(), 'Iona');
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await tester.pumpAndSettle();
+    expect(name(), contains(hit.title));
   });
 
   testWidgets('command S names and keeps the open trail, then marks its root', (tester) async {
@@ -85,11 +106,12 @@ void main() {
 
     expect(core.names, ['Music for the evening']);
     expect(find.byKey(const ValueKey('keep-trail-dialog')), findsNothing);
-    expect(find.text('◆ Music for the evening'), findsOneWidget);
+    final named = tester.widget<Text>(find.byKey(const ValueKey('trail-chip-name'))).data!;
+    expect(named, startsWith('◆ Music'), reason: 'the kept mark and name lead the chip');
+    expect(named, endsWith('→ ${hit.title}'), reason: 'the current stop stays when the line is short');
     final chip = tester.widget<TrailChip>(find.byType(TrailChip));
     expect(chip.trail.kept, isTrue);
     expect(chip.trail.stops, hasLength(2));
-    expect(tester.widget<Text>(find.byKey(const ValueKey('trail-chip-name'))).data, '◆ Music for the evening');
   });
 
   testWidgets('Escape cancels keeping and the root alone is the suggested name', (tester) async {
@@ -141,6 +163,20 @@ void main() {
     expect(tester.widget<TextField>(find.byKey(const ValueKey('trail-name'))).controller!.text, 'Iona');
   });
 
+  test('fake door visits reuse the newest bare trail with that root, and a used trail is never reused', () async {
+    final core = FakeCore();
+    final all = await core.startTrail(const TargetDto.search(query: ''));
+    await core.startTrail(const TargetDto.search(query: 'year:1998'));
+    final again = await core.startTrail(const TargetDto.search(query: ''));
+    expect(again.uid, all.uid, reason: 'a door is a launch point, not a new history entry');
+    expect((await core.trailHistory(10)).map((trail) => trail.uid).first, all.uid, reason: 'reuse moves it to the top');
+    expect(await core.trailHistory(10), hasLength(2));
+    final hit = (await core.search('Iona')).people.first;
+    await core.follow(again.current, TargetDto.person(id: hit.id), ThreadKind.matched, 'library');
+    final fresh = await core.startTrail(const TargetDto.search(query: ''));
+    expect(fresh.uid, isNot(all.uid), reason: 'a trail something happened on stays as it was');
+  });
+
   test('fake trail follows loop back instead of appending and keeps newer history', () async {
     final core = FakeCore();
     final root = await core.startTrail(const TargetDto.search(query: 'Iona'));
@@ -155,12 +191,11 @@ void main() {
     expect(current.current, person.current);
     expect(current.stops, hasLength(3));
     await core.startTrail(const TargetDto.search(query: 'year:1998'));
-    await core.trailBack();
-    await core.startTrail(const TargetDto.search(query: 'year:2000'));
-    expect((await core.trailBack())!.rootQuery, 'Iona');
-    expect((await core.trailBack())!.current, 0);
-    expect((await core.trailBack())!.rootQuery, 'year:1998');
-    expect((await core.trailForward())!.rootQuery, 'Iona');
+    expect(await core.trailBack(), isNull, reason: 'the first stop of a trail has no stop behind it');
+    final other = await core.startTrail(const TargetDto.search(query: 'year:2000'));
+    expect(other.rootQuery, 'year:2000');
+    expect(await core.trailBack(), isNull);
+    expect(await core.trailForward(), isNull);
   });
 
   test('fake trail memory names and keeps the whole tree across history moves', () async {
@@ -183,8 +218,8 @@ void main() {
     await core.startTrail(const TargetDto.search(query: 'year:2002'));
     final history = await core.trailHistory(10);
     expect(history, hasLength(3));
-    expect(history[1].uid, saved.uid);
-    expect(history[1].name, saved.name);
+    expect(history[2].uid, saved.uid);
+    expect(history[2].name, saved.name);
     expect(await core.trailHistory(0), isEmpty);
   });
 }
@@ -212,9 +247,9 @@ Future<void> _command(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
+/// The app opens on Today over the saved trail; `]` takes Today away.
 Future<void> _restoreTrail(WidgetTester tester) async {
-  await _command(tester, LogicalKeyboardKey.keyL);
-  await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
+  await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
 }

@@ -19,7 +19,8 @@ class WindowChrome {
       if (call.method == 'edit') edit(call.arguments as String);
     });
     FocusManager.instance.addListener(_textFocusChanged);
-    _channel.invokeMethod<bool>('fullScreen').then((v) => fullScreen.value = v ?? false, onError: (_) {});
+    // A failed call (no native side) still has to leave a bool for `then`.
+    _channel.invokeMethod<bool>('fullScreen').catchError((_) => false).then((v) => fullScreen.value = v ?? false);
   }
 
   static final instance = WindowChrome._();
@@ -56,12 +57,28 @@ class WindowChrome {
   void Function(String id)? onMenu;
 
   Map<String, bool> _menuAvailability = const {};
+  Map<String, bool>? _published;
+  bool _modal = false;
+  Set<String> _sheetKeeps = const {};
+
+  /// What the native menus may do now: the surface's availability, but while
+  /// a dialog is open only the items the sheet keeps (the history sheet keeps
+  /// Play or Pause, the keys sheet keeps Keys); the rest wait for it to close.
+  Map<String, bool> get menuState => {
+    for (final MapEntry(:key, :value) in _menuAvailability.entries) key: value && (!_modal || _sheetKeeps.contains(key)),
+  };
 
   void setMenuAvailability(Map<String, bool> availability) {
-    if (mapEquals(_menuAvailability, availability)) return;
     _menuAvailability = Map.of(availability);
+    _publish();
+  }
+
+  void _publish() {
+    final state = menuState;
+    if (mapEquals(_published, state)) return;
+    _published = state;
     if (Platform.isMacOS) {
-      _channel.invokeMethod<void>('menuAvailability', availability).catchError((_) {});
+      _channel.invokeMethod<void>('menuAvailability', state).catchError((_) {});
     }
   }
 
@@ -70,7 +87,14 @@ class WindowChrome {
   }
 
   void setModalVisible(bool visible) {
-    if (Platform.isMacOS) _channel.invokeMethod<void>('modalVisible', visible).catchError((_) {});
+    _modal = visible;
+    _publish();
+  }
+
+  /// The menu items the open sheet keeps on; empty when it closes.
+  set sheetKeeps(Set<String> keeps) {
+    _sheetKeeps = keeps;
+    _publish();
   }
 
   /// Room to leave at the left of the bar for the window buttons.
