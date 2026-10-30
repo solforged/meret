@@ -68,7 +68,7 @@ Decided 2026-10-14.
 | I browse the whole library as a table | `⌘L`, All tracks or an idiom door in Home | Built |
 | I wander from a credit to a person to their other work | Panes, and the threads drawn between them | Built (local credits only) |
 | I see what's next, and change it | Now, Up next | Built (shown; changing the queue isn't built) |
-| I find out what played ten minutes ago | Now, "What was that?"; `H` for history | Built |
+| I find out what played ten minutes ago | Now, "What was that?"; the Journal (`⌘3`) | Built as a history sheet (`H`); the Journal is placed |
 | I play on another speaker | Now, Play on | Built for this Mac's outputs; other zones later |
 | I control playback while working in another app | Menu bar item, media keys | Built |
 | I know whether I'm hearing it bit-perfect | Now, signal path | Built |
@@ -131,10 +131,12 @@ Mostly placed by the plates; listed so the whole set is in one file.
 
 | Story | Where | State |
 |---|---|---|
-| I see what's new for me, and why | Home's Leads (`L`) | Placed |
-| I mark something I want to own | `W` anywhere; Home's Wants | Placed |
-| I make a crate by hand, or from a rule | `C` / `⌘K`; Home's Crates | Placed |
-| I keep a trail and come back to it | `⌘S`; Home's Trails; `[` from a new root | Built |
+| I see what's new for me, and why | Explore (`⌘2`), the leads inbox; "Beyond your shelf" on every pane | Placed (2026-10-30 plates 01–03) |
+| I hear a lead before I own it | A lead's "Where to hear it", through Spotify Connect or Apple Music | Placed (plate 02) |
+| I mark something I want to own, and Meret notices when I do | `W` anywhere; Explore's Wants; the want closes when a matching file arrives, and the release keeps how I found it | Placed (plate 02) |
+| I make a crate by hand, or from a rule | `C` / `⌘K`; Home's Collection › Crates | Placed |
+| I keep a trail and come back to it | `⌘S`; Home's Pinned; the Journal | Built (kept trails and All trails); Journal and Pinned placed |
+| I see how my listening goes: what's on repeat, what's falling off, when I listen | The Journal's patterns | Placed (plate 04) |
 | I see my library as a map | `M`, the sky | Placed (plate 05) |
 | I check and refuse a habit | Play something's why → plate 12 | Placed |
 
