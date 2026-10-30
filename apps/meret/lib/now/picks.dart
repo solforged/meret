@@ -123,7 +123,7 @@ class _PlaySomethingState extends State<PlaySomething> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: Text(pick.label.toUpperCase(), style: Tok.label.copyWith(color: first ? Tok.gold : Tok.faint))),
+          Expanded(child: Text(pick.label.toUpperCase(), style: Tok.caps.copyWith(color: first ? Tok.gold : Tok.faint))),
         ]),
         const SizedBox(height: 4),
         Text(pick.title, style: Tok.body.copyWith(fontWeight: FontWeight.w600)),
@@ -131,7 +131,7 @@ class _PlaySomethingState extends State<PlaySomething> {
         Text(pick.reason, style: Tok.body.copyWith(color: Tok.muted, fontSize: 12.5)),
         Text(pick.plan, style: Tok.body.copyWith(color: Tok.muted, fontSize: 12.5)),
         const SizedBox(height: 10),
-        Text(pick.meta, style: Tok.label.copyWith(letterSpacing: 0)),
+        Text(pick.meta, style: Tok.label),
         const SizedBox(height: 8),
         Wrap(spacing: 8, children: [
           if (widget.onRelease != null) TextButton(

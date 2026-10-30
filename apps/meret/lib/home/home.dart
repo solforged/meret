@@ -205,7 +205,7 @@ class Home extends StatelessWidget {
         for (final (title, entries) in sections) if (entries.isNotEmpty || title == 'Trails') ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
-            child: Text(title.toUpperCase(), style: Tok.label.copyWith(fontSize: 9.5, color: Tok.dim)),
+            child: Text(title.toUpperCase(), style: Tok.caps),
           ),
           for (final door in entries)
             _Row(door: door, lit: _lit(door), onTap: door.kind == DoorKind.later || door.unavailable != null ? null : () => onDoor(door)),
@@ -329,10 +329,10 @@ class _RowState extends State<_Row> {
           Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(door.label, style: Tok.body.copyWith(fontSize: 13, color: colour), maxLines: 1, overflow: TextOverflow.ellipsis),
             if (door.subtitle != null) Row(children: [
-              Expanded(child: Text(door.subtitle!, style: Tok.label.copyWith(fontSize: 10, color: Tok.faint), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Expanded(child: Text(door.subtitle!, style: Tok.label.copyWith(fontSize: 11.5), maxLines: 1, overflow: TextOverflow.ellipsis)),
               if (door.when != null) ...[
                 const SizedBox(width: 6),
-                Text(door.when!, style: Tok.label.copyWith(fontSize: 10, color: Tok.faint), maxLines: 1),
+                Text(door.when!, style: Tok.label.copyWith(fontSize: 11.5), maxLines: 1),
               ],
             ]),
           ])),
@@ -340,12 +340,12 @@ class _RowState extends State<_Row> {
             const SizedBox(width: 8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: _countWidth),
-              child: Text(door.count!, style: Tok.label.copyWith(color: door.amber ? Tok.warn : Tok.faint), maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(door.count!, style: Tok.label.copyWith(fontSize: 11.5, color: door.amber ? Tok.warn : Tok.faint), maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ],
           if (door.keys != null) ...[
             const SizedBox(width: 8),
-            Text(door.keys!, style: Tok.label.copyWith(color: Tok.dim)),
+            Text(door.keys!, style: Tok.data),
           ],
         ]),
       ),

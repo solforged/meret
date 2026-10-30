@@ -158,7 +158,7 @@ class _ReleasePaneState extends State<ReleasePane> {
     child: Container(
       padding: const EdgeInsets.only(bottom: 6),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
-      child: Text(label, style: Tok.label),
+      child: Text(label, style: Tok.heading),
     ),
   );
 
@@ -196,7 +196,7 @@ class _ReleasePaneState extends State<ReleasePane> {
                       key: ValueKey('release-work-$index'),
                       onTap: () => _follow(work),
                       child: TrailRow(target: work.to, via: work.label, child:
-                        Text(work.title, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(work.title, style: Tok.labelMuted, maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                     ),
                   ),
@@ -379,7 +379,7 @@ class ThreadLine extends StatelessWidget {
               SizedBox(width: _label, child: Text(thread.label, style: Tok.body.copyWith(color: Tok.gold2, fontStyle: FontStyle.italic))),
               Expanded(child: Text(thread.title, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 8),
-              Text(thread.source, style: Tok.label.copyWith(color: Tok.dim, fontSize: 10)),
+              Text(thread.source, style: Tok.label.copyWith(fontSize: 11)),
               const SizedBox(width: 10),
               ThreadArrow(target: thread.to, via: thread.label, hover: hover),
             ]),

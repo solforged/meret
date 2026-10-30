@@ -101,7 +101,7 @@ class PaneActionButton extends StatelessWidget {
               color: primary && enabled ? Tok.sky : enabled ? Tok.ink : Tok.faint,
             )),
             if (hint.isNotEmpty) ...[
-              Text(hint, style: Tok.label.copyWith(color: primary && enabled ? Tok.sky.withValues(alpha: 0.6) : Tok.faint, letterSpacing: 0)),
+              Text(hint, style: Tok.label.copyWith(fontSize: 11.5, color: primary && enabled ? Tok.sky.withValues(alpha: 0.8) : Tok.faint)),
             ],
           ]),
         ),
@@ -271,7 +271,7 @@ class _PaneState extends State<Pane> {
       child: Row(children: [
         SizedBox(width: 10, height: 10, child: Center(child: star)),
         const SizedBox(width: 9),
-        Text(kind.toUpperCase(), style: Tok.label.copyWith(fontWeight: FontWeight.w500), maxLines: 1),
+        Text(kind.toUpperCase(), style: Tok.caps, maxLines: 1),
         if (via != null) ...[
           const SizedBox(width: 9),
           Flexible(child: Text(via, style: Tok.body.copyWith(fontSize: 12, fontStyle: FontStyle.italic, fontWeight: FontWeight.w500, color: Tok.gold2), maxLines: 1, overflow: TextOverflow.ellipsis)),
@@ -280,7 +280,7 @@ class _PaneState extends State<Pane> {
         if (fork case final fork?)
           fork
         else if (source != null)
-          Flexible(child: Text(source, style: Tok.label.copyWith(fontSize: 10, color: Tok.dim, letterSpacing: 0), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Flexible(child: Text(source, style: Tok.label.copyWith(fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
       ]),
     );
   }
@@ -309,7 +309,7 @@ class PaneSpine extends StatelessWidget {
           Flexible(child: Text(title, style: Tok.body.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500, color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis)),
           if (meta case final meta?) ...[
             const SizedBox(width: 8),
-            Text(meta, style: Tok.body.copyWith(fontSize: 12.5, color: Tok.dim), maxLines: 1),
+            Text(meta, style: Tok.body.copyWith(fontSize: 12.5, color: Tok.faint), maxLines: 1),
           ],
         ]),
       ),
@@ -393,9 +393,9 @@ class ThreadArrow extends StatelessWidget {
     final (glyph, colour) = switch (way) {
       ThreadWay.went => ('→', Tok.gold),
       ThreadWay.came => ('←', Tok.faint),
-      ThreadWay.onTrail => ('○', Tok.dim),
+      ThreadWay.onTrail => ('○', Tok.faint),
       ThreadWay.forked => ('⑂', Tok.gold2),
-      ThreadWay.open => ('→', hover ? Tok.ink : Tok.dim),
+      ThreadWay.open => ('→', hover ? Tok.ink : Tok.faint),
     };
     final arrow = SizedBox(width: 14, child: Text(glyph, key: ValueKey('arrow-${way.name}'), style: Tok.body.copyWith(color: colour), textAlign: TextAlign.right));
     final leaf = way == ThreadWay.forked ? scope?.followedLeaf(target) : null;
@@ -499,7 +499,7 @@ class _ForkControlState extends State<ForkControl> {
       ),
       menuChildren: [
         SizedBox(width: 320, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-          Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 6), child: Text(branches.isEmpty ? 'Peeks here' : 'Forks here', style: Tok.label)),
+          Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 6), child: Text(branches.isEmpty ? 'Peeks here' : 'Forks here', style: Tok.heading)),
           for (final branch in branches)
             _row(
               key: ValueKey('fork-${stop.index}-${branch.leaf}'),
@@ -510,7 +510,7 @@ class _ForkControlState extends State<ForkControl> {
               trailing: branch.prunable ? TextButton(
                 key: ValueKey('prune-${stop.index}-${branch.leaf}'),
                 onPressed: () => _pick(() => onPrune(branch.leaf)),
-                child: Text('prune', style: Tok.label.copyWith(color: Tok.dim)),
+                child: Text('prune', style: Tok.label),
               ) : null,
             ),
           for (final peek in peeks)
@@ -533,7 +533,7 @@ class _ForkControlState extends State<ForkControl> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
             decoration: BoxDecoration(border: Border.all(color: Tok.gold3)),
-            child: Text(label, style: Tok.label.copyWith(color: Tok.gold, letterSpacing: 0)),
+            child: Text(label, style: Tok.label.copyWith(color: Tok.gold)),
           ),
         ),
       ),

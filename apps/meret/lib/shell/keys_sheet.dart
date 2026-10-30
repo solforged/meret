@@ -61,7 +61,7 @@ class _KeysSheet extends StatelessWidget {
       shape: const RoundedRectangleBorder(side: BorderSide(color: Tok.rule)),
       child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 640), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(padding: const EdgeInsets.fromLTRB(20, 12, 12, 8), child: Row(children: [
-          const Expanded(child: Text('Keys', style: Tok.label)),
+          const Expanded(child: Text('Keys', style: Tok.heading)),
           IconButton(tooltip: 'Close  ?', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close, size: 18, color: Tok.muted)),
         ])),
         const Divider(height: 1, color: Tok.rule),
@@ -71,7 +71,7 @@ class _KeysSheet extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Wrap(spacing: 32, runSpacing: 18, children: [
             for (final (title, keys) in keyGroups) SizedBox(width: 276, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(title.toUpperCase(), style: Tok.label.copyWith(color: Tok.gold2))),
+              Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(title.toUpperCase(), style: Tok.caps.copyWith(color: Tok.gold2))),
               for (final (key, does) in keys) Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 SizedBox(width: 84, child: Text(key, style: Tok.monoSmall.copyWith(color: Tok.ink))),
                 const SizedBox(width: 12),
@@ -80,7 +80,7 @@ class _KeysSheet extends StatelessWidget {
             ])),
           ]),
           const SizedBox(height: 18),
-          Text('Commands', style: Tok.label.copyWith(color: Tok.gold2)),
+          Text('COMMANDS', style: Tok.caps.copyWith(color: Tok.gold2)),
           const SizedBox(height: 6),
           const Text('Press / to focus the query line, then type without a leading slash.', style: Tok.body),
           const SizedBox(height: 6),
@@ -92,7 +92,7 @@ class _KeysSheet extends StatelessWidget {
         )),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-          child: Text('The Go and Controls menus list these too.', style: Tok.label.copyWith(letterSpacing: 0)),
+          child: Text('The Go and Controls menus list these too.', style: Tok.label),
         ),
       ])),
     )),

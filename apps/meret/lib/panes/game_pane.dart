@@ -106,7 +106,7 @@ class _GamePaneState extends State<GamePane> {
     margin: const EdgeInsets.only(top: 18, bottom: 6),
     padding: const EdgeInsets.only(bottom: 6),
     decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
-    child: Text(title, style: Tok.label),
+    child: Text(title, style: Tok.heading),
   );
 
   List<Widget> _section(String title, List<ThreadDto> threads) => threads.isEmpty ? [] : [
@@ -154,7 +154,7 @@ class _GamePaneState extends State<GamePane> {
                       to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
                     )),
                     child: TrailRow(target: TargetDto.release(id: row.releaseId), child:
-                      Text(row.album, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(row.album, style: Tok.labelMuted, maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ),

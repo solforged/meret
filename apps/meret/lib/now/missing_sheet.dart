@@ -79,7 +79,7 @@ class _MissingSheetState extends State<_MissingSheet> {
       shape: const RoundedRectangleBorder(side: BorderSide(color: Tok.rule)),
       child: SizedBox(width: 640, height: 480, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(padding: const EdgeInsets.fromLTRB(20, 12, 12, 8), child: Row(children: [
-          Expanded(child: Text(files == null ? 'Missing files' : 'Missing files · ${files.length}', style: Tok.label)),
+          Expanded(child: Text(files == null ? 'Missing files' : 'Missing files · ${files.length}', style: Tok.heading)),
           TextButton(key: const ValueKey('missing-rescan'), onPressed: _rescan, child: const Text('Rescan')),
           TextButton(key: const ValueKey('missing-check-folders'), onPressed: _checkFolders, child: const Text('Check music folders')),
           IconButton(tooltip: 'Close', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close, size: 18, color: Tok.muted)),
@@ -100,7 +100,7 @@ class _MissingSheetState extends State<_MissingSheet> {
                     decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(file.file, style: Tok.body.copyWith(color: Tok.warn)),
-                      Text(file.folder, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(file.folder, style: Tok.data, maxLines: 1, overflow: TextOverflow.ellipsis),
                       Text([file.title, if (file.artist != null) file.artist!, file.album].join(' · '), style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
                     ]),
                   );

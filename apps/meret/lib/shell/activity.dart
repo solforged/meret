@@ -181,7 +181,7 @@ class _ActivityState extends State<Activity> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(children: [
             Expanded(child: Text('Folders and sources in Settings…', style: Tok.body.copyWith(fontSize: 12, color: Tok.gold), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            const Text('⌘,', style: Tok.label),
+            const Text('⌘,', style: Tok.data),
           ]),
         ),
       ),

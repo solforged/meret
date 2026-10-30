@@ -32,9 +32,9 @@ class FacetBrowser extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
         child: Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 2, children: [
-          Text(name, style: Tok.label),
+          Text(name, style: Tok.heading),
           Text(column == null ? '' : '${column.entries.length} ${column.entries.length == 1 ? one : many}',
-            style: Tok.label.copyWith(color: Tok.dim)),
+            style: Tok.label),
         ]),
       ),
       Expanded(child: ListView.builder(
@@ -64,7 +64,7 @@ class FacetBrowser extends StatelessWidget {
                       style: Tok.body.copyWith(color: selected ? Tok.ink : Tok.muted))),
                     const SizedBox(width: 8),
                     Tooltip(message: '${entry?.tracks ?? column!.tracks} ${(entry?.tracks ?? column!.tracks) == 1 ? 'track' : 'tracks'}',
-                      child: Text('${entry?.tracks ?? column!.tracks}', style: Tok.label.copyWith(color: Tok.dim))),
+                      child: Text('${entry?.tracks ?? column!.tracks}', style: Tok.data)),
                   ]),
                 ),
               ),

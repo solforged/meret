@@ -348,14 +348,14 @@ class _SettingsWindowState extends State<_SettingsWindow> {
 
   Widget _folders() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     _heading('Folders'),
-    if (_front == null) const Text('Reading folders…', style: Tok.monoSmall)
-    else if (_front!.roots.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('No folders yet', style: Tok.monoSmall))
+    if (_front == null) const Text('Reading folders…', style: Tok.labelMuted)
+    else if (_front!.roots.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Text('No folders yet', style: Tok.labelMuted))
     else for (final root in _front!.roots) _folder(root),
     const SizedBox(height: 22),
     Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
       _button('Add a folder…', _changingFolders ? null : _addFolder, primary: true),
       if (_front != null && _front!.roots.isNotEmpty) KeyedSubtree(key: const ValueKey('settings-rescan'), child: _button('Rescan', _rescan)),
-      if (_front != null) Text('${_count(_front!.tracks)} ${_front!.tracks == BigInt.one ? 'track' : 'tracks'} · ${_count(_front!.releases)} ${_front!.releases == BigInt.one ? 'release' : 'releases'}', style: Tok.monoSmall),
+      if (_front != null) Text('${_count(_front!.tracks)} ${_front!.tracks == BigInt.one ? 'track' : 'tracks'} · ${_count(_front!.releases)} ${_front!.releases == BigInt.one ? 'release' : 'releases'}', style: Tok.labelMuted),
     ]),
   ]);
 
@@ -383,7 +383,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
         ])),
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('${_count(root.tracks)} tracks', style: Tok.monoSmall),
+          Text('${_count(root.tracks)} tracks', style: Tok.labelMuted),
           const SizedBox(height: 8),
           _button('Remove…', _changingFolders ? null : () => setState(() => _confirmRemove = root)),
         ]),
@@ -427,7 +427,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(entry.$2, style: Tok.body.copyWith(fontSize: 14)),
                 const SizedBox(height: 3),
-                Text(entry.$3, style: Tok.label.copyWith(letterSpacing: 0)),
+                Text(entry.$3, style: Tok.label),
               ])),
             ]),
           ),
@@ -439,7 +439,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(selected.$2, style: Tok.title.copyWith(fontSize: 21)),
         const SizedBox(height: 10),
-        Text(selected.$3, style: Tok.monoSmall),
+        Text(selected.$3, style: Tok.labelMuted),
         const SizedBox(height: 22),
         Text(selected.$4, style: Tok.body.copyWith(color: Tok.muted)),
         if (selected.$1 == 'local') ...[
@@ -466,11 +466,11 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     final selected = devices.where((device) => deviceId == null ? device.isDefault : device.id == deviceId).firstOrNull;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _heading('Playback'),
-      if (settings == null) const Text('Reading playback settings…', style: Tok.monoSmall)
+      if (settings == null) const Text('Reading playback settings…', style: Tok.labelMuted)
       else ...[
         _settingRow('Output device',
           _devices == null
-            ? Text(_deviceError ?? 'Reading outputs…', style: Tok.monoSmall)
+            ? Text(_deviceError ?? 'Reading outputs…', style: Tok.labelMuted)
             : SizedBox(width: 240, child: DropdownButton<String>(
                 key: const ValueKey('settings-output'),
                 value: deviceId ?? '',
@@ -507,16 +507,16 @@ class _SettingsWindowState extends State<_SettingsWindow> {
         ))),
       ],
       const SizedBox(height: 12),
-      _settingRow('Device volume', const Text('On the device', style: Tok.monoSmall)),
+      _settingRow('Device volume', const Text('On the device', style: Tok.labelMuted)),
       _settingRow('Software volume', const Text('Not offered', style: Tok.label)),
-      _settingRow('Gapless playback', const Text('Always on', style: Tok.monoSmall)),
+      _settingRow('Gapless playback', const Text('Always on', style: Tok.labelMuted)),
       const SizedBox(height: 22),
       if (_now != null && _now!.path.isNotEmpty) ...[
-        const Text('Signal path', style: Tok.label),
+        const Text('Signal path', style: Tok.heading),
         const SizedBox(height: 12),
         for (final stage in _now!.path) Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: Text('${stage.name} · ${stage.detail}', style: Tok.monoSmall),
+          child: Text('${stage.name} · ${stage.detail}', style: Tok.labelMuted),
         ),
       ],
     ]);
@@ -546,7 +546,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
             if (lookups.failed > BigInt.zero) '${_count(lookups.failed)} failed',
             if (lookups.matched > BigInt.zero) '${_count(lookups.matched)} ${lookups.matched == BigInt.one ? 'release' : 'releases'} matched by name',
             if (lookups.unidentified > BigInt.zero) '${_count(lookups.unidentified)} without an ID',
-          ].join(' · '), style: Tok.monoSmall),
+          ].join(' · '), style: Tok.labelMuted),
         ),
   ]);
 
@@ -568,7 +568,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     final wash = _now?.light == null ? const Color(0x14D2A64E) : Color(_now!.light!.wash);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _heading('Light'),
-      if (_settings == null) const Text('Reading light settings…', style: Tok.monoSmall)
+      if (_settings == null) const Text('Reading light settings…', style: Tok.labelMuted)
       else LayoutBuilder(builder: (context, constraints) => Wrap(spacing: 12, runSpacing: 12, children: [
         for (final (level, title, description) in const [
           (LightLevelDto.off, 'Off', 'Gold accent, no cover color'),

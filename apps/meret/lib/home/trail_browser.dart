@@ -100,7 +100,7 @@ class _TrailBrowserState extends State<_TrailBrowser> {
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(trail.name ?? trail.title, style: Tok.body.copyWith(color: Tok.ink)),
                 if (trail.name != null && trail.name != trail.title) Text(trail.title, style: Tok.body.copyWith(color: Tok.muted)),
-                if (trail.route != trail.title) Text(trail.route, style: Tok.label.copyWith(color: Tok.muted)),
+                if (trail.route != trail.title) Text(trail.route, style: Tok.labelMuted),
                 const SizedBox(height: 4),
                 Text(trailSummaryContext(trail), style: Tok.label),
               ])),

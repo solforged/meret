@@ -230,7 +230,7 @@ class _QueryLineState extends State<QueryLine> {
     Widget group(String name, BigInt total, List<HitDto> rows) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 4), child: Text('$name · $total', style: Tok.label)),
+        Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 4), child: Text('$name · $total', style: Tok.heading)),
         for (final hit in rows) _hitRow(hit, index++),
       ],
     );
@@ -440,7 +440,7 @@ class _QueryLineState extends State<QueryLine> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(border: Border.all(color: Tok.gold3)),
-                child: Text('/', style: Tok.label.copyWith(color: Tok.gold, letterSpacing: 0)),
+                child: Text('/', style: Tok.data.copyWith(color: Tok.gold)),
               ),
             ],
           ]),

@@ -28,8 +28,30 @@ abstract final class Tok {
   static const sans = 'Instrument Sans';
   static const mono = 'Geist Mono';
 
-  static const label = TextStyle(fontFamily: mono, fontSize: 11.5, letterSpacing: 0.4, color: faint);
+  // Words are Instrument Sans; Geist Mono is for tabular and code-like data
+  // only: times, dates, counts and numbers in columns, key caps, DR/LUFS/format
+  // values, paths and query syntax. `Tok.dim` is decoration (rules, disabled
+  // glyphs, ornaments); information is never lighter than `Tok.faint`.
+
+  /// Captions, subtitles, empty states and metadata lines. Tabular figures keep
+  /// counts and times in a mixed line aligned.
+  static const label = TextStyle(fontFamily: sans, fontSize: 12.5, color: faint, fontFeatures: [FontFeature.tabularFigures()]);
+
+  /// [label] one step up in contrast: the line under a title.
+  static const labelMuted = TextStyle(fontFamily: sans, fontSize: 12.5, color: muted, fontFeatures: [FontFeature.tabularFigures()]);
+
+  /// Section heads: "Today", "Credits", "Most played in the last 7 days".
+  static const heading = TextStyle(fontFamily: sans, fontSize: 12.5, fontWeight: FontWeight.w600, color: muted);
+
+  /// Small-capital heads: NOW, SIGNAL PATH, the sidebar groups. Set uppercase by the caller.
+  static const caps = TextStyle(fontFamily: sans, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8, color: faint);
+
   static const body = TextStyle(fontFamily: sans, fontSize: 13, color: ink, height: 1.35);
   static const title = TextStyle(fontFamily: sans, fontSize: 22, fontWeight: FontWeight.w600, color: ink);
+
+  /// Tabular and code-like data: times, dates, counts, key caps, paths, readouts.
+  static const data = TextStyle(fontFamily: mono, fontSize: 11.5, color: faint);
+
+  /// [data] one step up in contrast: table cells, durations, track numbers.
   static const monoSmall = TextStyle(fontFamily: mono, fontSize: 11.5, color: muted);
 }

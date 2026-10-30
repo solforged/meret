@@ -77,7 +77,7 @@ class _HistorySheetState extends State<_HistorySheet> {
     shape: const RoundedRectangleBorder(side: BorderSide(color: Tok.rule)),
     child: SizedBox(width: 520, height: 640, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(padding: const EdgeInsets.fromLTRB(20, 12, 12, 8), child: Row(children: [
-        const Expanded(child: Text('History', style: Tok.label)),
+        const Expanded(child: Text('History', style: Tok.heading)),
         IconButton(tooltip: 'Close history', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close, size: 18, color: Tok.muted)),
       ])),
       const Divider(height: 1, color: Tok.rule),
@@ -101,14 +101,14 @@ class _HistorySheetState extends State<_HistorySheet> {
                 },
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Row(children: [
-                    Expanded(child: Moment(ms: listen.startedAtMs.toInt(), builder: (_, when) => Text(when, style: Tok.label))),
+                    Expanded(child: Moment(ms: listen.startedAtMs.toInt(), builder: (_, when) => Text(when, style: Tok.data))),
                     if (listen.counted) const Text('✓', style: TextStyle(color: Tok.ok)),
                   ]),
                   const SizedBox(height: 4),
                   Text(listen.title, style: Tok.body),
                   Text([if (listen.credit != null) listen.credit!, if (listen.releaseTitle != null) listen.releaseTitle!].join(' · '), style: Tok.label),
                   const SizedBox(height: 4),
-                  Text(listenOutcome(listen, index == 0 ? _now : null), style: Tok.monoSmall),
+                  Text(listenOutcome(listen, index == 0 ? _now : null), style: Tok.labelMuted),
                 ]),
               );
             },

@@ -26,9 +26,9 @@ class ResumeHeader extends StatelessWidget {
     Widget line(String? when) => ListenableBuilder(listenable: clock, builder: (_, _) => _Parts(parts: [
       Text(
         '${clock.playing ? 'Playing' : when == null ? 'Paused' : 'Paused $when'} at ${positionOf(clock.positionMs.round(), now.lengthMs?.toInt())}',
-        key: const ValueKey('resume-where'), style: Tok.monoSmall,
+        key: const ValueKey('resume-where'), style: Tok.labelMuted,
       ),
-      const Text('on This Mac', style: Tok.monoSmall),
+      const Text('on This Mac', style: Tok.labelMuted),
     ]));
     return updatedAt == null ? line(null) : Moment(ms: updatedAt, builder: (_, when) => line(when));
   }
@@ -54,20 +54,20 @@ class ResumeHeader extends StatelessWidget {
             Opacity(opacity: (word == 'Pause') == clock.playing ? 1 : 0, child: Text(word, style: Tok.body.copyWith(fontSize: 15))),
         ]),
         const SizedBox(width: 16),
-        const Text('Space', style: Tok.label),
+        const Text('Space', style: Tok.data),
       ]),
     ));
     final what = Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
       Text(now.title, style: Tok.body.copyWith(fontSize: 15, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
       const SizedBox(height: 2),
-      Text(now.subtitle, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+      Text(now.subtitle, style: Tok.labelMuted, maxLines: 1, overflow: TextOverflow.ellipsis),
     ]);
     return Padding(
       padding: const EdgeInsets.only(bottom: 22),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         ListenableBuilder(listenable: clock, builder: (_, _) => Text(
           clock.playing ? 'Playing' : 'Pick up where you left off',
-          style: Tok.label.copyWith(color: Tok.ink),
+          style: Tok.heading.copyWith(color: Tok.ink),
         )),
         const SizedBox(height: 10),
         LayoutBuilder(builder: (context, box) => box.maxWidth >= 380
@@ -115,7 +115,8 @@ class _Parts extends StatelessWidget {
     // Each piece lays out to a whole pixel, so leave a pixel or two apiece.
     final total = [for (final part in parts) width(part.data!, part.style)].fold(0.0, (sum, w) => sum + w)
       + (parts.length - 1) * width(_separator, style) + 2.0 * (2 * parts.length - 1);
-    if (parts.length == 1 || total <= box.maxWidth) {
+    if (parts.length == 1) return parts.single;
+    if (total <= box.maxWidth) {
       return Row(mainAxisSize: MainAxisSize.min, children: [
         for (final (i, part) in parts.indexed) ...[
           if (i > 0) Text(_separator, style: style),

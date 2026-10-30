@@ -140,7 +140,7 @@ class _TodayState extends State<Today> {
     Container(
       padding: const EdgeInsets.only(bottom: 6),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
-      child: Text(title, style: Tok.label),
+      child: Text(title, style: Tok.heading),
     ),
     ...lines,
   ]);
@@ -193,7 +193,7 @@ class _TodayState extends State<Today> {
           Text('Add folder →', style: Tok.label.copyWith(color: _adding ? Tok.faint : Tok.gold)),
         ]),
         const SizedBox(height: 3),
-        Text(suggestion.path, style: Tok.monoSmall.copyWith(fontSize: 10, color: Tok.faint)),
+        Text(suggestion.path, style: Tok.data.copyWith(fontSize: 11)),
         if (detail != null) ...[
           const SizedBox(height: 4),
           Text(detail, style: Tok.body.copyWith(fontSize: 11, color: Tok.muted)),
@@ -236,7 +236,7 @@ class _TodayState extends State<Today> {
         padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Today', style: Tok.label),
+          const Text('Today', style: Tok.heading),
           const SizedBox(height: 10),
           Text(_welcome(), style: Tok.title),
         ]),
@@ -254,7 +254,7 @@ class _TodayState extends State<Today> {
   Widget _header() => Padding(
     padding: const EdgeInsets.fromLTRB(28, 18, 28, 0),
     child: Row(children: [
-      const Expanded(child: Text('Today', style: Tok.label)),
+      const Expanded(child: Text('Today', style: Tok.heading)),
       if (widget.trailName case final name?)
         Flexible(child: Text('] back to $name', key: const ValueKey('today-back'), style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
     ]),

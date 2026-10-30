@@ -46,7 +46,7 @@ class NowPane extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          const Expanded(child: Text('NOW', style: Tok.label)),
+          const Expanded(child: Text('NOW', style: Tok.caps)),
           ListenableBuilder(
             listenable: clock,
             builder: (_, _) => Text(!loaded ? '' : clock.playing ? 'playing' : 'paused', style: Tok.label),
@@ -78,7 +78,7 @@ class NowPane extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // Paused or stopped there is no path to draw, so no heading either.
             if (n != null && (n.path.isNotEmpty || n.fidelity != null)) ...[
-              const Text('SIGNAL PATH', style: Tok.label),
+              const Text('SIGNAL PATH', style: Tok.caps),
               const SizedBox(height: 6),
               Wrap(spacing: 6, runSpacing: 6, children: [
                 for (final s in n.path) _Stage(s),
@@ -213,7 +213,7 @@ class NowFidelity extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     signalVerdict(now, exclusive: exclusive) ?? '',
-    style: Tok.monoSmall.copyWith(color: now.fidelity == FidelityDto.bitPerfect ? Tok.ok : Tok.warn),
+    style: Tok.label.copyWith(color: now.fidelity == FidelityDto.bitPerfect ? Tok.ok : Tok.warn),
   );
 }
 
@@ -226,7 +226,7 @@ class NowFacts extends StatelessWidget {
     if (now.path.firstOrNull?.name == 'File') now.path.first.detail,
     if (now.dr != null) 'DR ${now.dr}',
     if (now.loudnessLufs != null) '${now.loudnessLufs!.toStringAsFixed(1)} LUFS',
-  ].join(' · '), style: Tok.monoSmall.copyWith(color: Tok.muted));
+  ].join(' · '), style: Tok.monoSmall);
 }
 
 /// Recent listening belongs to Now, on Today and in the pinned pane.
@@ -331,7 +331,7 @@ class _NowMemoryState extends State<NowMemory> {
             const SizedBox(height: 5),
             Row(children: [
               Expanded(child: Text(positionOf(point.positionMs.toInt(), point.lengthMs?.toInt()), style: Tok.monoSmall)),
-              Moment(ms: point.updatedAt.toInt(), builder: (_, when) => Text(when, style: Tok.label)),
+              Moment(ms: point.updatedAt.toInt(), builder: (_, when) => Text(when, style: Tok.data)),
             ]),
           ]),
         ),
@@ -403,8 +403,8 @@ class NowSection extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 7),
     decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
     child: Wrap(alignment: WrapAlignment.spaceBetween, spacing: 12, runSpacing: 4, children: [
-      Text(title, style: Tok.label),
-      if (meta != null) Text(meta!, style: Tok.label.copyWith(letterSpacing: 0)),
+      Text(title, style: Tok.heading),
+      if (meta != null) Text(meta!, style: Tok.label),
     ]),
   );
 }
@@ -1085,18 +1085,18 @@ class _DeviceVolumeState extends State<DeviceVolume> {
       return Tooltip(
         message: reason ?? 'Device volume $level',
         child: SizedBox(width: 148, child: Row(children: [
-          const Text('VOL', style: Tok.label),
+          const Text('VOL', style: Tok.caps),
           Expanded(child: slider),
         ])),
       );
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        const Expanded(child: Text('DEVICE VOLUME', style: Tok.label)),
+        const Expanded(child: Text('DEVICE VOLUME', style: Tok.caps)),
         Text(volume?.scalar == null ? '—' : level, style: Tok.monoSmall),
       ]),
       slider,
-      if (reason != null) Text(reason, style: Tok.monoSmall.copyWith(color: Tok.muted)),
+      if (reason != null) Text(reason, style: Tok.labelMuted),
     ]);
   }
 }
@@ -1110,7 +1110,7 @@ class _Stage extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(border: Border.all(color: s.alters ? Tok.warn : Tok.rule), borderRadius: BorderRadius.circular(3)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(s.name, style: Tok.label.copyWith(fontSize: 9.5)),
+          Text(s.name, style: Tok.label.copyWith(fontSize: 11)),
           Text(s.detail, style: Tok.monoSmall.copyWith(color: Tok.ink)),
         ]),
       );

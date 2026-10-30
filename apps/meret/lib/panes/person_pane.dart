@@ -71,7 +71,7 @@ class _PersonPaneState extends State<PersonPane> {
       margin: const EdgeInsets.only(top: 18, bottom: 6),
       padding: const EdgeInsets.only(bottom: 6),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
-      child: Text(title, style: Tok.label),
+      child: Text(title, style: Tok.heading),
     )),
     SliverList(delegate: SliverChildBuilderDelegate(
       (_, i) => ThreadLine(thread: threads[i], onFollow: () => _follow(threads[i])),

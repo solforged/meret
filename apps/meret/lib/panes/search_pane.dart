@@ -93,7 +93,7 @@ class _SearchPaneState extends State<SearchPane> {
   };
 
   Widget _group(String name, BigInt total, List<HitDto> hits) => Row(mainAxisSize: MainAxisSize.min, children: [
-    Text('$name · $total', style: Tok.label),
+    Text('$name · $total', style: Tok.heading),
     const SizedBox(width: 8),
     for (final hit in hits) Padding(
       padding: const EdgeInsets.only(right: 8),
