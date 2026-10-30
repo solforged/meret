@@ -51,8 +51,8 @@ Decided 2026-10-23 (plates 03, 08, 09). One rule: only the thing that changed mo
 - **What the row shows:** the path (root to current) plus the stops ahead, the chain of most recently entered children that `]` would walk. Stops ahead are dimmed. `[` moves focus and dims; it never removes a pane. A click anywhere on a dimmed pane goes to its stop, as a spine does; nothing inside it takes the click.
 - **Widths.** A pane's width depends only on the row's width: as many 440–560 pt panes as fit with one spine's room kept back, capped by the width class (about 560 pt at 1728). So a pane never resizes when a neighbour opens, and pinning Now costs one pane, not a reshuffle. A wide pane (the table) takes the leftover room and gives some back when a pane opens after it, the one time a pane changes width.
 - **Spines on both sides.** Stops before the window fold to 46 pt spines on the left, and stops ahead of it fold on the right; when there isn't room for every spine, the ones nearest the window show. The window only shifts when the focused pane would fall outside it, and only far enough to fit it. A resize fits it afresh, keeping as much of the path in view as it can.
-- **The ghost slot** shows where the next pane will open, while the last stop is in the window and at least 140 pt are left over.
-- **Threads look like threads.** Followable rows end in an arrow, and `←` marks where you came from.
+- **The ghost slot** shows where the next pane will open, while the focused stop is the last one in the window and at least 140 pt are left over. With stops ahead, the next follow lands in the dimmed pane's slot.
+- **Threads look like threads.** Followable rows end in an arrow, and `←` marks where you came from. The followed row joins the next pane's star with a short elbow in the gutter between the panes; it fades with the panes it joins, and a spine carries it when its pane folds.
 
 | Move | Motion |
 |---|---|
@@ -92,20 +92,22 @@ Decided 2026-10-13: a trail is a tree. Plates 06–08.
 
 - **Branching.** Following a thread from any pane except the last starts a branch. Nothing is thrown away.
 - **Panes show one branch:** the path from the root to where you are, plus the stops ahead of you on it (dimmed; decided 2026-10-23). The tree view (`T`) shows the whole tree: the current branch on the main line in gold, earlier branches above and below in grey, each fork ringed.
-- **Forks are visible in the panes too.** A pane you forked from says so ("Forks here", with each branch, its time and what happened on it). A thread you've already followed carries `⑂ → where it led`.
+- **Forks are visible without moving anything.** A pane you forked from carries `⑂ n` in its header, which opens its branches (each with its time and what happened on it) and their prune buttons. The followed row is the only lit row; a thread followed on another branch carries `⑂`.
 - **Peeks fold away.** A stop you leave within a few seconds is a peek. It folds into a tick, so browsing doesn't fill the tree with stubs.
 - **Branches meet.** When two branches reach the same thing, or close neighbours on the sky, a dotted line joins them. Two independent routes to one place make that place a strong lead.
 - **Keeping and pruning.** Keeping a trail keeps the whole tree. A branch you did something on (played, wanted, crated, noted) is always kept with it. A branch with nothing on it can be pruned with `⌘⌫`.
 - **Playing.** Play this branch, or play the whole tree depth first.
 - **Keys.** `[` `]` move along this branch. `⌥[` `⌥]` switch to a sibling branch at the nearest fork. `T` opens the whole tree as a pane, with a table of branches and the same tree drawn on the sky.
-- **A search ends a trail.** Decided 2026-10-13. Running a search from the query line starts a new tree, rooted at that search, and the old trail is kept as it was. Nothing else ends a trail: not time, not idle, not the Front, and not filtering inside a pane (brushing a table column, lassoing the sky). `[` from the first stop of a new trail steps back into the previous one.
+- **A search ends a trail.** Decided 2026-10-13. Running a search from the query line starts a new tree, rooted at that search, and the old trail is kept as it was. Nothing else ends a trail: not time, not idle, not the Front, and not filtering inside a pane (brushing a table column, lassoing the sky). A search stop's filters are part of the trail's root, so going back to it restores them.
+- **`[` stays in its trail** (decided 2026-10-29). At a trail's first stop `[` does nothing and the trail chip's border flashes; Go ▸ Back is disabled there. `]` walks into the dimmed stops ahead and never into another trail. Older trails open from Home, All trails and the tree. Over Today, Home, the tree or the narrow Now overlay, `[`, `]` and Esc only close it.
+- **Doors don't pile up.** Opening a door or a search that matches the newest trail that is still only that root, with nothing done on it, reopens that trail instead of starting a copy. Kept or named trails are never reused.
 - **Phone.** The trail chip shows only the current branch, with ringed stars and stubs at forks. Long-press a fork for a sheet of its branches.
 
 ## Press play and resume
 
 Plates 09–11. Most sessions are "press play", so playing never goes through a trail.
 
-- **Meret opens to Today** (decided 2026-10-23; it was the Now stage), with Resume at the top, paused where you left it. `Space` resumes. `⌥Space` starts the current piece from the top. `[` steps back into the last trail. Pressing play never starts or changes a trail.
+- **Meret opens to Today** (decided 2026-10-23; it was the Now stage), with Resume at the top, paused where you left it. `Space` resumes. `⌥Space` starts the current piece from the top. `[` or Esc closes Today onto the last trail, where you left it. Pressing play never starts or changes a trail.
 - **Pick up where you left off.** Everything you were partway through is listed, and each resumes the way its music does:
 
 | Idiom | Resumes |

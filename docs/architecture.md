@@ -206,7 +206,7 @@ These are what a spike or a regression test should hold the build to.
 
 ## State of the scaffold
 
-As of 2026-10-25. `cargo test --workspace` runs 225 tests (plus three ignored: a benchmark, and a device listing and an unplug test that need hardware); `flutter test` in `apps/meret` runs 215, ten of them through the real Rust core (parsing and commands, scan to play, Today, search, grouped rows and facets, release and person panes on a trail, device volume, and a pick counted through).
+As of 2026-10-29. `cargo test --workspace` runs 245 tests (plus three ignored: a benchmark, and a device listing and an unplug test that need hardware); `flutter test` in `apps/meret` runs 307, including the integration tests through the real Rust core (parsing and commands, scan to play, Today, search, grouped rows and facets, release and person panes on a trail, device volume, and a pick counted through).
 
 | Works | Stubbed or missing |
 |---|---|
@@ -231,7 +231,15 @@ As of 2026-10-25. `cargo test --workspace` runs 225 tests (plus three ignored: a
 - *Keys and hints.* Hints live in the Go and Controls menus and the controls' tooltips (the LCD's play button says Pause while playing); the top line never overflows from 600 px; Tab does nothing on the surface; `⌘S` works while typing like the other chords; the focus reclaim never fires under a sheet; the Escape that releases the query line empties it, and an unfocused line never promises `↵`. Before the first Now arrives nothing is drawn in the chip or the bar.
 - *Tree.* Stop labels take the room between neighbouring stars (minus 24 px, 190–240). The lookup counter's total is the batch's high-water mark of done + pending, so it converges.
 - *Width.* The Now panel is pinned from 1800 px (decided 2026-10-23, superseding 1560 and 1400): the LCD carries the transport at every desktop width, so a narrower window keeps its third pane and opens Now on `N`.
-- *Open after this round (need a decision).* `]` at a re-entered trail's root prefers the next trail in history over the stop's own branches; Settings keeps Material's dropdown and switch.
+- *Open after this round (need a decision).* Settings keeps Material's dropdown and switch. (`]` at a re-entered trail's root was settled on 2026-10-29: `]` never leaves its trail.)
+
+**Clickaround fix pass, 2026-10-29** (a seven-lane QA of the October 28 audit's repairs; findings in `docs/ui-audit-2026-10-28.md`'s follow-up; supersedes the rows above where they differ):
+
+- *Trails.* `[` stays in its trail, `]` walks into the dimmed stops ahead, and over Today, Home, the tree or the narrow Now overlay both only close it (docs/navigation.md, "Forks"). Door and search visits reopen a bare one-stop trail with the same root instead of minting a copy. Forks live in a `⑂ n` header control, so following never moves a row. Every trail list shows the last-visited time and counts stops without peeks. A search stop's filter chips rewrite the trail's root query (`Api::refine_search`).
+- *Threads.* A short elbow in the gutter from the followed row to the next pane's star; its alpha is the panes' painted opacity, and a spine carries it.
+- *Keys and focus.* Tab follows the visual order (top line left to right, Home, content, Now) and Shift+Tab retraces it; one focus ring per control; Space plays or pauses from the LCD and its slider; the activity popover takes Tab; Edit's text services are disabled over Flutter fields.
+- *Listening.* A rewind keeps a counted listen (`played_ms` only grows); History shows the playing track as playing; missing-file errors name the file and offer Check music folders wherever they appear; Missing files opens a table (`meret library missing`); Settings ▸ Folders counts missing and duplicate files and has Rescan; when nothing plays the core says why (no music, folders offline, played all) and Play something is disabled.
+- *Home.* Library counts are tracks, Pick up counts releases; History and Kept trails doors; the open trail is lit in the column; below 720 pt Today keeps the rail; an offline release says Offline with no Play.
 
 Covers come from the first present track's embedded front picture (or its first picture), then from its folder: `cover`, `folder`, `front`, `album`, `albumart`, then the first JPEG or PNG by name. Reading and rendering happen in parallel, outside the store writer; each chunk commits together. Original bytes determine the blake3 name in `art/`, with JPEGs at 64, 128, 256 and 512 px on the long edge, never upscaled. A release checked without a cover is not read again until a new or changed track is ingested; unchanged rescans write no art. The 64 px image feeds hue buckets in OKLab: the winning chroma-weighted colour is restrained to lightness 0.68–0.80 and chroma at most 0.14, gamut-mapped to sRGB, with wash and dim alpha 0x14 and 0x55. Grey or pale covers keep the instrument accent. Release pages and Now carry cover paths; Now also carries track and release ids and the light tokens. `meret library rescan` reports cover reads and new files, including the startup scan.
 
@@ -257,7 +265,8 @@ cargo run -p meret-cli --release -- library ls 'year:1990s' --limit 20
 cargo run -p meret-cli --release -- library front                 # the Front as text: idioms, formats, added lately, needs you
 cargo run -p meret-cli --release -- library search 'baldur gate'   # the query line's hits, timing every prefix as if typed
 cargo run -p meret-cli --release -- library walk 'civ' 0 1          # open hit 0, then that pane's thread 1; prints each pane and the trail
-cargo run -p meret-cli --release -- library walk 'civ' 0 search=iona '[' ']'   # a second trail, then back into the first and forward again
+cargo run -p meret-cli --release -- library walk 'civ' 0 '[' ']'          # back to the first stop and forward again; '[' at the first stop is an error
+cargo run -p meret-cli --release -- library missing                # tracks whose files have gone
 cargo run -p meret-cli --release -- library volume [0.4]          # read, or set, the output device's own volume
 cargo run -p meret-cli --release -- library play 'format:flac' --from 3 --count 5 --tail 6   # times every join
 cargo run -p meret-cli --release -- library history            # every listen, newest first, ✓ when it counted as a play
