@@ -148,12 +148,12 @@ void main() {
     await tester.pump();
     final slider = find.byKey(const ValueKey('now-volume'));
     await tester.ensureVisible(slider);
-    expect(tester.widget<Slider>(slider).value, 0.5);
+    expect(tester.widget<ThinSlider>(find.ancestor(of: slider, matching: find.byType(ThinSlider))).value, 0.5);
     await tester.drag(slider, const Offset(-70, 0));
     await tester.pump();
     final volume = await core.volume();
     expect(volume.scalar, lessThan(0.5));
-    expect(tester.widget<Slider>(slider).value, closeTo(volume.scalar!, 0.001));
+    expect(tester.widget<ThinSlider>(find.ancestor(of: slider, matching: find.byType(ThinSlider))).value, closeTo(volume.scalar!, 0.001));
   });
 
   testWidgets('Now’s volume follows a change made outside Meret, and shows mute', (tester) async {
@@ -165,9 +165,9 @@ void main() {
     Future<void> show(NowDto n) => tester.pumpWidget(MaterialApp(home: Scaffold(body: DeviceVolume(core: core, now: n))));
     final slider = find.byKey(const ValueKey('now-volume'));
     await show(now(0.25));
-    expect(tester.widget<Slider>(slider).value, 0.25);
+    expect(tester.widget<ThinSlider>(find.ancestor(of: slider, matching: find.byType(ThinSlider))).value, 0.25);
     await show(now(0.3125));
-    expect(tester.widget<Slider>(slider).value, 0.3125);
+    expect(tester.widget<ThinSlider>(find.ancestor(of: slider, matching: find.byType(ThinSlider))).value, 0.3125);
     expect(find.text('31%'), findsOneWidget);
     await show(now(0.3125, muted: true));
     expect(find.text('muted'), findsOneWidget);
@@ -177,7 +177,7 @@ void main() {
     await _surface(tester, _FixedVolumeCore());
     await _commandKey(tester, LogicalKeyboardKey.digit1);
     await tester.pump();
-    final slider = tester.widget<Slider>(find.byKey(const ValueKey('now-volume')));
+    final slider = tester.widget<ThinSlider>(find.ancestor(of: find.byKey(const ValueKey('now-volume')), matching: find.byType(ThinSlider)));
     expect(slider.onChanged, isNull);
     expect(find.text('Use the amplifier on this output.'), findsOneWidget);
   });
@@ -385,12 +385,12 @@ void main() {
       lessThan(tester.getTopLeft(_inToday(find.byKey(ValueKey('now-pick-${picks[2].releaseId}')))).dy));
   });
 
-  testWidgets('pick clicks play that release with its why, refresh, and never change Today or the trail', (tester) async {
+  testWidgets('pick Play buttons play that release with its why, refresh, and never change Today or the trail', (tester) async {
     final core = _RecordingCore();
     final picks = await core.picks(3);
     await _surface(tester, core);
     await tester.pump();
-    final first = _inToday(find.byKey(ValueKey('now-pick-${picks.first.releaseId}')));
+    final first = _inToday(find.byKey(ValueKey('now-pick-play-${picks.first.releaseId}')));
     await tester.ensureVisible(first);
     await tester.tap(first);
     await tester.pump();
@@ -399,7 +399,7 @@ void main() {
     expect(core.playSomethingCalls, 0);
     expect(tester.widget<Text>(_inToday(find.byKey(const ValueKey('now-why')))).data, 'Dormant · 2 years · 96 plays, then nothing for 2 years');
     core.pickLimits.clear();
-    final second = _inToday(find.byKey(ValueKey('now-pick-${picks[1].releaseId}')));
+    final second = _inToday(find.byKey(ValueKey('now-pick-play-${picks[1].releaseId}')));
     await tester.ensureVisible(second);
     await tester.tap(second);
     await tester.pump();
@@ -902,7 +902,7 @@ void main() {
     expect([...empty.people, ...empty.releases, ...empty.trackHits], isEmpty);
   });
 
-  testWidgets('command errors stay in the query hint until the text changes', (tester) async {
+  testWidgets('command errors stay visible in full until the text changes', (tester) async {
     await _surface(tester, FakeCore());
     await tester.enterText(find.byType(TextField), 'queue idiom:score');
     await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -910,7 +910,8 @@ void main() {
 
     final error = find.text("queue isn't built yet");
     expect(error, findsOneWidget);
-    expect(tester.widget<Text>(error).style?.color, Tok.ox);
+    expect(tester.widget<Text>(error).style?.color, Tok.warn);
+    expect(tester.widget<Text>(error).maxLines, isNull);
     expect(find.byType(TablePane), findsNothing);
     await tester.enterText(find.byType(TextField), 'play idiom:score');
     await tester.pump();

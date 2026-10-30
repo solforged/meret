@@ -33,8 +33,6 @@ class _KeepDialogState extends State<_KeepDialog> {
   Widget build(BuildContext context) => Shortcuts(
     shortcuts: const {
       SingleActivator(LogicalKeyboardKey.escape): _CancelKeep(),
-      SingleActivator(LogicalKeyboardKey.enter): _ConfirmKeep(),
-      SingleActivator(LogicalKeyboardKey.numpadEnter): _ConfirmKeep(),
     },
     child: Actions(
       actions: {
@@ -55,7 +53,12 @@ class _KeepDialogState extends State<_KeepDialog> {
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               const Text('Keep this trail', style: Tok.title),
               const SizedBox(height: 18),
-              TextField(
+              Shortcuts(
+                shortcuts: const {
+                  SingleActivator(LogicalKeyboardKey.enter, includeRepeats: false): _ConfirmKeep(),
+                  SingleActivator(LogicalKeyboardKey.numpadEnter, includeRepeats: false): _ConfirmKeep(),
+                },
+                child: TextField(
                 key: const ValueKey('trail-name'),
                 controller: _name,
                 autofocus: true,
@@ -69,6 +72,7 @@ class _KeepDialogState extends State<_KeepDialog> {
                 ),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _keep(),
+                ),
               ),
               const SizedBox(height: 22),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../core/when.dart';
+import '../theme/action_target.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'now_pane.dart';
@@ -53,33 +54,34 @@ class Lcd extends StatelessWidget {
             style: Tok.label.copyWith(color: Tok.muted, height: 1.2)),
         );
         final seek = SizedBox(height: 10, child: SeekBar(core: core, now: n, clock: clock, hairline: true, id: 'lcd'));
-        final pillFace = Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          clocked(() => loaded ? positionOf(clock.positionMs.round(), n?.lengthMs?.toInt()) : '–:––', key: const ValueKey('lcd-time')),
-          const SizedBox(height: 2),
-          seek,
-        ]);
         final times = box.maxWidth >= 300;
-        final fullFace = Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          // The title keeps the centre; the DR mark sits in the corner beside it.
-          Stack(alignment: Alignment.center, children: [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: dr != null && box.maxWidth >= 500 ? 40 : 0),
-              child: Text(nowTitle(n, nothingToPlay: nothingToPlay), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: Tok.body.copyWith(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.2)),
-            ),
-            if (dr != null && box.maxWidth >= 500)
-              Positioned(right: 0, child: Text('DR $dr', key: const ValueKey('lcd-dr'), style: Tok.label.copyWith(height: 1.2))),
-          ]),
-          Text(n?.subtitle ?? '', key: const ValueKey('lcd-subtitle'), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: Tok.label.copyWith(height: 1.2)),
-          const SizedBox(height: 1),
-          Row(children: [
-            if (times) ...[
+        // Keep the seek row and slider mounted while the LCD folds. Removing
+        // an active Material Slider portal can orphan native semantics nodes.
+        final face = Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (pill)
+            clocked(() => loaded ? positionOf(clock.positionMs.round(), n?.lengthMs?.toInt()) : '–:––', key: const ValueKey('lcd-time'))
+          else ...[
+            // The title keeps the centre; the DR mark sits beside it.
+            Stack(alignment: Alignment.center, children: [
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: dr != null && box.maxWidth >= 500 ? 40 : 0),
+                child: Text(nowTitle(n, nothingToPlay: nothingToPlay), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: Tok.body.copyWith(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.2)),
+              ),
+              if (dr != null && box.maxWidth >= 500)
+                Positioned(right: 0, child: Text('DR $dr', key: const ValueKey('lcd-dr'), style: Tok.label.copyWith(height: 1.2))),
+            ]),
+            Text(n?.subtitle ?? '', key: const ValueKey('lcd-subtitle'), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: Tok.label.copyWith(height: 1.2)),
+          ],
+          SizedBox(height: pill ? 2 : 1),
+          Row(key: const ValueKey('lcd-seek-row'), children: [
+            if (!pill && times) ...[
               clocked(() => loaded ? clockLength(clock.positionMs.round()) : '–:––', key: const ValueKey('lcd-time')),
               const SizedBox(width: 8),
             ],
-            Expanded(child: seek),
-            if (times) ...[
+            Expanded(key: const ValueKey('lcd-seek-slot'), child: seek),
+            if (!pill && times) ...[
               const SizedBox(width: 8),
               Text(n?.lengthMs == null ? '–:––' : clockLength(n!.lengthMs!.toInt()), key: const ValueKey('lcd-length'),
                 maxLines: 1, softWrap: false, style: Tok.label.copyWith(color: Tok.muted, height: 1.2)),
@@ -89,21 +91,13 @@ class Lcd extends StatelessWidget {
         return Row(children: [
           Transport(core: core, now: n, clock: clock, onToggle: onToggle, compact: true, id: 'lcd'),
           SizedBox(width: pill ? 6 : 10),
-          // The full face and the pill cross-fade as the slot slides, so
-          // nothing snaps between layouts halfway.
-          Expanded(child: AnimatedSwitcher(duration: kMotion, child: Tooltip(
-            key: ValueKey(pill),
-            message: onOpen == null ? '' : open ? 'Hide Now  N' : 'Show Now  N',
-            child: GestureDetector(
-              key: const ValueKey('lcd-title'),
-              behavior: HitTestBehavior.opaque,
-              onTap: onOpen,
-              child: MouseRegion(
-                cursor: onOpen == null ? MouseCursor.defer : SystemMouseCursors.click,
-                child: pill ? pillFace : fullFace,
-              ),
-            ),
-          ))),
+          Expanded(child: ActionTarget(
+            key: const ValueKey('lcd-title'),
+            onTap: onOpen,
+            semanticLabel: open ? 'Hide Now' : 'Show Now',
+            selected: open,
+            child: face,
+          )),
         ]);
       }),
     );

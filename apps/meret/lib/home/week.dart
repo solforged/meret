@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
@@ -5,15 +7,19 @@ import '../core/bridge.dart';
 import '../core/when.dart';
 import '../theme/tokens.dart';
 
-/// Listening in the last seven local calendar days, in Monday–Sunday order.
-List<int> listeningByWeekday(List<ListenDto> history, {DateTime? now}) {
+/// Listening in the last seven local calendar days, oldest first, up to now.
+List<int> listeningByDay(List<ListenDto> history, {DateTime? now}) {
   now ??= DateTime.now();
   final start = DateTime(now.year, now.month, now.day - 6);
-  final end = DateTime(now.year, now.month, now.day + 1);
+  final startDate = DateTime.utc(start.year, start.month, start.day);
   final days = List<int>.filled(7, 0);
   for (final listen in history) {
     final at = DateTime.fromMillisecondsSinceEpoch(listen.startedAtMs.toInt());
-    if (!at.isBefore(start) && at.isBefore(end)) days[at.weekday - 1] += listen.playedMs.toInt();
+    if (!at.isBefore(start) && at.isBefore(now)) {
+      // Compare calendar dates, so a daylight-saving transition cannot shift a bin.
+      final index = DateTime.utc(at.year, at.month, at.day).difference(startDate).inDays;
+      days[index] += listen.playedMs.toInt();
+    }
   }
   return days;
 }
@@ -21,12 +27,13 @@ List<int> listeningByWeekday(List<ListenDto> history, {DateTime? now}) {
 /// Today's week: what you listened to, played most and left alone. It
 /// is independent of the collection's scan snapshot.
 class TodayWeek extends StatefulWidget {
-  const TodayWeek({super.key, required this.core, required this.memoryVersion, this.libraryVersion, this.onRelease});
+  const TodayWeek({super.key, required this.core, required this.memoryVersion, this.libraryVersion, this.onRelease, this.now});
 
   final CoreBridge core;
   final int memoryVersion;
   final BigInt? libraryVersion;
   final Future<void> Function(PlatformInt64)? onRelease;
+  final DateTime Function()? now;
 
   @override
   State<TodayWeek> createState() => _TodayWeekState();
@@ -39,6 +46,8 @@ class _TodayWeekState extends State<TodayWeek> {
   int _generation = 0;
   bool _loaded = false;
   String? _error;
+  DateTime _windowEnd = DateTime.now();
+  Timer? _midnight;
 
   @override
   void initState() {
@@ -52,19 +61,30 @@ class _TodayWeekState extends State<TodayWeek> {
     if (old.core != widget.core || old.memoryVersion != widget.memoryVersion || old.libraryVersion != widget.libraryVersion) _load();
   }
 
+  @override
+  void dispose() {
+    _midnight?.cancel();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     final generation = ++_generation;
+    final now = widget.now?.call() ?? DateTime.now();
+    final start = DateTime(now.year, now.month, now.day - 6);
+    _midnight?.cancel();
+    _midnight = Timer(DateTime(now.year, now.month, now.day + 1).difference(now), _load);
     try {
       final memory = await Future.wait<Object>([
-        widget.core.history(500),
-        widget.core.mostPlayed(7, 3),
+        widget.core.listeningWindow(start.millisecondsSinceEpoch, now.millisecondsSinceEpoch),
         widget.core.dormant(3),
       ]);
       if (!mounted || generation != _generation) return;
       setState(() {
-        _history = memory[0] as List<ListenDto>;
-        _mostPlayed = memory[1] as List<PlayedDto>;
-        _dormant = memory[2] as List<DormantDto>;
+        final window = memory[0] as ListeningWindowDto;
+        _history = window.listens;
+        _mostPlayed = window.mostPlayed;
+        _dormant = memory[1] as List<DormantDto>;
+        _windowEnd = now;
         _loaded = true;
         _error = null;
       });
@@ -98,18 +118,20 @@ class _TodayWeekState extends State<TodayWeek> {
 
   Widget _log(List<int> days, DateTime now) {
     const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dates = List.generate(7, (i) => DateTime(now.year, now.month, now.day - 6 + i));
+    String day(int i) => '${names[dates[i].weekday - 1]} ${dates[i].month}/${dates[i].day}';
     final total = days.fold<int>(0, (sum, day) => sum + day);
     final peak = days.fold<int>(1, (max, day) => day > max ? day : max);
-    return _section('Your week', [
+    return _section('Last 7 days', [
       const SizedBox(height: 10),
       Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         for (var i = 0; i < days.length; i++)
           Expanded(child: Semantics(
-            label: '${names[i]}${now.weekday == i + 1 ? ' · today' : ''}',
+            label: '${day(i)}${i == 6 ? ' · today' : ''}',
             value: listeningTime(days[i]),
             excludeSemantics: true,
             child: Tooltip(
-              message: '${names[i]} · ${listeningTime(days[i])}',
+              message: '${day(i)}${i == 6 ? ' · today' : ''} · ${listeningTime(days[i])}',
               child: Column(children: [
                 SizedBox(height: 48, child: Align(
                   alignment: Alignment.bottomCenter,
@@ -117,19 +139,19 @@ class _TodayWeekState extends State<TodayWeek> {
                     key: ValueKey('today-log-${i + 1}'),
                     width: 18,
                     height: days[i] == 0 ? 1 : 48 * days[i] / peak,
-                    color: now.weekday == i + 1 ? Tok.gold : Tok.gold2,
+                    color: i == 6 ? Tok.gold : Tok.gold2,
                   ),
                 )),
                 const SizedBox(height: 6),
-                Text(names[i], style: Tok.label.copyWith(color: now.weekday == i + 1 ? Tok.gold : Tok.faint)),
+                Text(names[dates[i].weekday - 1], style: Tok.label.copyWith(color: i == 6 ? Tok.gold : Tok.faint)),
               ]),
             ),
           )),
       ]),
-    ], meta: 'this week · ${listeningTime(total)}');
+    ], meta: '${dates.first.month}/${dates.first.day}–${now.month}/${now.day} · ${listeningTime(total)}');
   }
 
-  Widget _played() => _section('Most played this week', [
+  Widget _played() => _section('Most played in the last 7 days', [
     for (final played in _mostPlayed)
       TodayDoor(
         key: ValueKey('today-most-played-${played.trackId}'),
@@ -164,19 +186,16 @@ class _TodayWeekState extends State<TodayWeek> {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final days = listeningByWeekday(_history, now: now);
-    final start = DateTime(now.year, now.month, now.day - 6).millisecondsSinceEpoch;
-    final end = DateTime(now.year, now.month, now.day + 1).millisecondsSinceEpoch;
-    final hasLog = _history.any((listen) => listen.startedAtMs.toInt() >= start && listen.startedAtMs.toInt() < end);
+    final now = _windowEnd;
+    final days = listeningByDay(_history, now: now);
     final sections = [
       if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
       if (_loaded) ...[
-        if (hasLog) _log(days, now),
+        if (_history.isNotEmpty) _log(days, now),
         if (_mostPlayed.isNotEmpty) _played(),
         if (_dormant.isNotEmpty) _dormantSection(now),
       ] else if (_error == null)
-        const Text('Reading your week…', style: Tok.label),
+        const Text('Reading the last 7 days…', style: Tok.label),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       for (var i = 0; i < sections.length; i++) ...[

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/bridge.dart';
+import '../theme/action_target.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 
@@ -38,10 +39,12 @@ class TrailChip extends StatelessWidget {
     final light = Light.of(context).accent;
     return Tooltip(
       message: '$name\n$meta',
-      child: InkWell(
+      excludeFromSemantics: true,
+      child: ActionTarget(
         key: const ValueKey('trail-chip'),
         onTap: onTree,
-        canRequestFocus: false,
+        semanticLabel: 'Show trail tree: $name. $meta',
+        excludeChildSemantics: true,
         child: Container(
           height: 26,
           padding: EdgeInsets.symmetric(horizontal: star ? 9 : 10),

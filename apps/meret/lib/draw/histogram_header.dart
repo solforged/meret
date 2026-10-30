@@ -8,14 +8,16 @@ import '../theme/tokens.dart';
 /// Dragging across it brushes a range; the caller turns that into a query
 /// clause such as `last:30d` and asks the core for new counts.
 class HistogramHeader extends StatefulWidget {
-  const HistogramHeader({super.key, required this.label, required this.bins, this.range, this.onBrush, this.height = 44});
+  const HistogramHeader({super.key, required this.label, required this.bins, this.range, this.selection, this.onBrush, this.onSetRange, this.height = 44});
 
   final String label;
 
   /// The span the bins cover, drawn at the right of the label: `1950–2026`.
   final String? range;
   final Uint32List bins;
+  final (double, double)? selection;
   final ValueChanged<(double, double)?>? onBrush;
+  final VoidCallback? onSetRange;
   final double height;
 
   @override
@@ -24,8 +26,14 @@ class HistogramHeader extends StatefulWidget {
 
 class _HistogramHeaderState extends State<HistogramHeader> {
   // The brush lives in a notifier so dragging repaints without rebuilding.
-  final _brush = ValueNotifier<(double, double)?>(null);
+  late final _brush = ValueNotifier<(double, double)?>(widget.selection);
   double? _start;
+
+  @override
+  void didUpdateWidget(HistogramHeader old) {
+    super.didUpdateWidget(old);
+    if (_start == null) _brush.value = widget.selection;
+  }
 
   @override
   void dispose() {
@@ -37,33 +45,47 @@ class _HistogramHeaderState extends State<HistogramHeader> {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, box) {
       double frac(Offset p) => (p.dx / box.maxWidth).clamp(0.0, 1.0);
-      return GestureDetector(
-        onHorizontalDragStart: (d) => _start = frac(d.localPosition),
+      return SizedBox(height: widget.height, child: Stack(children: [
+        Positioned.fill(child: GestureDetector(
+        onHorizontalDragStart: (d) {
+          _start = frac(d.localPosition);
+          _brush.value = (_start!, _start!);
+        },
         onHorizontalDragUpdate: (d) {
           final a = _start!, b = frac(d.localPosition);
           _brush.value = a < b ? (a, b) : (b, a);
         },
-        onHorizontalDragEnd: (_) => widget.onBrush?.call(_brush.value),
+        onHorizontalDragEnd: (_) {
+          _start = null;
+          widget.onBrush?.call(_brush.value);
+        },
+        onHorizontalDragCancel: () {
+          _start = null;
+          _brush.value = widget.selection;
+        },
         onDoubleTap: () {
           _brush.value = null;
           widget.onBrush?.call(null);
         },
-        child: SizedBox(
-          height: widget.height,
-          child: CustomPaint(
-            painter: _HistogramPainter(widget.bins, _brush),
-            child: Align(
+        child: CustomPaint(painter: _HistogramPainter(widget.bins, _brush)),
+        )),
+        Align(
               alignment: Alignment.topLeft,
               child: Row(children: [
-                Flexible(child: Text(widget.label.toUpperCase(), style: Tok.label, maxLines: 1, overflow: TextOverflow.clip)),
+                Flexible(child: widget.onSetRange == null
+                    ? Text(widget.label.toUpperCase(), style: Tok.label, maxLines: 1, overflow: TextOverflow.clip)
+                    : Tooltip(message: 'Set ${widget.label.toLowerCase()} filter', child: TextButton(
+                        onPressed: widget.onSetRange,
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap, alignment: Alignment.centerLeft),
+                        child: Text(widget.label.toUpperCase(), style: Tok.label, maxLines: 1, overflow: TextOverflow.clip),
+                      ))),
                 const Spacer(),
                 // A narrow header keeps its label and drops the span.
                 if (widget.range case final range? when box.maxWidth >= 140) Text(range, style: Tok.label.copyWith(color: Tok.faint)),
               ]),
-            ),
-          ),
         ),
-      );
+      ]));
     });
   }
 }

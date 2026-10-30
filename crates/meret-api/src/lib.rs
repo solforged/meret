@@ -203,6 +203,10 @@ impl Api {
         self.core.queue().into_iter().map(|i| (i.token, i.uri)).collect()
     }
 
+    pub fn jump_to_queued(&self, token: u64) -> Result<(), String> {
+        self.core.jump_to_queued(token).map_err(|e| e.to_string())
+    }
+
     /// Now's Up next: the queue after the playing item, up to `limit` rows.
     /// A row says why only when that differs from what's playing: a Play
     /// something queue carries its why on every item, and Now already says it.
@@ -210,17 +214,18 @@ impl Api {
         let (items, remaining) = self.core.up_next(limit as usize);
         let playing_why = self.now().why;
         let ids: Vec<_> = items.iter().filter_map(|i| i.track).collect();
-        let mut rows: std::collections::HashMap<_, _> =
+        let rows: std::collections::HashMap<_, _> =
             self.core.store.track_rows(&ids).map_err(|e| e.to_string())?.into_iter().map(|r| (r.track, r)).collect();
         let items = items
             .into_iter()
             .map(|mut item| {
                 if item.why == playing_why { item.why = None; }
-                match item.track.and_then(|t| rows.remove(&t)) {
+                match item.track.and_then(|t| rows.get(&t)) {
                     Some(r) => UpNextItemDto {
                         token: item.token,
                         track_id: Some(r.track.0),
-                        title: r.title,
+                        release_id: Some(r.release.0),
+                        title: r.title.clone(),
                         subtitle: [r.artist.as_deref(), Some(r.album.as_str())].into_iter().flatten().collect::<Vec<_>>().join(" · "),
                         length_ms: r.length_ms,
                         why: item.why,
@@ -230,6 +235,7 @@ impl Api {
                         UpNextItemDto {
                             token: item.token,
                             track_id: item.track.map(|t| t.0),
+                            release_id: item.release.map(|r| r.0),
                             title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
                             subtitle: path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
                             length_ms: None,
@@ -577,6 +583,17 @@ impl Api {
         let since_ms = now_ms() - i64::from(days) * 86_400_000;
         self.core.store.most_played(since_ms, limit).map(|rows| rows.into_iter().map(|row| PlayedDto::from_played(row, &art_dir)).collect())
             .map_err(|e| e.to_string())
+    }
+
+    /// The full listening log and top three tracks in [start, end). The UI
+    /// supplies local calendar boundaries so both sections describe one period.
+    pub fn listening_window(&self, start_ms: i64, end_ms: i64) -> Result<ListeningWindowDto, String> {
+        let art_dir = self.core.art_dir();
+        let listens = self.core.store.history_between(start_ms, end_ms).map_err(|e| e.to_string())?
+            .into_iter().map(|row| ListenDto::from_listen(row, &art_dir)).collect();
+        let most_played = self.core.store.most_played_between(start_ms, end_ms, 3).map_err(|e| e.to_string())?
+            .into_iter().map(|row| PlayedDto::from_played(row, &art_dir)).collect();
+        Ok(ListeningWindowDto { listens, most_played })
     }
 
     /// Releases with five counted plays, then none in the last 180 days.

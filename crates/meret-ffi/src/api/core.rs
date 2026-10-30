@@ -61,6 +61,10 @@ pub fn up_next(limit: u32) -> Result<UpNextDto, String> {
     api()?.up_next(limit)
 }
 
+pub fn jump_to_queued(token: u64) -> Result<(), String> {
+    api()?.jump_to_queued(token)
+}
+
 /// Adds a music folder and scans it in the background; returns the root id.
 pub fn add_root(path: String) -> Result<i64, String> {
     api()?.add_root(&path)
@@ -274,6 +278,10 @@ pub fn history(limit: u32) -> Result<Vec<ListenDto>, String> {
 
 pub fn most_played(days: u32, limit: u32) -> Result<Vec<PlayedDto>, String> {
     api()?.most_played(days, limit)
+}
+
+pub fn listening_window(start_ms: i64, end_ms: i64) -> Result<ListeningWindowDto, String> {
+    api()?.listening_window(start_ms, end_ms)
 }
 
 pub fn dormant(limit: u32) -> Result<Vec<DormantDto>, String> {

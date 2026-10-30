@@ -7,9 +7,10 @@ import 'package:flutter/services.dart';
 import '../core/bridge.dart';
 import '../panes/add_folder.dart';
 import '../shell/window_chrome.dart';
+import '../theme/action_target.dart';
 import '../theme/tokens.dart';
 
-enum SettingsSection { folders, sources, playback, lookups, files, history, devices, light }
+enum SettingsSection { folders, sources, playback, lookups, light, upcoming }
 
 /// Keeps Settings over the surface, outside the music trail.
 class SettingsScope extends StatefulWidget {
@@ -277,18 +278,20 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     height: 52,
     padding: const EdgeInsets.symmetric(horizontal: 12),
     decoration: const BoxDecoration(color: Color(0xFF0E1529), border: Border(bottom: BorderSide(color: Tok.line))),
-    child: Row(children: [
+    child: LayoutBuilder(builder: (context, constraints) => Row(children: [
       IconButton(
         onPressed: () => Navigator.of(context).pop(),
         tooltip: 'Close Settings',
         icon: Container(width: 11, height: 11, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFBC5B5A)), child: const Icon(Icons.close, size: 9, color: Color(0xFF5C2222))),
       ),
-      const SizedBox(width: 42),
-      Text('Meret settings', style: Tok.body.copyWith(fontWeight: FontWeight.w600, fontSize: 14)),
-      const Spacer(),
-      Text(_label(_section), style: Tok.label),
-      const SizedBox(width: 6),
-    ]),
+      SizedBox(width: constraints.maxWidth < 520 ? 8 : 42),
+      Expanded(child: Text('Meret settings', maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: Tok.body.copyWith(fontWeight: FontWeight.w600, fontSize: 14))),
+      if (constraints.maxWidth >= 520) ...[
+        Text(_label(_section), style: Tok.label),
+        const SizedBox(width: 6),
+      ],
+    ])),
   );
 
   Widget _navigation() => ColoredBox(
@@ -299,11 +302,12 @@ class _SettingsWindowState extends State<_SettingsWindow> {
         for (final section in SettingsSection.values)
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Semantics(
+            child: ActionTarget(
+              key: ValueKey('settings-nav-${section.name}'),
               selected: section == _section,
-              child: InkWell(
-                key: ValueKey('settings-nav-${section.name}'),
-                onTap: () => setState(() => _section = section),
+              semanticLabel: _label(section),
+              excludeChildSemantics: true,
+              onTap: () => setState(() => _section = section),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   decoration: BoxDecoration(
@@ -313,10 +317,9 @@ class _SettingsWindowState extends State<_SettingsWindow> {
                   child: Row(children: [
                     Icon(_icon(section), size: 17, color: section == _section ? Tok.ink : Tok.muted),
                     const SizedBox(width: 10),
-                    Text(_label(section), style: Tok.body.copyWith(fontSize: 14, color: section == _section ? Tok.ink : Tok.muted)),
+                    Expanded(child: Text(_label(section), style: Tok.body.copyWith(fontSize: 14, color: section == _section ? Tok.ink : Tok.muted))),
                   ]),
                 ),
-              ),
             ),
           ),
       ]),
@@ -328,10 +331,8 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     SettingsSection.sources => _sources(),
     SettingsSection.playback => _playback(),
     SettingsSection.lookups => _lookups(),
-    SettingsSection.files => _files(),
-    SettingsSection.history => _history(),
-    SettingsSection.devices => _pairedDevices(),
     SettingsSection.light => _light(),
+    SettingsSection.upcoming => _upcoming(),
   };
 
   Widget _folders() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -386,12 +387,14 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     final entries = <(String, String, String, String)>[
       ('local', 'This Mac', _status == null ? 'Reading library…' : '${_count(_status!.tracks)} tracks', 'Your music folders'),
       ('musicbrainz', 'MusicBrainz', musicbrainz == null ? 'Reading…' : _capital(musicbrainz.detail), 'Recordings and credits'),
-      ..._futureSources.map((source) => (source.$1, source.$2, 'Coming later', source.$3)),
     ];
     final selected = entries.firstWhere((entry) => entry.$1 == _source);
     final list = Column(children: [
       for (final entry in entries)
-        InkWell(
+        ActionTarget(
+          semanticLabel: '${entry.$2}, ${entry.$3}',
+          selected: entry.$1 == _source,
+          excludeChildSemantics: true,
           onTap: () => setState(() => _source = entry.$1),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -430,6 +433,8 @@ class _SettingsWindowState extends State<_SettingsWindow> {
       LayoutBuilder(builder: (context, constraints) => constraints.maxWidth >= 650
         ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: 260, child: list), const SizedBox(width: 24), Expanded(child: detail)])
         : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [list, const SizedBox(height: 22), detail])),
+      const SizedBox(height: 16),
+      Align(alignment: Alignment.centerLeft, child: _button('Planned integrations', () => setState(() => _section = SettingsSection.upcoming))),
     ]);
   }
 
@@ -526,23 +531,20 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     _futureRow('AcoustID', 'Fingerprints made on this Mac'),
   ]);
 
-  Widget _files() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _heading('Files'),
-    _futureRow('Write tags on save'),
-    _futureRow('Undo every batch'),
-    _futureRow('See moves first'),
-  ]);
-
-  Widget _history() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _heading('History'),
-    _futureRow('Apple Music', 'Plays, ratings, playlists'),
-    _futureRow('Last.fm', 'Every listen'),
-    _futureRow('ListenBrainz', 'Every listen'),
-  ]);
-
-  Widget _pairedDevices() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    _heading('Devices'),
-    _futureRow('Pair a phone'),
+  Widget _upcoming() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    _heading('Upcoming'),
+    const Text('These features are planned and are not available yet.', style: Tok.body),
+    const SizedBox(height: 20),
+    _futureRow('File editing', 'Tag writing, move previews and undo'),
+    _futureRow('Import listening history', 'Apple Music, Last.fm and ListenBrainz'),
+    const Padding(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: Text('To see listening in Meret, choose Controls → History or press H outside a text field.', style: Tok.body),
+    ),
+    _futureRow('Paired devices', 'Pair a phone'),
+    const SizedBox(height: 20),
+    const Text('Planned integrations', style: Tok.title),
+    for (final source in _futureSources) _futureRow(source.$2, source.$3),
   ]);
 
   Widget _light() {
@@ -558,12 +560,12 @@ class _SettingsWindowState extends State<_SettingsWindow> {
           (LightLevelDto.accentAndWash, 'Accent and wash', 'Plus a faint wash behind the music'),
         ]) SizedBox(
           width: constraints.maxWidth >= 550 ? (constraints.maxWidth - 24) / 3 : constraints.maxWidth,
-          child: Semantics(
+          child: ActionTarget(
+            key: ValueKey('settings-light-${level.name}'),
             selected: _settings!.light == level,
-            button: true,
-            child: InkWell(
-              key: ValueKey('settings-light-${level.name}'),
-              onTap: _saving ? null : () => _save(light: level),
+            semanticLabel: '$title, $description',
+            excludeChildSemantics: true,
+            onTap: _saving ? null : () => _save(light: level),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(color: Tok.sky, border: Border.all(color: _settings!.light == level ? Tok.gold2 : Tok.rule)),
@@ -586,7 +588,6 @@ class _SettingsWindowState extends State<_SettingsWindow> {
                   Text(_settings!.light == level ? 'Selected' : ' ', style: Tok.label.copyWith(color: Tok.gold)),
                 ]),
               ),
-            ),
           ),
         ),
       ])),
@@ -658,10 +659,8 @@ String _label(SettingsSection section) => switch (section) {
   SettingsSection.sources => 'Sources',
   SettingsSection.playback => 'Playback',
   SettingsSection.lookups => 'Lookups',
-  SettingsSection.files => 'Files',
-  SettingsSection.history => 'History',
-  SettingsSection.devices => 'Devices',
   SettingsSection.light => 'Light',
+  SettingsSection.upcoming => 'Upcoming',
 };
 
 IconData _icon(SettingsSection section) => switch (section) {
@@ -669,10 +668,8 @@ IconData _icon(SettingsSection section) => switch (section) {
   SettingsSection.sources => Icons.hub_outlined,
   SettingsSection.playback => Icons.play_arrow_outlined,
   SettingsSection.lookups => Icons.manage_search_outlined,
-  SettingsSection.files => Icons.description_outlined,
-  SettingsSection.history => Icons.history,
-  SettingsSection.devices => Icons.phone_iphone_outlined,
   SettingsSection.light => Icons.wb_sunny_outlined,
+  SettingsSection.upcoming => Icons.upcoming_outlined,
 };
 
 const _futureSources = [

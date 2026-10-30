@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../core/bridge.dart';
 import '../core/when.dart';
+import '../theme/action_target.dart';
 import '../theme/tokens.dart';
+import 'trail_browser.dart';
 
 String _n(BigInt number) => number.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
 
-enum DoorKind { today, pickUp, playSomething, query, trail, later }
+enum DoorKind { today, pickUp, playSomething, query, trail, allTrails, later }
 
 /// One entry in Home: a door opens a pane, plays, or shows Today. Plumbing
 /// never gets one (navigation.md, "Home").
 class HomeDoor {
-  const HomeDoor({required this.id, required this.glyph, required this.label, required this.kind, this.count, this.query, this.uid, this.amber = false, this.keys});
+  const HomeDoor({required this.id, required this.glyph, required this.label, required this.kind, this.count, this.query, this.uid, this.amber = false, this.keys, this.detail, this.subtitle});
   final String id;
   final String glyph;
   final String label;
@@ -27,6 +29,8 @@ class HomeDoor {
 
   /// The key beside the label: `⌘3`, `⇧␣`.
   final String? keys;
+  final String? detail;
+  final String? subtitle;
 }
 
 /// What Home shows, read from the core; shared by the column, the rail
@@ -97,7 +101,11 @@ class HomeDoors extends ChangeNotifier {
       ('Trails', [
         for (final trail in _trails)
           HomeDoor(id: 'trail-${trail.uid}', glyph: trail.kept ? '◆' : '⑂', label: trail.name ?? trail.title, kind: DoorKind.trail, uid: trail.uid,
-            count: dayWord(trail.whenMs.toInt(), now: now) == 'today' ? clockTime(trail.whenMs.toInt()) : dayWord(trail.whenMs.toInt(), now: now)),
+            count: '${dayWord(trail.whenMs.toInt(), now: now)}\n${clockTime(trail.whenMs.toInt())}',
+            detail: [if (trail.name != null) trail.title, trailSummaryContext(trail)].join('\n'),
+            subtitle: trail.title.contains(' → ') ? '→ ${trail.title.split(' → ').last}'
+                : '${trail.stops} ${trail.stops == 1 ? 'stop' : 'stops'}'),
+        const HomeDoor(id: 'all-trails', glyph: '≡', label: 'All trails', kind: DoorKind.allTrails),
       ]),
       ('Out there', [
         for (final (i, need) in needs.indexed)
@@ -155,7 +163,7 @@ class Home extends StatelessWidget {
             child: Text(title.toUpperCase(), style: Tok.label.copyWith(fontSize: 9.5, color: Tok.dim)),
           ),
           for (final door in entries) _Row(door: door, lit: _lit(door), onTap: door.kind == DoorKind.later ? null : () => onDoor(door)),
-          if (title == 'Trails' && entries.isEmpty)
+          if (title == 'Trails' && entries.every((door) => door.kind == DoorKind.allTrails))
             const Padding(padding: EdgeInsets.fromLTRB(10, 3, 10, 3), child: Text('No trails yet', style: Tok.label)),
         ],
       ],
@@ -201,22 +209,33 @@ class Home extends StatelessWidget {
   );
 }
 
-class _Row extends StatelessWidget {
+class _Row extends StatefulWidget {
   const _Row({required this.door, required this.lit, this.onTap});
   final HomeDoor door;
   final bool lit;
   final VoidCallback? onTap;
 
   @override
+  State<_Row> createState() => _RowState();
+}
+
+class _RowState extends State<_Row> {
+  final _tooltip = GlobalKey<TooltipState>();
+  HomeDoor get door => widget.door;
+  bool get lit => widget.lit;
+
+  @override
   Widget build(BuildContext context) {
     final later = door.kind == DoorKind.later && !door.amber;
     final colour = later ? Tok.dim : door.amber ? Tok.warn : lit ? Tok.ink : Tok.muted;
-    final row = InkWell(
+    final row = ActionTarget(
       key: ValueKey('home-${door.id}'),
-      onTap: onTap,
-      canRequestFocus: false,
+      onTap: widget.onTap,
+      semanticLabel: [door.label, ?door.detail, if (door.detail == null) ?door.count].join(' · '),
+      selected: lit,
+      excludeChildSemantics: true,
       child: Container(
-        height: 26,
+        height: door.subtitle == null ? 26 : 42,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: lit ? Tok.panel2 : null,
@@ -225,7 +244,10 @@ class _Row extends StatelessWidget {
         child: Row(children: [
           SizedBox(width: 18, child: Text(door.glyph, style: Tok.body.copyWith(fontSize: 12.5, color: lit ? Tok.gold : door.amber ? Tok.warn : Tok.faint))),
           const SizedBox(width: 6),
-          Expanded(child: Text(door.label, style: Tok.body.copyWith(fontSize: 13, color: colour), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(door.label, style: Tok.body.copyWith(fontSize: 13, color: colour), maxLines: 1, overflow: TextOverflow.ellipsis),
+            if (door.subtitle != null) Text(door.subtitle!, style: Tok.label.copyWith(fontSize: 10, color: Tok.faint), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ])),
           if (door.count != null || door.keys != null) const SizedBox(width: 8),
           if (door.count != null)
             Text(door.count!, style: Tok.label.copyWith(color: door.amber ? Tok.warn : Tok.faint))
@@ -234,7 +256,15 @@ class _Row extends StatelessWidget {
         ]),
       ),
     );
-    return later ? Tooltip(message: 'Coming later', child: row) : row;
+    return Focus(canRequestFocus: false, onFocusChange: (focused) {
+      if (focused) {
+        _tooltip.currentState?.ensureTooltipVisible();
+      } else {
+        Tooltip.dismissAllToolTips();
+      }
+    }, child: Tooltip(key: _tooltip,
+      message: later ? '${door.label} · Coming later' : [door.label, ?door.detail, if (door.detail == null) ?door.count, ?door.keys].join('\n'),
+      excludeFromSemantics: true, child: row));
   }
 }
 
@@ -247,11 +277,14 @@ class _Glyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: [door.label, ?door.count, ?door.keys].join(' · '),
+    excludeFromSemantics: true,
     waitDuration: const Duration(milliseconds: 300),
-    child: InkWell(
+    child: ActionTarget(
       key: ValueKey('rail-${door.id}'),
       onTap: onTap,
-      canRequestFocus: false,
+      semanticLabel: [door.label, ?door.count].join(' · '),
+      selected: lit,
+      excludeChildSemantics: true,
       child: Container(
         height: 34,
         decoration: BoxDecoration(

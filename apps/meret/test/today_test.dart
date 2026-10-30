@@ -16,10 +16,10 @@ void main() {
       core.calls.clear();
       await _today(tester, core);
 
-      for (final heading in ['Or play something', 'Pick up', 'Added lately', 'Your week', 'Most played this week', 'Dormant']) {
+      for (final heading in ['Or play something', 'Pick up', 'Added lately', 'Last 7 days', 'Most played in the last 7 days', 'Dormant']) {
         expect(find.text(heading), findsOneWidget, reason: heading);
       }
-      expect(find.text('14 plays'), findsOneWidget);
+      expect(find.text('1 play'), findsNWidgets(3));
       expect(find.text('Sunday at the Village Vanguard'), findsOneWidget);
       for (final resume in resumes) {
         final row = find.byKey(ValueKey('now-pick-up-${resume.releaseId}'));
@@ -37,7 +37,7 @@ void main() {
         expect(recent.dx, listen.dx);
         expect(recent.dy, greaterThan(listen.dy));
       }
-      expect(core.calls, containsAll(['resume:6', 'history:500', 'most:7:3', 'dormant:3']));
+      expect(core.calls, containsAll(['resume:6', 'window', 'dormant:3']));
       expect(tester.takeException(), isNull);
     });
   }
@@ -70,12 +70,12 @@ void main() {
     final core = _MemoryCore()..blankMemory = true;
     await _today(tester, core);
     expect(find.text('Or play something'), findsOneWidget);
-    for (final heading in ['Pick up', 'Your week', 'Most played this week', 'Dormant']) {
+    for (final heading in ['Pick up', 'Last 7 days', 'Most played in the last 7 days', 'Dormant']) {
       expect(find.text(heading), findsNothing);
     }
   });
 
-  test('Your week sums played time by weekday over seven local calendar days', () {
+  test('last seven dates sum all played time chronologically, with exact bounds', () {
     final now = DateTime(2026, 10, 17, 12);
     final history = [
       _listen(DateTime(2026, 10, 11), 60000),
@@ -85,16 +85,18 @@ void main() {
       _listen(DateTime(2026, 10, 14), 180000),
       _listen(DateTime(2026, 10, 15), 240000),
       _listen(DateTime(2026, 10, 16), 300000),
-      _listen(DateTime(2026, 10, 17, 23, 59), 360000),
+      _listen(DateTime(2026, 10, 17, 11, 59), 360000),
+      _listen(now, 999999),
+      _listen(DateTime(2026, 10, 17, 23, 59), 999999),
       _listen(DateTime(2026, 10, 10, 23, 59), 999999),
       _listen(DateTime(2026, 10, 18), 999999),
     ];
-    expect(listeningByWeekday(history, now: now), [150000, 120000, 180000, 240000, 300000, 360000, 60000]);
+    expect(listeningByDay(history, now: now), [60000, 150000, 120000, 180000, 240000, 300000, 360000]);
   });
 
-  testWidgets('Your week draws Monday–Sunday sums, total and today', (tester) async {
+  testWidgets('last seven dates end with today and expose dated labels', (tester) async {
     _size(tester, 1600);
-    final now = DateTime.now();
+    final now = DateTime(2026, 10, 14, 12);
     final midnight = DateTime(now.year, now.month, now.day);
     final yesterday = DateTime(now.year, now.month, now.day - 1);
     final core = _MemoryCore()..listens = [
@@ -102,17 +104,35 @@ void main() {
       _listen(midnight, 120000, counted: false),
       _listen(yesterday, 60000),
     ];
-    await _today(tester, core);
-    expect(find.text('this week · 4 min'), findsOneWidget);
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    for (final day in weekdays) {
-      expect(find.text(day), findsOneWidget);
-    }
-    final today = tester.widget<Container>(find.byKey(ValueKey('today-log-${now.weekday}')));
-    final previous = tester.widget<Container>(find.byKey(ValueKey('today-log-${yesterday.weekday}')));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TodayWeek(core: core, memoryVersion: 0, now: () => now))));
+    await tester.pumpAndSettle();
+    expect(find.text('10/8–10/14 · 4 min'), findsOneWidget);
+    const weekdays = ['Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed'];
+    final xs = weekdays.map((day) => tester.getTopLeft(find.text(day)).dx).toList();
+    expect(xs, orderedEquals([...xs]..sort()));
+    final today = tester.widget<Container>(find.byKey(const ValueKey('today-log-7')));
+    final previous = tester.widget<Container>(find.byKey(const ValueKey('today-log-6')));
     expect(today.constraints!.maxHeight, 48);
     expect(previous.constraints!.maxHeight, 16);
-    expect(find.byWidgetPredicate((widget) => widget is Semantics && widget.properties.label == '${weekdays[now.weekday - 1]} · today' && widget.properties.value == '3 min'), findsOneWidget);
+    expect(find.byWidgetPredicate((widget) => widget is Semantics && widget.properties.label == 'Wed 10/14 · today' && widget.properties.value == '3 min'), findsOneWidget);
+    expect(core.windows.single, (DateTime(2026, 10, 8).millisecondsSinceEpoch, now.millisecondsSinceEpoch));
+  });
+
+  testWidgets('an open listening window rolls over at local midnight', (tester) async {
+    _size(tester, 1600);
+    var now = DateTime(2026, 10, 14, 23, 59, 59);
+    final core = _MemoryCore()..listens = [
+      _listen(DateTime(2026, 10, 8, 12), 60000),
+      _listen(DateTime(2026, 10, 14, 12), 120000),
+    ];
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TodayWeek(core: core, memoryVersion: 0, now: () => now))));
+    await tester.pumpAndSettle();
+    expect(find.text('10/8–10/14 · 3 min'), findsOneWidget);
+    now = DateTime(2026, 10, 15);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('10/9–10/15 · 2 min'), findsOneWidget);
+    expect(core.windows.last, (DateTime(2026, 10, 9).millisecondsSinceEpoch, now.millisecondsSinceEpoch));
   });
 
   testWidgets('memory revisions reload the week without rereading the Front', (tester) async {
@@ -126,7 +146,7 @@ void main() {
     core.calls.clear();
     await _today(tester, core, memoryVersion: 1);
     expect(core.frontCalls, 1);
-    expect(core.calls, ['history:500', 'most:7:3', 'dormant:3']);
+    expect(core.calls, ['window', 'history:4294967295', 'dormant:3']);
     await _today(tester, core, memoryVersion: 1, libraryVersion: BigInt.two);
     expect(core.frontCalls, 2);
   });
@@ -135,16 +155,16 @@ void main() {
     _size(tester, 1600);
     final core = _DelayedCore();
     await _today(tester, core, settle: false);
-    expect(find.text('Reading your week…'), findsOneWidget);
+    expect(find.text('Reading the last 7 days…'), findsOneWidget);
     await _today(tester, core, memoryVersion: 1, settle: false);
     final day = DateTime.now();
     core.requests[1].complete([_listen(DateTime(day.year, day.month, day.day), 120000)]);
     await tester.pumpAndSettle();
-    expect(find.text('this week · 2 min'), findsOneWidget);
+    expect(find.textContaining(' · 2 min'), findsOneWidget);
     core.requests[0].complete([_listen(DateTime(day.year, day.month, day.day), 600000)]);
     await tester.pumpAndSettle();
-    expect(find.text('this week · 2 min'), findsOneWidget);
-    expect(find.text('this week · 10 min'), findsNothing);
+    expect(find.textContaining(' · 2 min'), findsOneWidget);
+    expect(find.textContaining(' · 10 min'), findsNothing);
   });
 }
 
@@ -182,6 +202,7 @@ ListenDto _listen(DateTime at, int playedMs, {bool counted = true}) => ListenDto
 
 class _MemoryCore extends FakeCore {
   final calls = <String>[];
+  final windows = <(int, int)>[];
   final pickedUp = <PlatformInt64>[];
   final openedTrails = <String>[];
   final startedTargets = <TargetDto>[];
@@ -219,6 +240,13 @@ class _MemoryCore extends FakeCore {
   Future<List<PlayedDto>> mostPlayed(int days, int limit) {
     calls.add('most:$days:$limit');
     return blankMemory ? Future.value([]) : super.mostPlayed(days, limit);
+  }
+
+  @override
+  Future<ListeningWindowDto> listeningWindow(int startMs, int endMs) {
+    calls.add('window');
+    windows.add((startMs, endMs));
+    return super.listeningWindow(startMs, endMs);
   }
 
   @override

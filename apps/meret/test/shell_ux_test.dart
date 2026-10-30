@@ -504,6 +504,31 @@ void main() {
     expect(tester.getSize(find.byKey(const ValueKey('lcd'))).width, greaterThan(560), reason: 'wide, the LCD takes the room the chip leaves');
   });
 
+  testWidgets('narrow Now overlays Today and dismisses on navigation', (tester) async {
+    final core = FakeCore();
+    await _surface(tester, core, width: 600, height: 900);
+    for (final width in [600.0, 720.0, 865.0]) {
+      tester.view.physicalSize = Size(width, 900);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('now-scrim')), findsOneWidget);
+      expect(tester.getSize(find.byType(NowPane)).width, 360);
+      expect(tester.takeException(), isNull, reason: 'Today retains its width at $width');
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('now-scrim')), findsNothing);
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.pumpAndSettle();
+    final open = find.descendant(of: find.byType(NowPane), matching: find.text('Go to release'));
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('now-scrim')), findsNothing);
+    expect(find.byType(ReleasePane), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('KEYS-K5 the LCD play button says pause while playing', (tester) async {
     final core = FakeCore();
     await _surface(tester, core);
@@ -545,11 +570,11 @@ void main() {
       await tester.pump();
     }
     expect(focus.hasFocus, isFalse);
-    expect(tester.widget<TextField>(field).controller!.text, '');
+    expect(tester.widget<TextField>(field).controller!.text, 'xen', reason: 'Escape preserves the search draft');
     expect(find.text('Search'), findsOneWidget);
   });
 
-  testWidgets('KEYS-K8 Tab and Shift-Tab move focus nowhere on the surface', (tester) async {
+  testWidgets('KEYS-K8 Tab and Shift-Tab traverse visible controls while shell shortcuts remain available', (tester) async {
     final core = _TransportCore();
     await _seedTrail(core, stops: 2);
     await _surface(tester, core);
@@ -557,15 +582,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'surface');
     for (final page in ['front-over-trail', 'panes']) {
-      for (var i = 0; i < 4; i++) {
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pump();
-        expect(FocusManager.instance.primaryFocus?.debugLabel, 'surface', reason: 'Tab $i over $page');
-        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-        await tester.pump();
-        expect(FocusManager.instance.primaryFocus?.debugLabel, 'surface', reason: 'Shift-Tab $i over $page');
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      final first = FocusManager.instance.primaryFocus;
+      expect(first?.debugLabel, isNot('surface'), reason: 'Tab reaches a control over $page');
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus, isNot(same(first)));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus, same(first), reason: 'Shift-Tab returns to the prior control over $page');
+      if (tester.widget<QueryLine>(find.byType(QueryLine)).focus.hasFocus) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
       }
       await _key(tester, LogicalKeyboardKey.bracketRight);
       await tester.pumpAndSettle();

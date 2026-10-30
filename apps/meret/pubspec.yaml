@@ -66,6 +66,19 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/fonts/instrumentsans-OFL.txt
+    - assets/fonts/geistmono-OFL.txt
+
+  fonts:
+    - family: Instrument Sans
+      fonts:
+        - asset: assets/fonts/InstrumentSans[wdth,wght].ttf
+        - asset: assets/fonts/InstrumentSans-Italic[wdth,wght].ttf
+          style: italic
+    - family: Geist Mono
+      fonts:
+        - asset: assets/fonts/GeistMono[wght].ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

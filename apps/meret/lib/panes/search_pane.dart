@@ -29,6 +29,7 @@ class _SearchPaneState extends State<SearchPane> {
   SearchDto? _search;
   String? _error;
   int _generation = 0;
+  bool _loading = false;
 
   @override
   void initState() {
@@ -51,20 +52,33 @@ class _SearchPaneState extends State<SearchPane> {
 
   Future<void> _load() async {
     final generation = ++_generation;
+    setState(() {
+      _loading = true;
+      _search = null;
+      _error = null;
+    });
     try {
-      final search = await widget.core.search(widget.query);
+      final search = await widget.core.search(_query);
       if (!mounted || generation != _generation) return;
       setState(() {
         _search = search;
         _error = null;
+        _loading = false;
       });
     } catch (error) {
-      if (mounted && generation == _generation) setState(() => _error = error.toString());
+      if (mounted && generation == _generation) {
+        setState(() {
+          _error = error.toString();
+          _loading = false;
+        });
+      }
     }
   }
 
   void _filter(String query) {
+    if (query == _query) return;
     setState(() => _query = query);
+    _load();
     widget.onQuery?.call(query);
   }
 
@@ -103,7 +117,20 @@ class _SearchPaneState extends State<SearchPane> {
   Widget build(BuildContext context) {
     final search = _search;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Text('Results for: ${_query.isEmpty ? 'All tracks' : _query}',
+          key: const ValueKey('search-effective-query'), style: Tok.label)),
+        if (_query != widget.query) TextButton(
+          key: const ValueKey('search-reset-filters'),
+          onPressed: () => _filter(widget.query),
+          child: const Text('Reset'),
+        ),
+      ]),
+      if (_loading) Semantics(liveRegion: true, child: const Text('Updating matches…', style: Tok.label)),
+      if (_error != null) Row(children: [
+        Expanded(child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn))),
+        TextButton(onPressed: _load, child: const Text('Retry')),
+      ]),
       if (search != null && (search.people.isNotEmpty || search.releases.isNotEmpty)) ...[
         SingleChildScrollView(
           key: const ValueKey('search-hit-strip'),

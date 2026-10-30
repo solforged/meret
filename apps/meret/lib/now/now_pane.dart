@@ -10,6 +10,8 @@ import '../core/bridge.dart';
 import '../core/playhead.dart';
 import '../core/when.dart';
 import '../draw/body_painter.dart';
+import '../settings/settings_window.dart';
+import '../theme/action_target.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'zones.dart';
@@ -52,11 +54,25 @@ class NowPane extends StatelessWidget {
         const SizedBox(height: 8),
         Text(nowTitle(n, nothingToPlay: nothingToPlay), style: Tok.title.copyWith(fontSize: 17), maxLines: 2, overflow: TextOverflow.ellipsis),
         Text(n?.subtitle ?? '', style: Tok.body.copyWith(color: Tok.muted, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (n?.releaseId != null && onRelease != null)
+          Align(alignment: Alignment.centerLeft, child: TextButton.icon(
+            key: const ValueKey('now-open-release'),
+            onPressed: () => onRelease!(n!.releaseId!),
+            icon: const Icon(Icons.arrow_outward, size: 14),
+            label: const Text('Go to release'),
+          )),
         if (n != null) NowFacts(now: n),
         _WhySlot(n?.why),
         if (n?.error case final error?) Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: Text(error, style: Tok.label.copyWith(color: Tok.warn)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SelectableText(error, style: Tok.label.copyWith(color: Tok.warn)),
+            TextButton(
+              key: const ValueKey('now-check-folders'),
+              onPressed: () => showSettings(context, section: SettingsSection.folders),
+              child: const Text('Check music folders'),
+            ),
+          ]),
         ),
         const SizedBox(height: 10),
         // The LCD above carries previous, play and next; the pane keeps a
@@ -80,10 +96,10 @@ class NowPane extends StatelessWidget {
             PlayOn(core: core, now: n, settingsChanges: settingsChanges),
             if (loaded) ...[
               const SizedBox(height: 12),
-              UpNext(core: core, now: n),
+              UpNext(core: core, now: n, onRelease: onRelease),
             ],
             const SizedBox(height: 12),
-            PlaySomething(core: core, now: n),
+            PlaySomething(core: core, now: n, onRelease: onRelease),
             const SizedBox(height: 12),
             NowMemory(core: core, now: n, resumeLimit: 3, historyLimit: 3, onRelease: onRelease),
             const SizedBox(height: 12),
@@ -103,8 +119,10 @@ class NowDial extends StatelessWidget {
   final VoidCallback? onToggle;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
+  Widget build(BuildContext context) => ActionTarget(
     onTap: onToggle,
+    semanticLabel: clock.playing ? 'Pause' : 'Play',
+    excludeChildSemantics: true,
     child: RepaintBoundary(child: Stack(alignment: Alignment.center, children: [
       CustomPaint(
         size: Size.infinite,
@@ -391,9 +409,10 @@ class NowSection extends StatelessWidget {
 }
 
 class NowDoor extends StatefulWidget {
-  const NowDoor({super.key, required this.child, this.onTap});
+  const NowDoor({super.key, required this.child, this.onTap, this.semanticLabel});
   final Widget child;
   final VoidCallback? onTap;
+  final String? semanticLabel;
 
   @override
   State<NowDoor> createState() => _NowDoorState();
@@ -403,23 +422,26 @@ class _NowDoorState extends State<NowDoor> {
   bool _hover = false;
 
   @override
-  Widget build(BuildContext context) => MouseRegion(
+  Widget build(BuildContext context) {
+    final content = Container(
+      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
+      decoration: BoxDecoration(
+        color: _hover && widget.onTap != null ? Tok.panel2 : Colors.transparent,
+        border: const Border(bottom: BorderSide(color: Tok.line)),
+      ),
+      child: widget.child,
+    );
+    return MouseRegion(
     cursor: widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
     onEnter: (_) => setState(() => _hover = true),
     onExit: (_) => setState(() => _hover = false),
-    child: Semantics(button: widget.onTap != null, child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    child: widget.onTap == null ? content : ActionTarget(
       onTap: widget.onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
-        decoration: BoxDecoration(
-          color: _hover && widget.onTap != null ? Tok.panel2 : Colors.transparent,
-          border: const Border(bottom: BorderSide(color: Tok.line)),
-        ),
-        child: widget.child,
-      ),
-    )),
+      semanticLabel: widget.semanticLabel,
+      child: content,
+    ),
   );
+  }
 }
 
 /// Now as a bar, below the panes, when the window is too narrow to pin it.
@@ -455,10 +477,11 @@ class NowBar extends StatelessWidget {
           Transport(core: core, now: n, clock: clock, onToggle: onToggle, compact: true),
           const SizedBox(width: 12),
           Expanded(
-            child: GestureDetector(
+            child: ActionTarget(
               key: const ValueKey('now-bar-title'),
-              behavior: HitTestBehavior.opaque,
               onTap: loaded ? () => _open(context) : null,
+              semanticLabel: 'Show Now: ${nowTitle(n, nothingToPlay: nothingToPlay)}',
+              excludeChildSemantics: true,
               child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(nowTitle(n, nothingToPlay: nothingToPlay), style: Tok.body, maxLines: 1, overflow: TextOverflow.ellipsis),
                 Text(n?.subtitle ?? '', style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -479,6 +502,17 @@ class NowBar extends StatelessWidget {
   }
 
   /// The sheet fits the window with 16 px to spare on every side.
+  void _space() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    const intent = ActivateIntent();
+    final action = context == null ? null : Actions.maybeFind<ActivateIntent>(context);
+    if (action != null && action.isEnabled(intent)) {
+      Actions.invoke(context!, intent);
+    } else {
+      onToggle();
+    }
+  }
+
   void _open(BuildContext context) {
     showDialog<void>(
       context: context,
@@ -486,9 +520,10 @@ class NowBar extends StatelessWidget {
       builder: (sheetContext) {
         final room = MediaQuery.sizeOf(sheetContext);
         return CallbackShortcuts(
-          bindings: {const SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): onToggle},
+          bindings: {const SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): _space},
           child: Focus(
             autofocus: true,
+            skipTraversal: true,
             child: Dialog(
               alignment: Alignment.bottomRight,
               insetPadding: const EdgeInsets.fromLTRB(16, 16, 16, 72),
@@ -584,17 +619,20 @@ class _TransportButton extends StatelessWidget {
   final Color? color;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-        icon: Icon(icon),
+  Widget build(BuildContext context) => Tooltip(
+      message: tooltip,
+      excludeFromSemantics: true,
+      child: IconButton(
+        icon: Icon(icon, semanticLabel: tooltip),
         iconSize: size,
-        tooltip: tooltip,
         color: color ?? Tok.ink,
         disabledColor: Tok.dim,
         padding: const EdgeInsets.all(4),
         constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
         visualDensity: VisualDensity.compact,
         onPressed: onPressed,
-      );
+      ),
+  );
 }
 
 /// A thin slider over the playing item. Dragging seeks on release; the
@@ -656,10 +694,11 @@ class _SeekBarState extends State<SeekBar> {
 
 /// The queue after the playing item, refetched when that item changes.
 class UpNext extends StatefulWidget {
-  const UpNext({super.key, required this.core, required this.now, this.limit = 8});
+  const UpNext({super.key, required this.core, required this.now, this.limit = 8, this.onRelease});
   final CoreBridge core;
   final NowDto? now;
   final int limit;
+  final Future<void> Function(PlatformInt64)? onRelease;
 
   @override
   State<UpNext> createState() => _UpNextState();
@@ -668,6 +707,10 @@ class UpNext extends StatefulWidget {
 class _UpNextState extends State<UpNext> {
   UpNextDto? _upNext;
   int _request = 0;
+  late int _limit = widget.limit;
+  String? _error;
+  bool _loading = false;
+  BigInt? _playing;
 
   @override
   void initState() {
@@ -678,17 +721,66 @@ class _UpNextState extends State<UpNext> {
   @override
   void didUpdateWidget(UpNext old) {
     super.didUpdateWidget(old);
-    if (old.core != widget.core || old.now?.anchor?.item != widget.now?.anchor?.item) _load();
+    if (old.core != widget.core || old.limit != widget.limit) {
+      _limit = widget.limit;
+    }
+    if (old.core != widget.core || old.now?.anchor?.item != widget.now?.anchor?.item || old.limit != widget.limit) _load();
   }
 
   Future<void> _load() async {
     final request = ++_request;
+    setState(() => _loading = true);
     try {
-      final upNext = await widget.core.upNext(widget.limit);
-      if (mounted && request == _request) setState(() => _upNext = upNext);
-    } catch (_) {
-      if (mounted && request == _request) setState(() => _upNext = null);
+      final upNext = await widget.core.upNext(_limit);
+      if (mounted && request == _request) {
+        setState(() {
+          _upNext = upNext;
+          _error = null;
+        });
+      }
+    } catch (error) {
+      if (mounted && request == _request) setState(() => _error = error.toString());
+    } finally {
+      if (mounted && request == _request) setState(() => _loading = false);
     }
+  }
+
+  Future<bool> _play(UpNextItemDto item) async {
+    if (_playing != null) return false;
+    setState(() => _playing = item.token);
+    try {
+      await widget.core.jumpToQueued(item.token);
+      if (mounted) await _load();
+      return true;
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+      return false;
+    } finally {
+      if (mounted) setState(() => _playing = null);
+    }
+  }
+
+  Future<void> _inspect(UpNextItemDto item) async {
+    if (item.releaseId != null && widget.onRelease != null) {
+      try {
+        await widget.onRelease!(item.releaseId!);
+      } catch (error) {
+        if (mounted) setState(() => _error = error.toString());
+      }
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(item.title),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(item.subtitle),
+          if (item.lengthMs != null) Text(clockLength(item.lengthMs!.toInt())),
+          if (item.why != null) Text(item.why!),
+        ]),
+        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+      ),
+    );
   }
 
   @override
@@ -703,29 +795,49 @@ class _UpNextState extends State<UpNext> {
         _ when more > 0 => '$remaining track${remaining == 1 ? '' : 's'}',
         _ => null,
       }),
+      if (_error != null) Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
+      ),
+      if (upNext == null && _loading) const Text('Reading the queue…', style: Tok.label),
+      if (upNext == null && _error != null)
+        TextButton(onPressed: _loading ? null : _load, child: const Text('Try again')),
       for (final item in upNext?.items ?? const <UpNextItemDto>[])
-        Container(
+        NowDoor(
           key: ValueKey('up-next-${item.token}'),
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.line))),
+          onTap: () => _inspect(item),
+          semanticLabel: item.releaseId != null && widget.onRelease != null ? 'Open release for ${item.title}' : 'Inspect ${item.title}',
           child: Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(item.title, style: Tok.body.copyWith(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Tooltip(message: item.title, excludeFromSemantics: true, child:
+                Text(item.title, style: Tok.body.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
               Text(item.why ?? item.subtitle, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              if (item.lengthMs != null) Text(clockLength(item.lengthMs!.toInt()), style: Tok.monoSmall),
             ])),
-            const SizedBox(width: 8),
-            Text(item.lengthMs == null ? '' : clockLength(item.lengthMs!.toInt()), style: Tok.monoSmall),
+            TextButton(
+              key: ValueKey('up-next-play-${item.token}'),
+              onPressed: _playing == null ? () => _play(item) : null,
+              child: Semantics(label: 'Play ${item.title}', excludeSemantics: true,
+                child: Text(_playing == item.token ? 'Starting…' : 'Play')),
+            ),
           ]),
         ),
-      if (more > 0) Padding(padding: const EdgeInsets.only(top: 4), child: Text('$more more', style: Tok.label)),
+      if (more > 0) Align(alignment: Alignment.centerLeft, child: TextButton(
+        key: const ValueKey('up-next-more'),
+        onPressed: _loading ? null : () {
+          _limit += min(more, 50);
+          _load();
+        },
+        child: Text(_loading ? 'Reading…' : 'Show ${min(more, 50)} more'),
+      )),
     ]);
   }
 }
 
 
 /// The instrument's slider: a 2 px track and a small thumb in the light.
-/// [sliderKey] lands on the `Slider` itself, so tests can read its value.
-class ThinSlider extends StatelessWidget {
+/// The track has no overlay portal; moving it cannot orphan native AX nodes.
+class ThinSlider extends StatefulWidget {
   const ThinSlider({super.key, this.sliderKey, required this.value, required this.onChanged, this.onChangeEnd, this.semanticFormatterCallback, this.hairline = false});
   final Key? sliderKey;
   final bool hairline;
@@ -735,30 +847,148 @@ class ThinSlider extends StatelessWidget {
   final SemanticFormatterCallback? semanticFormatterCallback;
 
   @override
+  State<ThinSlider> createState() => _ThinSliderState();
+}
+
+class _ThinSliderState extends State<ThinSlider> {
+  final _focus = FocusNode(debugLabel: 'slider');
+  double? _dragging;
+  bool _showFocus = false;
+  bool _hover = false;
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _adjust(double value) {
+    if (widget.onChanged == null) return;
+    final next = value.clamp(0.0, 1.0);
+    widget.onChanged!(next);
+    widget.onChangeEnd?.call(next);
+  }
+
+  void _move(double x, double width, double padding, bool rtl) {
+    if (widget.onChanged == null || width <= padding * 2) return;
+    final position = ((x - padding) / (width - padding * 2)).clamp(0.0, 1.0);
+    final value = rtl ? 1 - position : position;
+    setState(() => _dragging = value);
+    widget.onChanged!(value);
+  }
+
+  void _finish() {
+    final value = _dragging;
+    if (value == null) return;
+    setState(() => _dragging = null);
+    if (widget.onChanged != null) widget.onChangeEnd?.call(value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final accent = Light.of(context).accent;
-    return SliderTheme(
-      data: SliderThemeData(
-        trackHeight: 2,
-        activeTrackColor: accent,
-        inactiveTrackColor: Tok.line,
-        thumbColor: accent,
-        disabledActiveTrackColor: Tok.line,
-        disabledInactiveTrackColor: Tok.line,
-        disabledThumbColor: Tok.dim,
-        thumbShape: hairline ? SliderComponentShape.noThumb : const RoundSliderThumbShape(enabledThumbRadius: 5, disabledThumbRadius: 3),
-        overlayShape: hairline ? SliderComponentShape.noOverlay : const RoundSliderOverlayShape(overlayRadius: 12),
-        trackShape: const RectangularSliderTrackShape(),
-      ),
-      child: Slider(
-        key: sliderKey,
-        value: value.clamp(0.0, 1.0),
-        semanticFormatterCallback: semanticFormatterCallback,
-        onChanged: onChanged,
-        onChangeEnd: onChangeEnd,
+    final enabled = widget.onChanged != null;
+    final position = (_dragging ?? widget.value).clamp(0.0, 1.0);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    String describe(double value) => widget.semanticFormatterCallback?.call(value) ?? '${(value * 100).round()}%';
+    final step = switch (Theme.of(context).platform) {
+      TargetPlatform.iOS || TargetPlatform.macOS => 0.1,
+      _ => 0.05,
+    };
+    final increased = (position + step).clamp(0.0, 1.0);
+    final decreased = (position - step).clamp(0.0, 1.0);
+    return Semantics(
+      key: widget.sliderKey,
+      container: true,
+      excludeSemantics: true,
+      slider: true,
+      enabled: enabled,
+      focusable: enabled,
+      focused: enabled && _focus.hasFocus,
+      value: describe(position),
+      increasedValue: enabled && position < 1 ? describe(increased) : null,
+      decreasedValue: enabled && position > 0 ? describe(decreased) : null,
+      onIncrease: enabled && position < 1 ? () => _adjust(increased) : null,
+      onDecrease: enabled && position > 0 ? () => _adjust(decreased) : null,
+      onDidGainAccessibilityFocus: enabled ? _focus.requestFocus : null,
+      child: CallbackShortcuts(
+        bindings: enabled ? {
+          const SingleActivator(LogicalKeyboardKey.arrowRight): () => _adjust(position + (rtl ? -step : step)),
+          const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _adjust(position + (rtl ? step : -step)),
+          const SingleActivator(LogicalKeyboardKey.arrowUp): () => _adjust(increased),
+          const SingleActivator(LogicalKeyboardKey.arrowDown): () => _adjust(decreased),
+          const SingleActivator(LogicalKeyboardKey.home, includeRepeats: false): () => _adjust(0),
+          const SingleActivator(LogicalKeyboardKey.end, includeRepeats: false): () => _adjust(1),
+        } : const {},
+        child: FocusableActionDetector(
+          focusNode: _focus,
+          enabled: enabled,
+          includeFocusSemantics: false,
+          mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+          onFocusChange: (_) => setState(() {}),
+          onShowFocusHighlight: (show) => setState(() => _showFocus = show),
+          onShowHoverHighlight: (hover) => setState(() => _hover = hover),
+          child: LayoutBuilder(builder: (context, box) {
+            final width = box.hasBoundedWidth ? box.maxWidth : 144.0;
+            final padding = widget.hairline ? 0.0 : min(12.0, width / 4);
+            void move(Offset offset) => _move(offset.dx, width, padding, rtl);
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              excludeFromSemantics: true,
+              onTapDown: enabled ? (_) => _focus.requestFocus() : null,
+              onTapUp: enabled ? (details) { move(details.localPosition); _finish(); } : null,
+              onHorizontalDragStart: enabled ? (details) { _focus.requestFocus(); move(details.localPosition); } : null,
+              onHorizontalDragUpdate: enabled ? (details) => move(details.localPosition) : null,
+              onHorizontalDragEnd: enabled ? (_) => _finish() : null,
+              onHorizontalDragCancel: enabled ? _finish : null,
+              child: CustomPaint(
+                painter: _ThinSliderPainter(position: position, padding: padding, rtl: rtl,
+                  accent: Light.of(context).accent, enabled: enabled, hairline: widget.hairline,
+                  showFocus: _showFocus, hover: _hover),
+                child: SizedBox(width: width, height: widget.hairline ? 10 : 32),
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
+}
+
+class _ThinSliderPainter extends CustomPainter {
+  const _ThinSliderPainter({required this.position, required this.padding, required this.rtl,
+    required this.accent, required this.enabled, required this.hairline, required this.showFocus, required this.hover});
+  final double position;
+  final double padding;
+  final bool rtl;
+  final Color accent;
+  final bool enabled;
+  final bool hairline;
+  final bool showFocus;
+  final bool hover;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final left = padding;
+    final right = size.width - padding;
+    final y = size.height / 2;
+    final x = left + (right - left) * (rtl ? 1 - position : position);
+    final paint = Paint()..strokeWidth = 2..color = Tok.line;
+    canvas.drawLine(Offset(left, y), Offset(right, y), paint);
+    paint.color = enabled ? accent : Tok.line;
+    canvas.drawLine(Offset(rtl ? right : left, y), Offset(x, y), paint);
+    if (enabled && hover && !hairline) {
+      canvas.drawCircle(Offset(x, y), 9, Paint()..color = accent.withValues(alpha: 0.15));
+    }
+    if (!hairline) canvas.drawCircle(Offset(x, y), enabled ? 5 : 3, Paint()..color = enabled ? accent : Tok.dim);
+    if (enabled && showFocus && size.width > 2 && size.height > 2) {
+      canvas.drawRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(2)).deflate(1),
+        Paint()..color = Tok.gold..style = PaintingStyle.stroke..strokeWidth = 2);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ThinSliderPainter old) => position != old.position || padding != old.padding || rtl != old.rtl ||
+    accent != old.accent || enabled != old.enabled || hairline != old.hairline || showFocus != old.showFocus || hover != old.hover;
 }
 
 

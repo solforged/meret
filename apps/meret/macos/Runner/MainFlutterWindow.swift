@@ -8,9 +8,30 @@ import FlutterMacOS
 /// Closing hides the window; the music, the menu bar item and the media
 /// keys go on without it (`AppDelegate`).
 class MainFlutterWindow: NSWindow {
+  override func sendEvent(_ event: NSEvent) {
+    if event.type == .keyDown { restoreSurfaceResponderIfNeeded() }
+    super.sendEvent(event)
+  }
   private var channel: FlutterMethodChannel?
   private var settingsVisible = false
+  private var modalVisible = false
   private var outside: Outside?
+  private var editMenu: FlutterEditMenu?
+  private var menuAvailability: [String: Bool] = [:]
+
+  override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    restoreSurfaceResponderIfNeeded()
+    return super.performKeyEquivalent(with: event)
+  }
+
+  private func restoreSurfaceResponderIfNeeded() {
+    // AppKit can reactivate the accessibility field editor after Flutter
+    // has blurred its field. That editor has no client and swallows keys.
+    guard NSApp.keyWindow === self, attachedSheet == nil, NSApp.modalWindow == nil,
+          editMenu?.textFocused == false, firstResponder is NSTextView,
+          let controller = contentViewController else { return }
+    makeFirstResponder(controller)
+  }
 
   @IBAction func showSettings(_ sender: Any?) {
     channel?.invokeMethod("showSettings", arguments: nil)
@@ -18,6 +39,16 @@ class MainFlutterWindow: NSWindow {
 
   @objc private func menuItem(_ sender: NSMenuItem) {
     if let id = sender.representedObject as? String { channel?.invokeMethod("menu", arguments: id) }
+  }
+
+  override func validateMenuItem(_ item: NSMenuItem) -> Bool {
+    guard let id = item.representedObject as? String else { return super.validateMenuItem(item) }
+    guard !modalVisible, !settingsVisible, attachedSheet == nil, NSApp.modalWindow == nil else { return false }
+    if editMenu?.textFocused == true && ["back", "forward", "previousBranch", "nextBranch", "tree", "prune", "fromStart", "playSomething", "history", "keys"].contains(id) {
+      return false
+    }
+    if id == "toggle" && editMenu?.textFocused == true && menuAvailability["fromStart"] != true { return false }
+    return menuAvailability[id] ?? false
   }
 
   /// The key hints live here (navigation.md, plate 04), where Mac users look
@@ -166,11 +197,21 @@ class MainFlutterWindow: NSWindow {
       case "settingsVisible":
         self.settingsVisible = call.arguments as? Bool ?? false
         result(nil)
+      case "modalVisible":
+        self.modalVisible = call.arguments as? Bool ?? false
+        result(nil)
+      case "textInputFocused":
+        self.editMenu?.textFocused = call.arguments as? Bool ?? false
+        result(nil)
+      case "menuAvailability":
+        self.menuAvailability = call.arguments as? [String: Bool] ?? [:]
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }
     }
     self.channel = channel
+    editMenu = FlutterEditMenu(window: self, channel: channel)
     for (name, value) in [
       (NSWindow.willEnterFullScreenNotification, true),
       (NSWindow.didExitFullScreenNotification, false),
@@ -207,5 +248,80 @@ class MainFlutterWindow: NSWindow {
   override func layoutIfNeeded() {
     super.layoutIfNeeded()
     placeButtons()
+  }
+}
+
+/// AppKit's NSTextView editing actions do not update Flutter's editing model.
+/// Route Edit through the focused Flutter Actions, while retaining native
+/// responder-chain behavior in file panels and other native windows.
+private final class FlutterEditMenu: NSObject, NSMenuItemValidation, NSMenuDelegate {
+  private weak var window: NSWindow?
+  private let channel: FlutterMethodChannel
+  private var selectors: [NSMenuItem: Selector] = [:]
+  private var nativeItems = Set<NSMenuItem>()
+  private var nativeTargets: [NSMenuItem: AnyObject] = [:]
+  private let commands: Set<String> = ["selectAll:", "copy:", "cut:", "paste:", "pasteAsPlainText:", "undo:", "redo:", "delete:"]
+  var textFocused = false
+
+  private var flutterSurfaceIsKey: Bool {
+    NSApp.keyWindow === window && window?.attachedSheet == nil && NSApp.modalWindow == nil
+  }
+
+  init(window: NSWindow, channel: FlutterMethodChannel) {
+    self.window = window
+    self.channel = channel
+    super.init()
+    guard let menu = NSApp.mainMenu?.items.first(where: { $0.submenu?.title == "Edit" })?.submenu else { return }
+    captureActions(menu)
+  }
+
+  // AppKit's optional text services operate on a detached native field
+  // editor. Keep them unavailable over Flutter, but retain them in panels.
+  private func captureActions(_ menu: NSMenu) {
+    menu.delegate = self
+    for item in menu.items {
+      if let submenu = item.submenu {
+        captureActions(submenu)
+        continue
+      }
+      guard selectors[item] == nil, let action = item.action,
+            NSStringFromSelector(action) != "orderFrontCharacterPalette:" else { continue }
+      if commands.contains(NSStringFromSelector(action)) {
+        selectors[item] = action
+        item.target = self
+        item.action = #selector(edit(_:))
+      } else {
+        // Preserve system selectors so AppKit can recognize its dynamically
+        // inserted items. Replacing those actions makes it insert duplicates.
+        if nativeItems.insert(item).inserted, let target = item.target {
+          nativeTargets[item] = target
+        }
+        item.target = flutterSurfaceIsKey ? self : nativeTargets[item]
+      }
+    }
+  }
+
+  func menuNeedsUpdate(_ menu: NSMenu) { captureActions(menu) }
+  func menuWillOpen(_ menu: NSMenu) { captureActions(menu) }
+
+  @objc private func edit(_ sender: NSMenuItem) {
+    guard let selector = selectors[sender] else { return }
+    if flutterSurfaceIsKey {
+      if textFocused && commands.contains(NSStringFromSelector(selector)) {
+        channel.invokeMethod("edit", arguments: NSStringFromSelector(selector))
+      }
+    } else {
+      NSApp.sendAction(selector, to: nil, from: sender)
+    }
+  }
+
+  func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+    guard let selector = selectors[menuItem] else { return false }
+    if flutterSurfaceIsKey { return textFocused && commands.contains(NSStringFromSelector(selector)) }
+    guard let target = NSApp.target(forAction: selector) else { return false }
+    let nativeItem = NSMenuItem(title: menuItem.title, action: selector, keyEquivalent: "")
+    if let validator = target as? NSMenuItemValidation { return validator.validateMenuItem(nativeItem) }
+    if let validator = target as? NSUserInterfaceValidations { return validator.validateUserInterfaceItem(nativeItem) }
+    return true
   }
 }

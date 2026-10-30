@@ -5,12 +5,12 @@
 //! `track_recording`, so a page costs reads proportional to what's on it,
 //! not to the library.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use meret_model::{AgentId, GameId, Idiom, RecordingId, ReleaseId, TrackId, WorkId};
 use rusqlite::{Connection, OptionalExtension};
 
-use crate::library::{PREFERRED_SOURCE, TrackRow};
+use crate::library::{PREFERRED_SOURCE, TRACK_ORDER, TrackRow};
 use crate::{Artwork, Result, Store};
 
 /// A release pane.
@@ -54,7 +54,8 @@ pub struct RoleCredit {
     /// What they play, for performers: "percussion", "shakuhachi".
     pub detail: Option<String>,
     pub source: String,
-    /// (disc, track) of each track they're credited on.
+    /// One (disc, track) entry per credited track; zero is unknown. Different
+    /// tracks can have the same position, including (0, 0).
     pub positions: Vec<(u32, u32)>,
 }
 
@@ -66,7 +67,7 @@ pub const ROLES: [&str; 7] = ["composer", "lyricist", "arranger", "performer", "
 pub struct TrackCredit {
     pub agent: AgentId,
     pub name: String,
-    /// (disc, track) of each track they're credited on.
+    /// One (disc, track) entry per credited track; zero is unknown.
     pub positions: Vec<(u32, u32)>,
 }
 
@@ -225,8 +226,9 @@ impl Store {
                 None => None,
             };
             let sql = format!(
-                "SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
-                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY m.position, t.position, t.id"
+                "SELECT t.id FROM track t JOIN recording r ON r.id = t.recording_id
+                 JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
+                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY {TRACK_ORDER}"
             );
             let tracks = c
                 .prepare(&sql)?
@@ -242,38 +244,44 @@ impl Store {
         let mut works = vec![];
         let mut games = vec![];
         self.read(|c| {
+            let mut artist_tracks = HashSet::new();
+            let mut role_tracks = HashSet::new();
             let sql = format!(
-                "SELECT a.id, a.name, m.position, t.position FROM track t
+                "SELECT a.id, a.name, m.position, t.position, t.id FROM track t
+                 JOIN recording r ON r.id = t.recording_id
                  JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
                  JOIN credit cr ON cr.subject_kind = 2 AND cr.subject_id = t.recording_id AND cr.role = 'artist'
                  JOIN agent a ON a.id = cr.agent_id
-                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY m.position, t.position, t.id, cr.sort, cr.id"
+                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY {TRACK_ORDER}, cr.sort, cr.id"
             );
             for row in c.prepare(&sql)?.query_map([release.0], |r| {
-                Ok((AgentId(r.get(0)?), r.get::<_, String>(1)?, (r.get::<_, u32>(2)?, r.get::<_, u32>(3)?)))
+                Ok((AgentId(r.get(0)?), r.get::<_, String>(1)?, (r.get::<_, u32>(2)?, r.get::<_, u32>(3)?), r.get::<_, i64>(4)?))
             })? {
-                let (agent, name, position) = row?;
+                let (agent, name, position, track) = row?;
+                if !artist_tracks.insert((agent, track)) { continue; }
                 match artists.iter_mut().find(|a| a.agent == agent) {
-                    Some(a) => { if !a.positions.contains(&position) { a.positions.push(position); } }
+                    Some(a) => a.positions.push(position),
                     None => artists.push(TrackCredit { agent, name, positions: vec![position] }),
                 }
             }
             let sql = format!(
-                "SELECT cr.role, a.id, a.name, cr.detail, m.position, t.position, COALESCE(p.source, 'local_tags') FROM track t
+                "SELECT cr.role, a.id, a.name, cr.detail, m.position, t.position, COALESCE(p.source, 'local_tags'), t.id FROM track t
+                 JOIN recording r ON r.id = t.recording_id
                  JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
                  JOIN credit cr ON cr.subject_kind = 2 AND cr.subject_id = t.recording_id AND cr.role <> 'artist'
                  JOIN agent a ON a.id = cr.agent_id
                  LEFT JOIN provenance p ON p.id = cr.provenance_id
-                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY m.position, t.position, t.id, cr.sort, cr.id"
+                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY {TRACK_ORDER}, cr.sort, cr.id"
             );
             for row in c.prepare(&sql)?.query_map([release.0], |r| {
                 Ok((r.get::<_, String>(0)?, AgentId(r.get(1)?), r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?,
-                    (r.get::<_, u32>(4)?, r.get::<_, u32>(5)?), r.get::<_, String>(6)?))
+                    (r.get::<_, u32>(4)?, r.get::<_, u32>(5)?), r.get::<_, String>(6)?, r.get::<_, i64>(7)?))
             })? {
-                let (role, agent, name, detail, position, source) = row?;
+                let (role, agent, name, detail, position, source, track) = row?;
+                if !role_tracks.insert((role.clone(), agent, detail.clone(), track)) { continue; }
                 // "orchestration" on two tracks is said of those two, not of every track they arranged.
                 match roles.iter_mut().find(|c: &&mut RoleCredit| c.role == role && c.agent == agent && c.detail == detail) {
-                    Some(c) => if !c.positions.contains(&position) { c.positions.push(position) },
+                    Some(c) => c.positions.push(position),
                     None => roles.push(RoleCredit { role, agent, name, detail, source, positions: vec![position] }),
                 }
             }
@@ -281,7 +289,7 @@ impl Store {
                 "SELECT t.id, w.id, w.title FROM track t
                  JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id
                  JOIN recording r ON r.id = t.recording_id JOIN work w ON w.id = r.work_id
-                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY m.position, t.position, t.id"
+                 WHERE e.release_id = ?1 AND {PREFERRED_SOURCE} IS NOT NULL ORDER BY {TRACK_ORDER}"
             );
             works = c.prepare(&sql)?.query_map([release.0], |r| Ok((TrackId(r.get(0)?), WorkId(r.get(1)?), r.get(2)?)))?
                 .collect::<rusqlite::Result<_>>()?;
@@ -457,7 +465,7 @@ impl Store {
                 "SELECT t.id FROM track t JOIN recording r ON r.id = t.recording_id JOIN work w ON w.id = r.work_id
                  JOIN medium m ON m.id = t.medium_id JOIN edition e ON e.id = m.edition_id JOIN release rl ON rl.id = e.release_id
                  WHERE (w.id = ?1 OR w.parent_id = ?1) AND {PREFERRED_SOURCE} IS NOT NULL
-                 ORDER BY rl.year IS NULL, rl.year, rl.title COLLATE NOCASE, rl.id, m.position, t.position, t.id"
+                 ORDER BY rl.year IS NULL, rl.year, rl.title COLLATE NOCASE, rl.id, {TRACK_ORDER}"
             );
             let tracks = c.prepare(&sql)?.query_map([work.0], |r| Ok(TrackId(r.get(0)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
             let mut others = c.prepare(
@@ -540,11 +548,11 @@ impl Store {
             );
             page.same_series = c.prepare(&sql)?.query_map([game.0], game_link)?.collect::<rusqlite::Result<_>>()?;
             let sql = format!(
-                "SELECT t.id FROM track t JOIN medium m ON m.id = t.medium_id
+                "SELECT t.id FROM track t JOIN recording r ON r.id = t.recording_id JOIN medium m ON m.id = t.medium_id
                  JOIN edition e ON e.id = m.edition_id JOIN release rl ON rl.id = e.release_id
                  WHERE {PREFERRED_SOURCE} IS NOT NULL AND EXISTS (SELECT 1 FROM edge x
                      WHERE x.from_kind = 3 AND x.from_id = rl.id AND x.to_kind = 13 AND x.to_id = ?1 AND x.kind = 'soundtrack_of')
-                 ORDER BY rl.year IS NULL, rl.year, rl.title COLLATE NOCASE, rl.id, m.position, t.position, t.id"
+                 ORDER BY rl.year IS NULL, rl.year, rl.title COLLATE NOCASE, rl.id, {TRACK_ORDER}"
             );
             let tracks = c.prepare(&sql)?.query_map([game.0], |r| Ok(TrackId(r.get(0)?)))?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -821,6 +829,17 @@ mod tests {
                 source: "musicbrainz".into() },
         ]);
         assert_eq!(store.work_page(WorkId(2)).unwrap().unwrap().recordings_known, None);
+
+        // Missing tags on different tracks must not collapse their credit
+        // coverage. Duplicate credit rows for one track still count just once.
+        store.writer.write(|tx| tx.execute_batch("
+            UPDATE track SET position=0;
+            INSERT INTO credit(subject_kind,subject_id,agent_id,role,detail,rev) VALUES
+                (2,1,1,'performer','glass bells',1),(2,1,2,'artist',NULL,1);
+        ")).unwrap();
+        let unnumbered = store.release_page(ReleaseId(1)).unwrap().unwrap();
+        assert_eq!(unnumbered.roles[0].positions, [(1, 0), (1, 0)]);
+        assert_eq!(unnumbered.artists[0].positions, [(1, 0), (1, 0)]);
         drop(store);
         std::fs::remove_dir_all(dir).unwrap();
     }

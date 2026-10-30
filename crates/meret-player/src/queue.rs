@@ -36,6 +36,12 @@ pub struct Queue {
 }
 
 impl Queue {
+    /// Restored tokens may still be held by the UI before the queue is loaded.
+    /// Future replacements must not reuse them.
+    pub fn reserve_through(&mut self, token: u64) {
+        self.next_token = self.next_token.max(token);
+    }
+
     pub fn push(&mut self, mut item: QueueItem) -> u64 {
         self.next_token += 1;
         item.token = self.next_token;

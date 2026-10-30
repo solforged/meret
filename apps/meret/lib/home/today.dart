@@ -8,6 +8,7 @@ import '../now/now_pane.dart';
 import '../now/picks.dart';
 import '../panes/add_folder.dart';
 import '../panes/pane.dart';
+import '../settings/settings_window.dart';
 import '../theme/tokens.dart';
 import 'resume.dart';
 import 'week.dart';
@@ -218,61 +219,8 @@ class _TodayState extends State<Today> {
           Text('Browse →', style: Tok.label.copyWith(color: _adding ? Tok.faint : Tok.gold)),
         ]),
       ),
-      const SizedBox(height: 14),
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(border: Border.all(color: Tok.line)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Coming later', style: Tok.label),
-          const SizedBox(height: 6),
-          Text('Bring your history', style: Tok.body.copyWith(color: Tok.muted)),
-          const SizedBox(height: 4),
-          Text('Apple Music, Last.fm, ListenBrainz', style: Tok.body.copyWith(fontSize: 11, color: Tok.faint)),
-          const SizedBox(height: 10),
-          Text('Connect a service', style: Tok.body.copyWith(color: Tok.muted)),
-          const SizedBox(height: 4),
-          Text('Spotify, Bandcamp, Qobuz, ListenBrainz…', style: Tok.body.copyWith(fontSize: 11, color: Tok.faint)),
-        ]),
-      ),
     ]),
   );
-
-  Widget _quietLine(String title) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 16),
-    child: Text(title, style: Tok.body.copyWith(color: Tok.faint)),
-  );
-
-  /// Doors that aren't built yet, so a reader can tell them from empty ones.
-  Widget _quietPanel(List<Widget> children) => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(border: Border.all(color: Tok.line.withValues(alpha: 0.65))),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const Text('Coming later', style: Tok.label),
-      const SizedBox(height: 6),
-      ...children,
-    ]),
-  );
-
-  Widget _emptyLeads() => _quietPanel([
-    Text('Leads', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
-    const SizedBox(height: 12),
-    _quietLine('Music to follow'),
-    const Divider(height: 1, color: Tok.line),
-    _quietLine('Wants'),
-    const Divider(height: 1, color: Tok.line),
-    _quietLine('Needs you'),
-  ]);
-
-  Widget _emptyMemory() => _quietPanel([
-    Text('Crates and trails', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
-    const SizedBox(height: 12),
-    _quietLine('Sets you make'),
-    const Divider(height: 1, color: Tok.line),
-    const SizedBox(height: 28),
-    Text('Pick up', style: Tok.body.copyWith(fontSize: 16, fontWeight: FontWeight.w600, color: Tok.faint)),
-    const SizedBox(height: 12),
-    _quietLine('Where you stopped'),
-  ]);
 
   /// The headline waits for the disk look; only places with a counted file
   /// total are "found", a volume that still needs permission is not.
@@ -283,7 +231,7 @@ class _TodayState extends State<Today> {
     return found > 0 ? 'Meret found $found ${found == 1 ? 'place' : 'places'} with music' : 'Start with a music folder';
   }
 
-  Widget _emptyFront(double width) {
+  Widget _emptyFront() {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(
         padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
@@ -296,31 +244,18 @@ class _TodayState extends State<Today> {
       ),
       Padding(
         padding: const EdgeInsets.all(20),
-        child: width >= 1000
-          ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(flex: 5, child: _emptyCollection()),
-              const SizedBox(width: 16),
-              Expanded(flex: 4, child: _emptyLeads()),
-              const SizedBox(width: 16),
-              Expanded(flex: 4, child: _emptyMemory()),
-            ])
-          : width >= 650
-            ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(child: _emptyCollection()),
-                const SizedBox(width: 16),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  _emptyLeads(),
-                  const SizedBox(height: 16),
-                  _emptyMemory(),
-                ])),
-              ])
-            : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                _emptyCollection(),
-                const SizedBox(height: 16),
-                _emptyLeads(),
-                const SizedBox(height: 16),
-                _emptyMemory(),
-              ]),
+        child: Align(alignment: Alignment.topLeft, child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _emptyCollection(),
+            const SizedBox(height: 8),
+            Align(alignment: Alignment.centerLeft, child: TextButton(
+              key: const ValueKey('today-upcoming'),
+              onPressed: () => showSettings(context, section: SettingsSection.upcoming),
+              child: const Text('Upcoming features'),
+            )),
+          ]),
+        )),
       ),
     ]);
   }
@@ -340,7 +275,7 @@ class _TodayState extends State<Today> {
     header: (points) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if ((widget.now, widget.clock) case (final now?, final clock?) when now.anchor != null)
         ResumeHeader(now: now, clock: clock, onToggle: widget.onToggle ?? () {}, points: points),
-      PlaySomething(core: widget.core, now: widget.now),
+      PlaySomething(core: widget.core, now: widget.now, onRelease: widget.onRelease),
       const SizedBox(height: 22),
     ]),
   );
@@ -380,7 +315,7 @@ class _TodayState extends State<Today> {
         if (front == null)
           Padding(padding: EdgeInsets.all(gutter), child: const Text('Reading collection…', style: Tok.label))
         else if (front.roots.isEmpty)
-          _emptyFront(box.maxWidth)
+          _emptyFront()
         else
           Padding(
             padding: EdgeInsets.fromLTRB(gutter, 18, gutter, 28),

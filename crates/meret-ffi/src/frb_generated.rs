@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1900542481;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1463028422;
 
 // Section: executor
 
@@ -386,6 +386,39 @@ fn wire__crate__api__core__init_app_impl(
         },
     )
 }
+fn wire__crate__api__core__jump_to_queued_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "jump_to_queued",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_token = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::jump_to_queued(api_token)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__core__keep_trail_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -413,6 +446,40 @@ fn wire__crate__api__core__keep_trail_impl(
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::core::keep_trail(api_name)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__core__listening_window_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "listening_window",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_start_ms = <i64>::sse_decode(&mut deserializer);
+            let api_end_ms = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::core::listening_window(api_start_ms, api_end_ms)?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2028,6 +2095,11 @@ const _: fn() = || {
         let _: bool = ListenDto.counted;
     }
     {
+        let ListeningWindowDto = None::<crate::api::types::ListeningWindowDto>.unwrap();
+        let _: Vec<crate::api::types::ListenDto> = ListeningWindowDto.listens;
+        let _: Vec<crate::api::types::PlayedDto> = ListeningWindowDto.most_played;
+    }
+    {
         let LookupStatusDto = None::<crate::api::types::LookupStatusDto>.unwrap();
         let _: crate::api::types::LookupsDto = LookupStatusDto.setting;
         let _: u64 = LookupStatusDto.releases;
@@ -2322,6 +2394,7 @@ const _: fn() = || {
         let UpNextItemDto = None::<crate::api::types::UpNextItemDto>.unwrap();
         let _: u64 = UpNextItemDto.token;
         let _: Option<i64> = UpNextItemDto.track_id;
+        let _: Option<i64> = UpNextItemDto.release_id;
         let _: String = UpNextItemDto.title;
         let _: String = UpNextItemDto.subtitle;
         let _: Option<u64> = UpNextItemDto.length_ms;
@@ -3283,6 +3356,18 @@ impl SseDecode for crate::api::types::ListenDto {
             played_ms: var_playedMs,
             length_ms: var_lengthMs,
             counted: var_counted,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::ListeningWindowDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_listens = <Vec<crate::api::types::ListenDto>>::sse_decode(deserializer);
+        let mut var_mostPlayed = <Vec<crate::api::types::PlayedDto>>::sse_decode(deserializer);
+        return crate::api::types::ListeningWindowDto {
+            listens: var_listens,
+            most_played: var_mostPlayed,
         };
     }
 }
@@ -4252,6 +4337,7 @@ impl SseDecode for crate::api::types::UpNextItemDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_token = <u64>::sse_decode(deserializer);
         let mut var_trackId = <Option<i64>>::sse_decode(deserializer);
+        let mut var_releaseId = <Option<i64>>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_subtitle = <String>::sse_decode(deserializer);
         let mut var_lengthMs = <Option<u64>>::sse_decode(deserializer);
@@ -4259,6 +4345,7 @@ impl SseDecode for crate::api::types::UpNextItemDto {
         return crate::api::types::UpNextItemDto {
             token: var_token,
             track_id: var_trackId,
+            release_id: var_releaseId,
             title: var_title,
             subtitle: var_subtitle,
             length_ms: var_lengthMs,
@@ -4368,48 +4455,50 @@ fn pde_ffi_dispatcher_primary_impl(
         8 => wire__crate__api__core__histogram_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__core__history_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__core__init_app_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__core__keep_trail_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__core__lookups_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__core__most_played_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__core__open_trail_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__core__picks_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__core__play_game_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__core__play_on_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__core__play_pick_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__core__play_something_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__core__play_trail_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__core__play_work_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__core__prune_branch_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__core__set_lookups_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__core__trail_sibling_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__core__work_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__core__zones_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__core__jump_to_queued_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__core__keep_trail_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__core__listening_window_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__core__lookups_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__core__most_played_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__core__open_trail_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__core__output_devices_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__core__person_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__core__pick_up_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__core__picks_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__core__play_game_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__core__play_on_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__core__play_pick_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__core__play_release_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__core__play_results_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__core__play_something_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__core__play_trail_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__core__play_work_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__core__prune_branch_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__core__release_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__core__remove_root_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__core__resume_points_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__core__rows_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__core__run_command_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__core__search_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__core__set_lookups_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__core__set_settings_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__core__set_volume_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__core__start_core_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__core__start_trail_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__core__suggest_folders_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__core__trail_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__core__trail_back_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__core__trail_forward_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__core__trail_go_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__core__trail_history_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__core__trail_sibling_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__core__transport_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__core__up_next_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__core__volume_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__core__watch_now_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__core__watch_status_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__core__work_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__core__zones_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4422,8 +4511,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        16 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__core__parse_query_impl(ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__core__settings_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5064,6 +5153,27 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ListenDto>>
     for crate::api::types::ListenDto
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::types::ListenDto> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::ListeningWindowDto> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.listens.into_into_dart().into_dart(),
+            self.0.most_played.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::types::ListeningWindowDto>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::types::ListeningWindowDto>>
+    for crate::api::types::ListeningWindowDto
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::types::ListeningWindowDto> {
         self.into()
     }
 }
@@ -5887,6 +5997,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::types::UpNextItemD
         [
             self.0.token.into_into_dart().into_dart(),
             self.0.track_id.into_into_dart().into_dart(),
+            self.0.release_id.into_into_dart().into_dart(),
             self.0.title.into_into_dart().into_dart(),
             self.0.subtitle.into_into_dart().into_dart(),
             self.0.length_ms.into_into_dart().into_dart(),
@@ -6725,6 +6836,14 @@ impl SseEncode for crate::api::types::ListenDto {
     }
 }
 
+impl SseEncode for crate::api::types::ListeningWindowDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::types::ListenDto>>::sse_encode(self.listens, serializer);
+        <Vec<crate::api::types::PlayedDto>>::sse_encode(self.most_played, serializer);
+    }
+}
+
 impl SseEncode for crate::api::types::LookupStatusDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7445,6 +7564,7 @@ impl SseEncode for crate::api::types::UpNextItemDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.token, serializer);
         <Option<i64>>::sse_encode(self.track_id, serializer);
+        <Option<i64>>::sse_encode(self.release_id, serializer);
         <String>::sse_encode(self.title, serializer);
         <String>::sse_encode(self.subtitle, serializer);
         <Option<u64>>::sse_encode(self.length_ms, serializer);

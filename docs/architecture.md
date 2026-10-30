@@ -268,8 +268,8 @@ cargo run -p meret-cli --release -- library picks              # Play something'
 cargo run -p meret-cli --release -- library zones              # Play on: this Mac's outputs, the current one starred, with verdicts
 
 cd apps/meret
-flutter test                                 # bridge tests need: cargo build -p meret-ffi
-flutter run -d macos --dart-define=MERET_FAKE=true   # mock data, no Rust
+mise run app:test                            # builds the host Rust bridge, then tests Flutter
+mise exec -- flutter run -d macos --dart-define=MERET_FAKE=true   # mock data, no Rust
 flutter_rust_bridge_codegen generate         # after changing crates/meret-ffi/src/api
 ```
 

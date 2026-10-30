@@ -37,6 +37,14 @@ class _QueryLineState extends State<QueryLine> {
 
   List<HitDto> get _items => [...?_hits?.people, ...?_hits?.releases, ...?_hits?.trackHits];
   bool get _showHits => widget.focus.hasFocus && !_dismissed && _hits != null && _parsed?.kind == QueryKind.search;
+  // Match a bare leading verb; quoted titles and negative search terms stay searches.
+  String? get _unavailableCommand => RegExp(r'^\s*(queue|want|crate)(?:\s|$)', caseSensitive: false).firstMatch(_text.text)?.group(1)?.toLowerCase();
+  String? get _error {
+    final command = _unavailableCommand;
+    return _submitError ?? (command != null ? 'The $command command is not available yet.'
+        : _parsed?.kind == QueryKind.invalid ? _parsed?.error : null);
+  }
+  bool get _showError => widget.focus.hasFocus && !_dismissed && _error != null;
 
   @override
   void initState() {
@@ -63,7 +71,7 @@ class _QueryLineState extends State<QueryLine> {
   }
 
   void _syncOverlay() {
-    if (_showHits) {
+    if (_showHits || _showError) {
       _overlay.show();
     } else {
       _overlay.hide();
@@ -102,8 +110,8 @@ class _QueryLineState extends State<QueryLine> {
   }
 
   void _move(int by) {
-    if (!_showHits) return;
-    final last = _items.length;
+    if (!_showHits || (_items.isEmpty && _hits!.tracks == BigInt.zero)) return;
+    final last = _items.length - (_hits!.tracks == BigInt.zero ? 1 : 0);
     setState(() => _highlight = _highlight == null ? (by > 0 ? 0 : last) : (_highlight! + by).clamp(0, last));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _highlight == null) return;
@@ -120,16 +128,20 @@ class _QueryLineState extends State<QueryLine> {
     _syncOverlay();
   }
 
-  /// Escape closes open suggestions; otherwise it empties the line and
-  /// hands focus back, so nothing stale promises an Enter.
+  /// Escape dismisses help or suggestions, then hands focus back without
+  /// discarding the draft. Clearing is an explicit action.
   void _escape() {
-    if (_showHits) {
+    if (_showHits || _showError) {
       _dismiss();
       return;
     }
+    widget.focus.unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
+  }
+
+  void _clear() {
     _text.clear();
     _changed('');
-    widget.focus.unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
+    widget.focus.requestFocus();
   }
 
   Future<void> _submit({HitDto? hit, bool all = false}) async {
@@ -143,7 +155,8 @@ class _QueryLineState extends State<QueryLine> {
       if (parsed.kind == QueryKind.search && parsed.canonical.isNotEmpty) {
         final hits = _hits ?? await widget.core.search(input);
         if (!mounted || generation != _generation || _text.text != input) return;
-        final items = _items;
+        final items = [...hits.people, ...hits.releases, ...hits.trackHits];
+        if (hits.tracks == BigInt.zero && hit == null && items.isEmpty) return;
         final selected = hit ?? (!all && _showHits && _highlight != null && _highlight! < items.length ? items[_highlight!] : null);
         await widget.onSearch?.call(hits, selected);
       } else {
@@ -155,7 +168,10 @@ class _QueryLineState extends State<QueryLine> {
         widget.focus.unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
       }
     } catch (error) {
-      if (mounted && generation == _generation) setState(() => _submitError = error.toString());
+      if (mounted && generation == _generation) {
+        setState(() => _submitError = error.toString());
+        _syncOverlay();
+      }
     } finally {
       _submitting = false;
     }
@@ -180,16 +196,52 @@ class _QueryLineState extends State<QueryLine> {
         child: SingleChildScrollView(
           controller: _list,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+            if (_items.isEmpty && hits.tracks == BigInt.zero)
+              Padding(
+                key: const ValueKey('query-no-results'),
+                padding: const EdgeInsets.all(12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('No matches', style: Tok.body),
+                  const SizedBox(height: 4),
+                  const Text('Try fewer words or remove a filter.', style: Tok.label),
+                  TextButton(onPressed: _clear, child: const Text('Clear search')),
+                ]),
+              ),
             if (hits.people.isNotEmpty) group('People', hits.peopleTotal, hits.people),
             if (hits.releases.isNotEmpty) group('Releases', hits.releasesTotal, hits.releases),
             if (hits.trackHits.isNotEmpty) group('Tracks', hits.trackHitsTotal, hits.trackHits),
-            const Divider(height: 8, color: Tok.rule),
-            _option(index, onTap: () => _submit(all: true), child: Text('All ${hits.tracks} tracks ↵', style: Tok.body.copyWith(color: Tok.gold))),
+            if (hits.tracks > BigInt.zero) ...[
+              const Divider(height: 8, color: Tok.rule),
+              _option(index, onTap: () => _submit(all: true), child: Text('All ${hits.tracks} tracks ↵', style: Tok.body.copyWith(color: Tok.gold))),
+            ],
           ]),
         ),
       ),
     );
   }
+
+  Widget _errorPanel() => Material(
+    key: const ValueKey('query-error'),
+    color: Tok.panel,
+    elevation: 8,
+    shape: const RoundedRectangleBorder(side: BorderSide(color: Tok.rule)),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Semantics(liveRegion: true, child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_error!, style: Tok.body.copyWith(color: Tok.warn)),
+          const SizedBox(height: 6),
+          Text(_unavailableCommand != null
+              ? 'Use play <query> to play matching tracks, for example play by:Iona.'
+              : RegExp(r'(^|\s)-?year:', caseSensitive: false).hasMatch(_text.text)
+              ? 'For example, year:2017 or year:2000..2020.'
+              : 'Edit the query or clear it to start again.', style: Tok.label),
+        ],
+      )),
+    ),
+  );
 
   Widget _hitRow(HitDto hit, int index) => _option(index,
     onTap: () => _submit(hit: hit),
@@ -219,11 +271,12 @@ class _QueryLineState extends State<QueryLine> {
   Widget build(BuildContext context) {
     final p = _parsed;
     // Enter reaches the line only while it has focus; unfocused, it is a door.
-    String hintFor({required bool docked}) => _submitError ?? switch (widget.focus.hasFocus ? p?.kind : null) {
+    String hintFor({required bool docked}) => _submitError != null && widget.focus.hasFocus ? 'Could not complete'
+      : widget.focus.hasFocus && _unavailableCommand != null ? 'Coming later' : switch (widget.focus.hasFocus ? p?.kind : null) {
       null => docked ? 'Search' : 'Search or type a command',
-      QueryKind.invalid => p!.error ?? '',
+      QueryKind.invalid => 'Check query',
       QueryKind.command => '↵ to run',
-      QueryKind.search => '↵ as a table',
+      QueryKind.search => _hits?.tracks == BigInt.zero && _items.isEmpty ? 'No matches' : '↵ as a table',
     };
     final warn = _submitError != null || (widget.focus.hasFocus && p?.kind == QueryKind.invalid);
     final empty = _text.text.isEmpty;
@@ -239,7 +292,7 @@ class _QueryLineState extends State<QueryLine> {
           targetAnchor: Alignment.bottomRight,
           followerAnchor: Alignment.topRight,
           offset: const Offset(0, 4),
-          child: _hits == null ? const SizedBox() : TextFieldTapRegion(child: _dropdown(_hits!)),
+          child: TextFieldTapRegion(child: _showError ? _errorPanel() : _hits == null ? const SizedBox() : _dropdown(_hits!)),
         ),
       ),
       child: CompositedTransformTarget(
@@ -282,7 +335,7 @@ class _QueryLineState extends State<QueryLine> {
                     SingleActivator(LogicalKeyboardKey.space, shift: true): DoNothingAndStopPropagationTextIntent(),
                     SingleActivator(LogicalKeyboardKey.space, alt: true): DoNothingAndStopPropagationTextIntent(),
                   },
-                  child: TextField(
+                  child: Semantics(label: 'Search or command', child: TextField(
                     controller: _text,
                     focusNode: widget.focus,
                     style: Tok.monoSmall.copyWith(color: Tok.ink, fontSize: 12.5),
@@ -291,7 +344,7 @@ class _QueryLineState extends State<QueryLine> {
                     onChanged: _changed,
                     onEditingComplete: () {},
                     onSubmitted: (_) => _submit(),
-                  ),
+                  )),
                 ),
               ),
             ])),
@@ -299,6 +352,16 @@ class _QueryLineState extends State<QueryLine> {
               const SizedBox(width: 8),
               Flexible(child: Text(hint, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: Tok.label.copyWith(color: warn ? Tok.ox : Tok.faint))),
+              IconButton(
+                key: const ValueKey('query-clear'),
+                tooltip: 'Clear search',
+                onPressed: _clear,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(width: 24, height: 24),
+                iconSize: 14,
+                color: Tok.faint,
+                icon: const Icon(Icons.close),
+              ),
             ] else if (!widget.focus.hasFocus) ...[
               const SizedBox(width: 8),
               Container(

@@ -30,13 +30,24 @@ class _HistorySheet extends StatefulWidget {
 class _HistorySheetState extends State<_HistorySheet> {
   late final Future<List<ListenDto>> _history = widget.core.history(200);
 
+  void _space() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    const intent = ActivateIntent();
+    final action = context == null ? null : Actions.maybeFind<ActivateIntent>(context);
+    if (action != null && action.isEnabled(intent)) {
+      Actions.invoke(context!, intent);
+    } else {
+      widget.onToggle?.call();
+    }
+  }
+
   @override
   Widget build(BuildContext context) => CallbackShortcuts(
     bindings: {
       const SingleActivator(LogicalKeyboardKey.keyH): () => Navigator.of(context).pop(),
-      const SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): ?widget.onToggle,
+      const SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): _space,
     },
-    child: Focus(autofocus: true, child: _sheet(context)),
+    child: Focus(autofocus: true, skipTraversal: true, child: _sheet(context)),
   );
 
   Widget _sheet(BuildContext context) => Dialog(
