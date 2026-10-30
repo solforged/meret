@@ -2,7 +2,7 @@
 
 > **Design specification.** This document includes planned behavior as well as implemented navigation. For what is built and what is missing, see [Architecture](architecture.md#state-of-the-scaffold).
 
-Draft, 2026-10-13. Sol: "this is it" for the trail model. Plates: `design/2026-10-13-trails/` (01 trail, 02 Front, 03 phone and foldable, 04 table, 05 sky, 06–08 forks, 09–11 press play and resume, 12 habits). Revised 2026-10-23 after driving the build: Home, the pane row and the chrome. Plates: `design/2026-10-23-navigation/` (01 Home, 02 a trail with its threads drawn, 03 and 09 motion demos, 04 chrome, 06 Home's states and doors, 07 a day of trails, 08 every move). Renders of both sets are in [plates.md](plates.md).
+Draft, 2026-10-13. Sol: "this is it" for the trail model. Plates: `design/2026-10-13-trails/` (01 trail, 02 Front, 03 phone and foldable, 04 table, 05 sky, 06–08 forks, 09–11 press play and resume, 12 habits). Revised 2026-10-23 after driving the build: Home, the pane row and the chrome. Plates: `design/2026-10-23-navigation/` (01 Home, 02 a trail with its threads drawn, 03 and 09 motion demos, 04 chrome, 06 Home's states and doors, 07 a day of trails, 08 every move). Revised 2026-10-30 for discovery: the shelf's edge, Explore, the Journal and the Home column that follows from them. Plates: `design/2026-10-30-discovery/` (01 the edge, 02 a lead becomes yours, 03 Explore, 04 Journal, 05 Today, 06 Home). Renders of the sets are in [plates.md](plates.md).
 
 ## What was wrong
 
@@ -32,17 +32,17 @@ There are no pages to file things into. There is one surface.
 - **Now.** The transport, title, scrubber and quality marks sit in an LCD at the top centre at every desktop width (iTunes' place). The Now panel (the playing body, the signal path and the queue) opens from it or with `N`, and is pinned by default from 1800 pt. Phones keep a player bar under the thumb.
 - **Activity.** One indicator in the top line, replacing the status line on 2026-10-23. It is a dot while every source is fine, a ring while a job runs, and amber when something needs you. Its popover lists sources, folders, jobs and guesses, and opens Settings. There is no bottom row on desktop.
 
-Keyboard: `/` search, `[` `]` move along the trail, `⌘↵` follow, `W` want, `C` crate, `⌘S` keep the trail, `⌘1` Home, `N` Now. Key hints live in the menu bar (Go and Controls menus), a `?` sheet and tooltips, not on screen.
+Keyboard: `/` search, `[` `]` move along the trail, `⌘↵` follow, `W` want, `C` crate, `⌘S` keep the trail, `⌘1` Today, `⌘2` Explore, `⌘3` Journal, `N` Now. Key hints live in the menu bar (Go and Controls menus), a `?` sheet and tooltips, not on screen.
 
 ## Home
 
 Decided 2026-10-23 (plates 01, 06, 07). Sol: "Home as a column feels right." It isn't a sidebar of places: every entry is a door that opens a pane, and plumbing stays out of it.
 
 - **Three states.** A 248 pt column when nothing is open, beside Today. A 52 pt rail inside a trail, with the door the trail started from lit. The column laid over the trail with `⌘1` or `◐`: the panes dim and never move. `Esc`, `]` or a click on a pane closes it. From 2200 pt the column can stay open as a setting.
-- **Today** is Home's own page, not a trail stop: Resume first, then Play something with its reasons, partway through, added lately and your week. Meret opens here. Opening something from Today starts a trail whose first pane says so ("from Today · added lately").
-- **Doors start trees.** A door starts a new tree, as a search does, and the old tree moves to Trails, one `[` away. Doors never fork the current tree. The tree and its first pane take the door's name (All tracks, Scores), not its query, and a row opened from a search's table is *found* by it.
-- **Sections are fixed:** Listen (Today, Pick up, Play something), Library (All tracks, then one row per idiom you own, People, Games), Crates, Trails, Out there (Leads, Wants, Needs you). Crates and trails can be pinned and reordered. Needs you shows only while it isn't zero. Folders, sources and jobs never get a door; they live in the activity popover and Settings.
-- **Keys.** `⌘1`–`⌘9` go to the first nine doors in order.
+- **Today** is Home's own page, not a trail stop: Resume first, then Play something with its reasons and added lately; a narrower right column holds Pick up (everything partway, each resuming as its idiom does), your week, and one line each to Explore and the Journal. Today holds no feed of leads. Meret opens here. Opening something from Today starts a trail whose first pane says so ("from Today · added lately").
+- **Doors start trees.** A door starts a new tree, as a search does, and the old tree goes to the Journal. Doors never fork the current tree. The tree and its first pane take the door's name (All tracks, Scores), not its query, and a row opened from a search's table is *found* by it.
+- **Sections are fixed** (decided 2026-10-30, superseding Listen, Library, Crates, Trails and Out there): Today, Explore and Journal at the top; Collection (All tracks, then one row per idiom you own, People, Games, Crates); Pinned (crates and kept trails you pin, in your order). Each section counts in one unit: tracks for All tracks, releases for idioms. Pick up is Today's right column, not a door. Play something is a verb (the LCD, Today, `⇧Space`), not a door. Needs you is not a door either: it lives in the activity popover, and Collection shows a Library health row only while something needs you. Folders, sources and jobs never get a door; they live in the activity popover and Settings.
+- **Keys.** `⌘1` Today, `⌘2` Explore, `⌘3` Journal; `⌘4`–`⌘9` go to the next doors in order.
 
 ## The pane row
 
@@ -73,18 +73,30 @@ These join the shared primitives in [idioms.md](idioms.md):
 | Primitive | Meaning |
 |---|---|
 | Thread | A typed, sourced relation you can follow |
-| Trail | A path of followed threads; kept, named, playable |
-| Lead | Something you haven't heard, with the thread or threads that produced it. A lead that several threads converge on is a strong one, and Meret says so |
-| Want | A lead you mean to own; Meret watches for it in shops and on Discogs |
+| Trail | A path of followed threads; playable. It keeps itself while it produced something (a play, a want, a crate add, a note) or you kept it, and fades after two weeks otherwise |
+| Lead | Something you don't own, with the signals that produced it. A lead that several signals agree on is a strong one, and Meret says so. It moves Found → Heard → Wanted → Owned |
+| Want | A lead you mean to own; Meret watches for it in shops and on Discogs, and closes it when a matching file arrives |
 | Crate | A hand-made set of anything, owned or not. Ordered crates are playlists; rule crates are smart playlists |
 | Dormant | Something you loved and stopped playing. Rediscovery is discovery |
 
-Leads come from: people you follow, the rest of what you own (other editions, the arranged album, the audience tape), crawls of your YouTube likes and Bandcamp, sound similarity to this week's listening, other recordings of works you love, and ListenBrainz neighbours.
+Leads come from: credits you own (MusicBrainz discographies), the same studio or series (Wikidata), listeners of what you play (ListenBrainz), sound similarity to this week's listening (local audio), your services' likes and libraries (Spotify, Apple Music), other recordings of works you love, the rest of what you own (other editions, the arranged album, the audience tape), and crawls of your YouTube likes and Bandcamp.
+
+## Discovery at the shelf's edge
+
+Decided 2026-10-30, after the trail model shipped without anything outside the library to find. Plates: `design/2026-10-30-discovery/`.
+
+- **The shelf comes first.** Every pane lists what you own first, as solid rows ("On your shelf"), then "Beyond your shelf": the same person's, work's or series' records you don't own, as hollow rows with the sources that know them. Outside rows never mix into the owned list.
+- **Ownership is the goal.** A lead moves Found → Heard → Wanted → Owned. When a file arrives that matches a want (by MusicBrainz ID, then the usual matching order), the lead closes and the release keeps how you found it: the trail, the signals, where you heard it and when it arrived. Purchases are never read; ownership is detected by matching.
+- **Services suggest and let you hear; they never hold the library.** Spotify and Apple Music contribute likes and library albums as lead sources, and play a lead through their own player (Spotify Connect; Apple Music through MusicKit). That playback is marked lossy and outside Meret's engine.
+- **Free sources come first.** MusicBrainz discographies, ListenBrainz listeners and Wikidata need no subscription, so "Beyond your shelf" is built on them before any service is connected. Without a service a lead says where it could be heard and offers to connect one.
+- **Explore** (`⌘2`) is the inbox of leads: grouped by how many signals agree, then by trail, person, series and service, filterable by source, with Wants and Not for me beside it. Not for me hides a lead and lowers similar ones; a lead untouched for 30 days leaves Explore and stays findable on its pane.
+- **The Journal** (`⌘3`) replaces History and All trails. It is one timeline of listening sessions (plays less than 30 minutes apart), with the trails you wandered during each shown inline with what they found. Patterns sit on top: listening by hour across the week, on repeat, falling off and habits. Skips are not shown per row; brief plays are one count per session and feed the patterns. A trail's tree opens inside its Journal entry.
+- **Trails fade.** A trail with nothing done on it drops out after two weeks unless kept (decided 2026-10-30; a setting can come later if Sol wants to keep them).
 
 ## What replaces Sources and Unmatched
 
 - **Availability is a mark on every row.** Filled: own, lossless. Half: own, lossy. Ringed: stream, with a service code (sp, qb, yt, bc, ia). Dashed: known, nowhere to hear yet. A pane shows "where to hear it" when that matters, such as for a lead. Connections live in the activity popover and settings.
-- **Identity is a mark too.** `≈` means guessed. You fix it where you see it. The activity indicator counts the guesses, and Home's Needs you door offers batch fixes (for example, sending 41 game rips to MusicBrainz's editor).
+- **Identity is a mark too.** `≈` means guessed. You fix it where you see it. The activity indicator counts the guesses, and Collection's Library health row offers batch fixes (for example, sending 41 game rips to MusicBrainz's editor).
 
 ## Forks: trails are trees
 
@@ -99,7 +111,7 @@ Decided 2026-10-13: a trail is a tree. Plates 06–08.
 - **Playing.** Play this branch, or play the whole tree depth first.
 - **Keys.** `[` `]` move along this branch. `⌥[` `⌥]` switch to a sibling branch at the nearest fork. `T` opens the whole tree as a pane, with a table of branches and the same tree drawn on the sky.
 - **A search ends a trail.** Decided 2026-10-13. Running a search from the query line starts a new tree, rooted at that search, and the old trail is kept as it was. Nothing else ends a trail: not time, not idle, not the Front, and not filtering inside a pane (brushing a table column, lassoing the sky). A search stop's filters are part of the trail's root, so going back to it restores them.
-- **`[` stays in its trail** (decided 2026-10-29). At a trail's first stop `[` does nothing and the trail chip's border flashes; Go ▸ Back is disabled there. `]` walks into the dimmed stops ahead and never into another trail. Older trails open from Home, All trails and the tree. Over Today, Home, the tree or the narrow Now overlay, `[`, `]` and Esc only close it.
+- **`[` stays in its trail** (decided 2026-10-29). At a trail's first stop `[` does nothing and the trail chip's border flashes; Go ▸ Back is disabled there. `]` walks into the dimmed stops ahead and never into another trail. Older trails open from the Journal, Pinned and the tree. Over Today, Home, the tree or the narrow Now overlay, `[`, `]` and Esc only close it.
 - **Doors don't pile up.** Opening a door or a search that matches the newest trail that is still only that root, with nothing done on it, reopens that trail instead of starting a copy. Kept or named trails are never reused.
 - **Phone.** The trail chip shows only the current branch, with ringed stars and stubs at forks. Long-press a fork for a sheet of its branches.
 
@@ -122,7 +134,7 @@ Plates 09–11. Most sessions are "press play", so playing never goes through a 
 
 - **Play something** (`⇧Space`, or `Space` when there's nothing to resume) always says why it chose what it did. Picks are ranked: your habit for this day and time (a crate you play on most Tuesday evenings), something dormant, then the region of the sky your latest trail ended in, mixed with leads.
 - **When the queue ends**, the idiom decides by default. An album or score you were exploring stops; a podcast moves on to the next unplayed episode; radio only starts if you asked for it.
-- **What was that?** The last few plays, with times, sit under Now. `H` opens the full history.
+- **What was that?** The last few plays, with times, sit under Now. `⌘3` opens the Journal.
 - **Play on.** Every zone (this Mac, Roon, Sonos and AirPlay through Music Assistant, Spotify Connect, your phone) is listed with what it does to the sound: bit-perfect, resampled, lossy, delayed.
 - **Outside the app.** A menu bar item shows the title and time. Its panel has the controls, the signal path, three things to pick up, and play something. Media keys work without opening anything. On phones Meret fills the system player and adds one "pick up" widget; it doesn't redraw the lock screen.
 - **Hand-off.** Open the phone and Now offers "Continue from the Mac at 3:47". The phone plays its own copy if it has one, otherwise it controls the Mac.
