@@ -34,6 +34,8 @@ abstract interface class CoreBridge {
   Future<void> playGame(PlatformInt64 id, int index);
   Future<void> playRelease({required PlatformInt64 id, required int index, int? fromStop});
   Future<TrailDto> startTrail(TargetDto to);
+  /// A search stop's filters rewrite the trail's search, so a return to the stop keeps them.
+  Future<TrailDto> refineSearch(String query);
   Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via, String provider);
   Future<TrailDto?> trailBack();
   Future<TrailDto?> trailForward();
@@ -79,6 +81,12 @@ abstract interface class CoreBridge {
   Future<PickDto?> playSomething();
   /// A pick clicked in Now: plays that release from the top with its why.
   Future<PickDto> playPick(PlatformInt64 releaseId);
+  /// Null while Play something has a pick; otherwise why it hasn't.
+  Future<NothingToPlayDto?> nothingToPlay();
+  /// The tracks whose files have gone: what the Front's Missing files counts.
+  Future<List<MissingFileDto>> missingFiles();
+  /// Walks every folder again in the background; the library version moves when it ends.
+  Future<void> rescan();
   /// Play on: every zone and what it does to the sound.
   Future<List<ZoneDto>> zones();
   /// Sends output to a zone; while playing it applies from the next track.
@@ -113,6 +121,8 @@ class RustCore implements CoreBridge {
       rust.playRelease(id: id, index: index, fromStop: fromStop);
   @override
   Future<TrailDto> startTrail(TargetDto to) => rust.startTrail(to: to);
+  @override
+  Future<TrailDto> refineSearch(String query) => rust.refineSearch(query: query);
   @override
   Future<TrailDto> follow(int fromStop, TargetDto to, ThreadKind via, String provider) => rust.follow(fromStop: fromStop, to: to, via: via, provider: provider);
   @override
@@ -196,6 +206,12 @@ class RustCore implements CoreBridge {
   @override
   Future<PickDto> playPick(PlatformInt64 releaseId) => rust.playPick(releaseId: releaseId);
   @override
+  Future<NothingToPlayDto?> nothingToPlay() => rust.nothingToPlay();
+  @override
+  Future<List<MissingFileDto>> missingFiles() => rust.missingFiles();
+  @override
+  Future<void> rescan() => rust.rescan();
+  @override
   Future<List<ZoneDto>> zones() => rust.zones();
   @override
   Future<void> playOn(String zone) => rust.playOn(zone: zone);
@@ -217,7 +233,7 @@ class FakeCore implements CoreBridge {
   BigInt _libraryVersion = BigInt.one;
   TrailDto? _trail;
   final _forward = <int, int>{};
-  final _trailHistory = <({TrailDto trail, Map<int, int> forward, int departure})>[];
+  final _trailHistory = <({TrailDto trail, Map<int, int> forward})>[];
   int? _historyIndex;
   final _trailUids = <String>[];
   final _trailCreated = <String, int>{};
@@ -236,19 +252,24 @@ class FakeCore implements CoreBridge {
     ];
   }
 
+  /// The core's `Trail::last_visited`: when the stop you're on was entered.
+  static PlatformInt64 _lastVisited(TrailDto trail) => trail.stops.firstWhere((stop) => stop.index == trail.current).openedMs;
+
   TrailSummaryDto _trailSummary(int index) {
     final trail = _trailHistory[index].trail;
     final uid = _trailUids[index];
+    final counted = trail.stops.where((stop) => !stop.isPeek).toList();
     final root = trail.stops.first.title;
     final leaf = trail.stops.firstWhere((stop) => stop.index == trail.current).title;
     final parents = trail.stops.map((stop) => stop.parent).toSet();
     return TrailSummaryDto(
-      uid: uid, title: root == leaf ? root : '$root → $leaf',
-      stops: trail.stops.length,
-      branches: trail.stops.where((stop) => !parents.contains(stop.index)).length,
-      whenMs: PlatformInt64Util.from(_trailCreated[uid]!),
+      uid: uid, title: trail.current == 0 ? root : '$root → $leaf',
+      stops: counted.length,
+      branches: counted.where((stop) => !parents.contains(stop.index)).length,
+      whenMs: _lastVisited(trail),
       kept: _keptTrails.containsKey(uid), name: _keptTrails[uid],
       played: _trailPlayed[uid]?.length ?? 0, wanted: 0,
+      route: counted.map((stop) => stop.title).join(' → '),
     );
   }
 
@@ -268,14 +289,22 @@ class FakeCore implements CoreBridge {
     final index = _trailUids.indexOf(uid);
     if (index < 0) throw 'that trail is no longer in the history';
     _saveTrail();
-    _loadTrail(index);
-    return trailGo(_trail!.current);
+    _moveToTop(index);
+    return _enter(_trail!.current, resume: true);
+  }
+
+  /// The core moves a trail you start, reuse or open to the end of history.
+  void _moveToTop(int index) {
+    final entry = _trailHistory.removeAt(index);
+    _trailHistory.add(entry);
+    _trailUids.add(_trailUids.removeAt(index));
+    _loadTrail(_trailHistory.length - 1);
   }
 
   TrailDto _withKept(TrailDto trail, int index) {
     final uid = _trailUids[index];
-    return TrailDto(rootQuery: trail.rootQuery, current: trail.current, stops: trail.stops, meetings: trail.meetings,
-      branches: _branches(trail, uid), kept: _keptTrails.containsKey(uid), name: _keptTrails[uid]);
+    return TrailDto(uid: uid, rootQuery: trail.rootQuery, current: trail.current, stops: trail.stops, meetings: trail.meetings,
+      branches: _branches(trail, uid), kept: _keptTrails.containsKey(uid), name: _keptTrails[uid], whenMs: _lastVisited(trail));
   }
 
   List<BranchDto> _branches(TrailDto trail, String uid) {
@@ -312,7 +341,7 @@ class FakeCore implements CoreBridge {
     final index = _historyIndex;
     final trail = _trail;
     if (index != null && trail != null) {
-      _trailHistory[index] = (trail: trail, forward: Map.of(_forward), departure: _trailHistory[index].departure);
+      _trailHistory[index] = (trail: trail, forward: Map.of(_forward));
     }
   }
 
@@ -417,7 +446,7 @@ class FakeCore implements CoreBridge {
           ('Native chiptune', 1840, 'SPC, NSF, VGM', 'format:chiptune'),
           ('DSD', 410, '', 'format:dsd'),
         ])
-          FrontLineDto(label: label, count: BigInt.from(count), note: note, query: query),
+          FrontLineDto(label: label, count: BigInt.from(count), note: note, query: query, missingFiles: false),
       ],
       addedLately: [
         for (final id in [6, 4, 3])
@@ -427,13 +456,16 @@ class FakeCore implements CoreBridge {
             addedMs: PlatformInt64Util.from(now - id * 86400000), query: 'release:${_quote(_releases[id - 1].$1)}'),
       ],
       needsYou: [
-        FrontLineDto(label: 'Tracks with a guessed identity', count: BigInt.from(312), note: ''),
-        FrontLineDto(label: 'Albums with two editions', count: BigInt.from(18), note: ''),
+        FrontLineDto(label: 'Tracks with a guessed identity', count: BigInt.from(312), note: '', missingFiles: false),
+        FrontLineDto(label: 'Albums with two editions', count: BigInt.from(18), note: '', missingFiles: false),
+        if (missing.isNotEmpty)
+          FrontLineDto(label: 'Missing files', count: BigInt.from(missing.length), note: '', missingFiles: true),
       ],
       roots: [for (final root in _roots.entries) RootDto(
         id: PlatformInt64Util.from(root.key), path: root.value, online: true,
         tracks: BigInt.from(48210 ~/ _roots.length),
         label: root.value.split('/').where((part) => part.isNotEmpty).lastOrNull ?? root.value,
+        duplicates: BigInt.zero, missing: BigInt.from(missing.length),
       )],
     );
   }
@@ -443,7 +475,10 @@ class FakeCore implements CoreBridge {
     final command = input.trim();
     final verb = command.split(RegExp(r'\s+')).first.toLowerCase();
     if (verb == 'play') {
-      await playResults(command.substring(4).trim(), const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), 0);
+      final query = command.substring(4).trim();
+      const view = ViewDto(sort: SortKeyDto.library_, descending: false, group: false);
+      if (_list(query, view).$1.isEmpty) throw 'No tracks match';
+      await playResults(query, view, 0);
       return;
     }
     throw "$verb isn't built yet";
@@ -532,34 +567,65 @@ class FakeCore implements CoreBridge {
     };
     final title = await _title(target);
     _saveTrail();
-    if (_historyIndex case final index?) {
-      final previous = _trailHistory.removeAt(index);
-      _trailHistory.add((trail: previous.trail, forward: previous.forward, departure: previous.trail.current));
-      _trailUids.add(_trailUids.removeAt(index));
+    // A door visit that only repeats a trail with nothing on it but that
+    // root brings the trail back (the core's `TrailHistory::start`).
+    final bare = [for (var i = _trailHistory.length - 1; i >= 0; i--) i].where((i) => _isBare(i, target)).firstOrNull;
+    if (bare != null) {
+      _moveToTop(bare);
+      return _enter(0, resume: true);
     }
     _forward.clear();
+    final uid = 'fake-trail-${_nextTrail++}';
+    final now = DateTime.now().millisecondsSinceEpoch;
     final trail = TrailDto(
+      uid: uid,
       rootQuery: target is TargetDto_Search ? target.query : null,
       current: 0,
       stops: [StopDto(index: 0, target: target, title: title, onPath: true, isFork: false, isPeek: false,
-        openedMs: PlatformInt64Util.from(DateTime.now().millisecondsSinceEpoch), dwellMs: PlatformInt64Util.from(0), actions: const [])],
+        openedMs: PlatformInt64Util.from(now), dwellMs: PlatformInt64Util.from(0), actions: const [])],
       meetings: const [],
       branches: const [],
       kept: false,
+      whenMs: PlatformInt64Util.from(now),
     );
-    _trailHistory.add((trail: trail, forward: {}, departure: 0));
-    final uid = 'fake-trail-${_nextTrail++}';
+    _trailHistory.add((trail: trail, forward: {}));
     _trailUids.add(uid);
-    _trailCreated[uid] = DateTime.now().millisecondsSinceEpoch;
+    _trailCreated[uid] = now;
     _historyIndex = _trailHistory.length - 1;
-    (_trailVisits[uid] ??= {})[0] = DateTime.now().millisecondsSinceEpoch + _visitClock++;
+    (_trailVisits[uid] ??= {})[0] = now + _visitClock++;
     return _trail = _withKept(trail, _historyIndex!);
+  }
+
+  bool _isBare(int index, TargetDto target) {
+    final trail = _trailHistory[index].trail;
+    final root = trail.stops.first;
+    return !_keptTrails.containsKey(_trailUids[index]) && root.target == target && root.actions.isEmpty
+        && trail.current == 0 && trail.stops.skip(1).every((stop) => stop.isPeek);
   }
 
   String _searchQuery(String query) {
     final parsed = parse(query);
     if (parsed.kind != QueryKind.search) throw parsed.error ?? 'Type a search, not a command';
     return parsed.canonical;
+  }
+
+  @override
+  Future<TrailDto> refineSearch(String query) async {
+    final trail = _trail;
+    final index = _historyIndex;
+    if (trail == null || index == null) throw 'No trail is open';
+    if (trail.rootQuery == null) throw "this trail doesn't start from a search";
+    final canonical = _searchQuery(query);
+    final root = TargetDto.search(query: canonical);
+    _trail = _withKept(TrailDto(
+      uid: trail.uid, whenMs: trail.whenMs, rootQuery: canonical, current: trail.current, kept: trail.kept, name: trail.name,
+      branches: trail.branches, meetings: trail.meetings,
+      stops: [for (final stop in trail.stops)
+        stop.index == 0 ? StopDto(index: 0, target: root, title: _searchTitle(canonical), onPath: stop.onPath, isFork: stop.isFork,
+          isPeek: stop.isPeek, openedMs: stop.openedMs, dwellMs: stop.dwellMs, actions: stop.actions) : stop],
+    ), index);
+    _saveTrail();
+    return _trail!;
   }
 
   static const _idioms = {
@@ -606,7 +672,7 @@ class FakeCore implements CoreBridge {
     }
     final index = trail.stops.map((stop) => stop.index).reduce((a, b) => a > b ? a : b) + 1;
     _forward[fromStop] = index;
-    _trail = TrailDto(rootQuery: trail.rootQuery, current: index, branches: const [], kept: trail.kept, name: trail.name, stops: [
+    _trail = TrailDto(uid: trail.uid, whenMs: trail.whenMs, rootQuery: trail.rootQuery, current: index, branches: const [], kept: trail.kept, name: trail.name, stops: [
       ...trail.stops,
       StopDto(index: index, parent: fromStop, target: to, title: title, via: _threadLabel(via),
         viaSource: switch (provider) { 'musicbrainz' => 'MB', 'wikidata' => 'Wikidata', 'library' => 'your library', _ => 'tags' },
@@ -643,7 +709,10 @@ class FakeCore implements CoreBridge {
   };
 
   @override
-  Future<TrailDto> trailGo(int stop) async {
+  Future<TrailDto> trailGo(int stop) => _enter(stop);
+
+  /// Makes [stop] current; [resume] restamps it as just opened, as returning to a trail does.
+  Future<TrailDto> _enter(int stop, {bool resume = false}) async {
     final trail = _trail;
     if (trail == null) throw 'No trail is open';
     final byIndex = {for (final node in trail.stops) node.index: node};
@@ -662,11 +731,11 @@ class FakeCore implements CoreBridge {
     }
     final now = DateTime.now().millisecondsSinceEpoch;
     (_trailVisits[_trailUids[_historyIndex!]] ??= {})[stop] = now + _visitClock++;
-    return _trail = _withKept(TrailDto(rootQuery: trail.rootQuery, current: stop, branches: const [], kept: false, stops: [
+    return _trail = _withKept(TrailDto(uid: trail.uid, whenMs: trail.whenMs, rootQuery: trail.rootQuery, current: stop, branches: const [], kept: false, stops: [
       for (final node in trail.stops)
         _copyTrailStop(node,
           onPath: path.contains(node.index), isFork: (children[node.index] ?? 0) > 1,
-          openedMs: stop != trail.current && node.index == stop ? PlatformInt64Util.from(now) : null,
+          openedMs: (resume || stop != trail.current) && node.index == stop ? PlatformInt64Util.from(now) : null,
           dwellMs: stop != trail.current && node.index == trail.current
             ? PlatformInt64Util.from(node.dwellMs.toInt() + now - node.openedMs.toInt()) : null,
         ),
@@ -683,7 +752,7 @@ class FakeCore implements CoreBridge {
   void _recordTrailPlayed(TrailDto trail, int historyIndex, Set<int> played) {
     (_trailPlayed[_trailUids[historyIndex]] ??= <int>{}).addAll(played);
     _trail = _withKept(TrailDto(
-      rootQuery: trail.rootQuery, current: trail.current, kept: trail.kept, name: trail.name,
+      uid: trail.uid, whenMs: trail.whenMs, rootQuery: trail.rootQuery, current: trail.current, kept: trail.kept, name: trail.name,
       branches: trail.branches, meetings: trail.meetings,
       stops: [for (final stop in trail.stops)
         played.contains(stop.index) ? _copyTrailStop(stop, actions: [...stop.actions, 'played']) : stop,
@@ -696,24 +765,13 @@ class FakeCore implements CoreBridge {
     final trail = _trail;
     if (trail == null) return null;
     final parent = trail.stops.firstWhere((stop) => stop.index == trail.current).parent;
-    if (parent != null) return trailGo(parent);
-    final index = _historyIndex;
-    if (index == null || index == 0) return null;
-    _saveTrail();
-    _loadTrail(index - 1);
-    return trailGo(_trailHistory[index - 1].departure);
+    return parent == null ? null : trailGo(parent);
   }
 
   @override
   Future<TrailDto?> trailForward() async {
     final trail = _trail;
     if (trail == null) return null;
-    final index = _historyIndex;
-    if (index != null && index + 1 < _trailHistory.length && trail.current == _trailHistory[index].departure) {
-      _saveTrail();
-      _loadTrail(index + 1);
-      return trailGo(0);
-    }
     final visible = trail.stops.where((stop) => stop.parent == trail.current && !stop.isPeek).toList();
     final preferred = _forward[trail.current];
     final child = visible.where((stop) => stop.index == preferred);
@@ -725,26 +783,41 @@ class FakeCore implements CoreBridge {
     final trail = _trail;
     if (trail == null) return null;
     final stops = {for (final stop in trail.stops) stop.index: stop};
-    var child = stops[trail.current]!;
-    while (child.parent != null) {
-      final parent = stops[child.parent]!;
-      final siblings = trail.stops.where((stop) => stop.parent == parent.index && !stop.isPeek).toList();
-      if (siblings.length > 1) {
-        final next = siblings[(siblings.indexOf(child) + step.sign) % siblings.length];
-        bool below(StopDto node) {
-          while (node.index != next.index && node.parent != null) {
-            node = stops[node.parent]!;
-          }
-          return node.index == next.index;
+    List<StopDto> kids(StopDto stop) => trail.stops.where((node) => node.parent == stop.index && !node.isPeek).toList();
+    // The nearest fork at or above the current stop. At the fork itself, the
+    // branch you're on is the one `]` would walk into.
+    StopDto? fork;
+    StopDto? on;
+    final here = stops[trail.current]!;
+    final own = kids(here);
+    if (own.length > 1) {
+      fork = here;
+      on = own.where((node) => node.index == _forward[here.index]).firstOrNull ?? own.last;
+    } else {
+      var child = here;
+      while (child.parent != null) {
+        final parent = stops[child.parent]!;
+        if (kids(parent).length > 1) {
+          fork = parent;
+          on = child;
+          break;
         }
-        final visits = _trailVisits[_trailUids[_historyIndex!]]!;
-        final candidates = trail.stops.where((stop) => !stop.isPeek && below(stop)).toList()
-          ..sort((a, b) => (visits[b.index] ?? 0).compareTo(visits[a.index] ?? 0));
-        return trailGo(candidates.first.index);
+        child = parent;
       }
-      child = parent;
     }
-    return null;
+    if (fork == null || on == null) return null;
+    final siblings = kids(fork);
+    final next = siblings[(siblings.indexOf(on) + step.sign) % siblings.length];
+    bool below(StopDto node) {
+      while (node.index != next.index && node.parent != null) {
+        node = stops[node.parent]!;
+      }
+      return node.index == next.index;
+    }
+    final visits = _trailVisits[_trailUids[_historyIndex!]]!;
+    final candidates = trail.stops.where((stop) => !stop.isPeek && below(stop)).toList()
+      ..sort((a, b) => (visits[b.index] ?? 0).compareTo(visits[a.index] ?? 0));
+    return trailGo(candidates.first.index);
   }
 
   @override
@@ -764,7 +837,7 @@ class FakeCore implements CoreBridge {
     }
     _forward.removeWhere((parent, child) => removed.contains(parent) || removed.contains(child));
     _trail = TrailDto(
-      rootQuery: trail.rootQuery, current: trail.current, kept: trail.kept, name: trail.name, branches: const [],
+      uid: trail.uid, whenMs: trail.whenMs, rootQuery: trail.rootQuery, current: trail.current, kept: trail.kept, name: trail.name, branches: const [],
       stops: trail.stops.where((stop) => !removed.contains(stop.index)).toList(),
       meetings: trail.meetings.where((pair) => !removed.contains(pair.$1) && !removed.contains(pair.$2)).toList(),
     );
@@ -1098,7 +1171,7 @@ class FakeCore implements CoreBridge {
       for (final release in releases) {
         items.add(ItemDto.group(headers[release]!));
         for (final index in groups[release]!) {
-          items.add(ItemDto.track(ordinal: indices.length, row: _row(index)));
+          items.add(ItemDto.track(ordinal: indices.length, row: _row(index), discs: _discsOf(index)));
           indices.add(index);
         }
       }
@@ -1123,13 +1196,21 @@ class FakeCore implements CoreBridge {
         });
       }
       for (var ordinal = 0; ordinal < indices.length; ordinal++) {
-        items.add(ItemDto.track(ordinal: ordinal, row: _row(indices[ordinal])));
+        items.add(ItemDto.track(ordinal: ordinal, row: _row(indices[ordinal]), discs: _discsOf(indices[ordinal])));
       }
     }
     final result = (indices, items, groups.length);
     _lists[key] = result;
     if (_lists.length > 8) _lists.remove(_lists.keys.first);
     return result;
+  }
+
+  final _discCounts = <int, int>{};
+
+  /// How many discs the row's release has, as its page counts them.
+  int _discsOf(int index) {
+    final release = _row(index).releaseId.toInt();
+    return _discCounts[release] ??= _sampleRows.where((row) => row.releaseId.toInt() == release).map((row) => row.disc).toSet().length;
   }
 
   static String _idiom(TrackRowDto row) => switch (row.albumArtist) {
@@ -1407,7 +1488,7 @@ class FakeCore implements CoreBridge {
     if (saved == null) throw 'That release has no resume point';
     final rows = _releaseRows(releaseId);
     final at = rows.indexWhere((row) => row.trackId == saved.recordingId);
-    if (at < 0) throw 'The saved recording is unavailable';
+    if (at < 0) throw '${saved.recordingTitle} is missing';
     _playQueue(rows.sublist(at));
     final position = saved.idiom == 'score' || saved.idiom == 'set' ? saved.positionMs : BigInt.zero;
     final anchor = _state.anchor!;
@@ -1467,6 +1548,27 @@ class FakeCore implements CoreBridge {
     if (pick == null) throw 'that pick is gone';
     _playQueue(_releaseRows(pick.releaseId), why: _pickWhy(pick));
     return pick;
+  }
+
+  /// The tracks the fake library has lost; the Front lists them under Missing files.
+  List<MissingFileDto> missing = const [];
+
+  /// How many times Rescan was asked for.
+  int rescans = 0;
+
+  @override
+  Future<NothingToPlayDto?> nothingToPlay() async {
+    if (_empty) return const NothingToPlayDto(kind: NothingToPlayKind.noMusic, label: 'Add a music folder');
+    return (await picks(3)).isEmpty ? const NothingToPlayDto(kind: NothingToPlayKind.playedAll, label: 'Nothing to play yet') : null;
+  }
+
+  @override
+  Future<List<MissingFileDto>> missingFiles() async => missing;
+
+  @override
+  Future<void> rescan() async {
+    rescans++;
+    _libraryChanged();
   }
 
   static String _pickWhy(PickDto pick) => '${pick.label} · ${pick.reason.replaceAll(RegExp(r'\.$'), '')}';

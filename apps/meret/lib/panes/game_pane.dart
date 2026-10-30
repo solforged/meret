@@ -153,10 +153,9 @@ class _GamePaneState extends State<GamePane> {
                       kind: ThreadKind.soundtrack, label: 'soundtrack', source: 'Wikidata', provider: 'wikidata',
                       to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
                     )),
-                    child: TrailRow(target: TargetDto.release(id: row.releaseId), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    child: TrailRow(target: TargetDto.release(id: row.releaseId), child:
                       Text(row.album, style: Tok.label.copyWith(color: Tok.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      TrailThreadMark(target: TargetDto.release(id: row.releaseId)),
-                    ])),
+                    ),
                   ),
                 ),
               ])),
@@ -193,7 +192,6 @@ class _GamePaneState extends State<GamePane> {
           PaneActions(primary: 'Play', onPrimary: game.rows.isEmpty ? null : () => _play(0), primaryKey: const ValueKey('game-play')),
           if (_error != null) Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
         ])),
-        const ForksHere(),
         ..._section('Composers', game.composers),
         ..._section('Soundtracks', game.soundtracks),
         ..._section('Same series', game.sameSeries),

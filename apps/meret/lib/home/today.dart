@@ -8,7 +8,6 @@ import '../now/now_pane.dart';
 import '../now/picks.dart';
 import '../panes/add_folder.dart';
 import '../panes/pane.dart';
-import '../settings/settings_window.dart';
 import '../theme/tokens.dart';
 import 'resume.dart';
 import 'week.dart';
@@ -246,15 +245,7 @@ class _TodayState extends State<Today> {
         padding: const EdgeInsets.all(20),
         child: Align(alignment: Alignment.topLeft, child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            _emptyCollection(),
-            const SizedBox(height: 8),
-            Align(alignment: Alignment.centerLeft, child: TextButton(
-              key: const ValueKey('today-upcoming'),
-              onPressed: () => showSettings(context, section: SettingsSection.upcoming),
-              child: const Text('Upcoming features'),
-            )),
-          ]),
+          child: _emptyCollection(),
         )),
       ),
     ]);

@@ -87,12 +87,13 @@ impl Store {
     }
 
     /// Writes how far a listen got, while it plays and when it ends, and
-    /// returns whether it counts, using the same rule as reads.
+    /// returns whether it counts, using the same rule as reads. A listen only
+    /// moves forward: rewinding what already counted leaves it counted.
     pub fn update_listen(&self, uid: ListenUid, played_ms: u64) -> Result<bool> {
         self.writer.write(move |tx| {
             let uid = uid.to_string();
             let played_ms = i64::try_from(played_ms).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-            tx.execute("UPDATE listen SET played_ms = ?2 WHERE uid = ?1", params![uid, played_ms])?;
+            tx.execute("UPDATE listen SET played_ms = MAX(played_ms, ?2) WHERE uid = ?1", params![uid, played_ms])?;
             tx.query_row(&format!("SELECT {COUNTED} FROM listen l {LISTEN_TRACK} WHERE l.uid = ?1"),
                 [uid], |r| r.get(0))
         })

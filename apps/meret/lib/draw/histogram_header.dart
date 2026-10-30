@@ -8,11 +8,13 @@ import '../theme/tokens.dart';
 /// Dragging across it brushes a range; the caller turns that into a query
 /// clause such as `last:30d` and asks the core for new counts.
 class HistogramHeader extends StatefulWidget {
-  const HistogramHeader({super.key, required this.label, required this.bins, this.range, this.selection, this.onBrush, this.onSetRange, this.height = 44});
+  const HistogramHeader({super.key, required this.label, required this.bins, this.range, this.selection, this.onBrush, this.onSetRange, this.height = 48});
 
   final String label;
 
-  /// The span the bins cover, drawn at the right of the label: `1950–2026`.
+  /// The span the bins cover, or the range applied to it, drawn at the
+  /// right of the label: `1950–2026`, `11–13`. It opens the same dialog as
+  /// the label.
   final String? range;
   final Uint32List bins;
   final (double, double)? selection;
@@ -45,6 +47,24 @@ class _HistogramHeaderState extends State<HistogramHeader> {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, box) {
       double frac(Offset p) => (p.dx / box.maxWidth).clamp(0.0, 1.0);
+      final title = widget.label.toUpperCase();
+      final range = widget.range;
+      // A narrow header keeps both words, the span under the label.
+      final stacked = range != null && _width(title) + _width(range) + 12 > box.maxWidth;
+      final onSet = widget.onSetRange;
+      // "Set DR filter", "Set year filter": acronyms keep their case.
+      final tooltip = 'Set ${widget.label == widget.label.toUpperCase() ? widget.label : widget.label.toLowerCase()} filter';
+      Widget word(String text, TextStyle style, {bool tip = false}) {
+        if (onSet == null) return Text(text, style: style, maxLines: 1, overflow: TextOverflow.clip);
+        final button = TextButton(
+          onPressed: onSet,
+          style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap, alignment: Alignment.centerLeft),
+          child: Text(text, style: style, maxLines: 1, overflow: TextOverflow.clip),
+        );
+        return tip ? Tooltip(message: tooltip, child: button) : button;
+      }
+      final rangeStyle = Tok.label.copyWith(color: Tok.faint);
       return SizedBox(height: widget.height, child: Stack(children: [
         Positioned.fill(child: GestureDetector(
         onHorizontalDragStart: (d) {
@@ -67,41 +87,40 @@ class _HistogramHeaderState extends State<HistogramHeader> {
           _brush.value = null;
           widget.onBrush?.call(null);
         },
-        child: CustomPaint(painter: _HistogramPainter(widget.bins, _brush)),
+        child: CustomPaint(painter: _HistogramPainter(widget.bins, _brush, top: stacked ? 28 : 14)),
         )),
         Align(
-              alignment: Alignment.topLeft,
-              child: Row(children: [
-                Flexible(child: widget.onSetRange == null
-                    ? Text(widget.label.toUpperCase(), style: Tok.label, maxLines: 1, overflow: TextOverflow.clip)
-                    : Tooltip(message: 'Set ${widget.label.toLowerCase()} filter', child: TextButton(
-                        onPressed: widget.onSetRange,
-                        style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap, alignment: Alignment.centerLeft),
-                        child: Text(widget.label.toUpperCase(), style: Tok.label, maxLines: 1, overflow: TextOverflow.clip),
-                      ))),
-                const Spacer(),
-                // A narrow header keeps its label and drops the span.
-                if (widget.range case final range? when box.maxWidth >= 140) Text(range, style: Tok.label.copyWith(color: Tok.faint)),
-              ]),
+          alignment: Alignment.topLeft,
+          child: stacked
+              ? Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  word(title, Tok.label, tip: true),
+                  word(range, rangeStyle),
+                ])
+              : Row(children: [
+                  Expanded(child: Align(alignment: Alignment.centerLeft, child: word(title, Tok.label, tip: true))),
+                  if (range != null) word(range, rangeStyle),
+                ]),
         ),
       ]));
     });
   }
+
+  static double _width(String text) =>
+      (TextPainter(text: TextSpan(text: text, style: Tok.label), textDirection: TextDirection.ltr, maxLines: 1)..layout()).width;
 }
 
 class _HistogramPainter extends CustomPainter {
-  _HistogramPainter(this.bins, this.brush) : super(repaint: brush);
+  _HistogramPainter(this.bins, this.brush, {required this.top}) : super(repaint: brush);
 
   final Uint32List bins;
   final ValueNotifier<(double, double)?> brush;
+  final double top;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (bins.isEmpty) return;
     final max = bins.reduce((a, b) => a > b ? a : b).toDouble();
     final w = size.width / bins.length;
-    final top = 14.0;
     final h = size.height - top;
     final sel = brush.value;
     final on = Paint()..color = Tok.gold2;
@@ -122,5 +141,5 @@ class _HistogramPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_HistogramPainter old) => old.bins != bins;
+  bool shouldRepaint(_HistogramPainter old) => old.bins != bins || old.top != top;
 }

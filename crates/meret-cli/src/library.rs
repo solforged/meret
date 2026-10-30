@@ -152,7 +152,7 @@ pub fn ls(api: &Api, rt: &tokio::runtime::Runtime, query: &str, view: ViewDto, o
                 g.length_ms / 1000 % 60,
                 g.format
             ),
-            ItemDto::Track { ordinal, row: r } => {
+            ItemDto::Track { ordinal, row: r, .. } => {
                 let len = r.length_ms.map(|ms| format!("{}:{:02}", ms / 60_000, ms / 1000 % 60)).unwrap_or_default();
                 println!(
                     "{ordinal:>6}  {:>2}-{:<3} {:<40.40} {:<24.24} {:<32.32} {:>4} {:>6}  {}  {}",
@@ -210,7 +210,10 @@ pub fn front(api: &Api, rt: &tokio::runtime::Runtime) -> Result<()> {
     }
     println!("Folders");
     for r in &f.roots {
-        println!("  {} {}", if r.online { "●" } else { "○" }, r.path);
+        let notes: Vec<_> = [(r.duplicates, "duplicates skipped"), (r.missing, "missing")]
+            .into_iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
+        println!("  {} {}{}", if r.online { "●" } else { "○" }, r.path,
+            if notes.is_empty() { String::new() } else { format!("  · {}", notes.join(" · ")) });
     }
     println!("in {took:.2?}");
     Ok(())
@@ -251,7 +254,7 @@ pub fn search(api: &Api, rt: &tokio::runtime::Runtime, input: &str) -> Result<()
     Ok(())
 }
 
-/// Walk numbered hits/threads, or navigate between session trails.
+/// Walk numbered hits/threads along one trail, or open a saved trail.
 pub fn walk(api: &Api, rt: &tokio::runtime::Runtime, search: &str, steps: &[String]) -> Result<()> {
     settle(api, rt);
     let mut trail = if search == "[" {
@@ -610,9 +613,21 @@ pub fn picks(api: &Api, limit: u32) -> Result<()> {
             pick.label, pick.title, pick.credit.as_deref().map(|c| format!(" · {c}")).unwrap_or_default(),
             pick.reason, pick.plan, pick.meta, pick.release_id);
     }
-    if picks.is_empty() {
-        println!("nothing to play: no release has a playable track");
+    if picks.is_empty() && let Some(nothing) = api.nothing_to_play().map_err(anyhow::Error::msg)? {
+        println!("{}", nothing.label);
     }
+    Ok(())
+}
+
+/// The tracks whose files have gone, as the Front's "Missing files" table lists them.
+pub fn missing(api: &Api, rt: &tokio::runtime::Runtime) -> Result<()> {
+    settle(api, rt);
+    let files = api.missing_files().map_err(anyhow::Error::msg)?;
+    for file in &files {
+        println!("{} / {} · {}{} · {}", file.folder, file.file, file.title,
+            file.artist.as_deref().map(|artist| format!(" · {artist}")).unwrap_or_default(), file.album);
+    }
+    println!("{} missing", files.len());
     Ok(())
 }
 

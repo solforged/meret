@@ -8,8 +8,10 @@ import '../core/playhead.dart';
 import '../home/home.dart';
 import '../home/today.dart';
 import '../home/trail_browser.dart';
+import '../now/folder_error.dart';
 import '../now/history_sheet.dart';
 import '../now/lcd.dart';
+import '../now/missing_sheet.dart';
 import '../now/now_pane.dart';
 import '../panes/game_pane.dart';
 import '../panes/pane.dart';
@@ -52,11 +54,14 @@ class _StopKey extends GlobalKey<State<StatefulWidget>> {
   final int index;
   final TargetDto target;
 
-  @override
-  bool operator ==(Object other) => other is _StopKey && other.tree == tree && other.index == index && other.target == target;
+  // A search stop keeps its pane as its filters rewrite the query.
+  Object get _identity => target is TargetDto_Search ? #search : target;
 
   @override
-  int get hashCode => Object.hash(tree, index, target);
+  bool operator ==(Object other) => other is _StopKey && other.tree == tree && other.index == index && other._identity == _identity;
+
+  @override
+  int get hashCode => Object.hash(tree, index, _identity);
 }
 
 /// Pages fade through: the outgoing page is gone before the incoming one shows.
@@ -97,6 +102,9 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   bool _frontOnly = true;
   bool _treeOnly = false;
 
+  /// Bumped when `[` has nowhere to go (the first stop of a trail); the chip flashes.
+  final _chipCue = ValueNotifier<int>(0);
+
   /// The Home column laid over the trail (plate 06 C); the panes dim and never move.
   bool _homeOver = false;
   final _doors = HomeDoors();
@@ -111,10 +119,17 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   String? _navigationError;
   late SettingsDto _settings;
   final _settingsChanges = ValueNotifier(0);
+  /// Bumped when the app leaves a search for a page the query line's draft isn't about.
+  final _queryReset = ValueNotifier(0);
   BuildContext? _settingsContext;
 
-  /// Play something found nothing playable; the LCD says so until an item loads.
-  bool _nothingToPlay = false;
+  /// Why Play something has nothing to play (null while it has); read again
+  /// when the library, the loaded item or the listening moves.
+  NothingToPlayDto? _nothingToPlay;
+  (BigInt?, int)? _nothingFor;
+
+  /// A play or pick up that failed on a file: the core names it, Folders answers it.
+  String? _fileError;
 
   /// `N` or the LCD: the Now panel shown or hidden; null keeps the width
   /// class's default (pinned from 1800 pt). [_nowShown] is the last build's answer.
@@ -127,6 +142,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     super.initState();
     _settings = widget.core.settings();
     _queryFocus.addListener(_queryFocusChanged);
+    FocusManager.instance.addListener(_focusManagerChanged);
     WindowChrome.instance.onSettings = _openSettings;
     WindowChrome.instance.onMenu = _menu;
     _nowSub = widget.core.now().listen((n) {
@@ -135,7 +151,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       _outside.now(n);
       setState(() {
         if (_now?.anchor?.item != n.anchor?.item) _memoryVersion++;
-        if (n.anchor != null) _nothingToPlay = false;
+        if (n.anchor != null) _fileError = null;
         _now = n;
         _decided = true;
       });
@@ -158,10 +174,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _statusSub?.cancel();
     _clock.dispose();
     _queryFocus.removeListener(_queryFocusChanged);
+    FocusManager.instance.removeListener(_focusManagerChanged);
     _queryFocus.dispose();
     _surfaceFocus.dispose();
     _settingsChanges.dispose();
+    _queryReset.dispose();
     _doors.dispose();
+    _chipCue.dispose();
     _anchors.dispose();
     WindowChrome.instance.onSettings = null;
     WindowChrome.instance.onMenu = null;
@@ -173,6 +192,14 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   /// surface does, so `[` `]` `h` and Space work without a click first.
   void _queryFocusChanged() {
     if (!_queryFocus.hasFocus) _reclaimFocus();
+  }
+
+  /// A control let go of the keyboard focus (a click outside the LCD): nothing
+  /// holds it but a scope, so the surface takes it for its keys.
+  void _focusManagerChanged() {
+    if (FocusManager.instance.primaryFocus is! FocusScopeNode) return;
+    _reclaimFocusAfterFrame();
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   /// Keys live on the surface: take focus back when nothing holds it, or
@@ -229,16 +256,33 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   Future<void> _playSomething() async {
     if (_queryFocus.hasFocus) return;
-    final pick = await widget.core.playSomething();
-    if (mounted) setState(() => _nothingToPlay = pick == null);
+    setState(() => _fileError = null);
+    try {
+      final pick = await widget.core.playSomething();
+      if (pick == null) await _readNothingToPlay();
+    } catch (error) {
+      if (mounted) setState(() => _fileError = error.toString());
+    }
+  }
+
+  Future<void> _readNothingToPlay() async {
+    final why = await widget.core.nothingToPlay();
+    if (!mounted) return;
+    _doors.nothingToPlay = why;
+    setState(() => _nothingToPlay = why);
   }
 
   /// The Pick up door: the latest partway release that isn't loaded, from
   /// where it stopped; Today lists the rest.
   Future<void> _pickUpLatest() async {
-    final points = await widget.core.resumePoints(99);
-    final point = points.where((point) => point.releaseId != _now?.releaseId).firstOrNull ?? points.firstOrNull;
-    if (point != null) await widget.core.pickUp(point.releaseId);
+    setState(() => _fileError = null);
+    try {
+      final points = await widget.core.resumePoints(99);
+      final point = points.where((point) => point.releaseId != _now?.releaseId).firstOrNull ?? points.firstOrNull;
+      if (point != null) await widget.core.pickUp(point.releaseId);
+    } catch (error) {
+      if (mounted) setState(() => _fileError = error.toString());
+    }
   }
 
   Future<void> _keep() async {
@@ -265,25 +309,35 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     if (!_queryFocus.hasFocus) widget.core.transport(const TransportDto.fromStart());
   }
 
+  /// A sheet over the surface; the Controls and Help menu items it keeps stay on
+  /// while it's open (`WindowChrome.menuState`), the rest wait for it to close.
+  Future<void> _sheet(Set<String> keeps, Future<void> Function() show) {
+    WindowChrome.instance.sheetKeeps = keeps;
+    return show().whenComplete(() => WindowChrome.instance.sheetKeeps = const {});
+  }
+
   void _history() {
     final context = _settingsContext;
     if (!_queryFocus.hasFocus && context != null) {
-      showHistorySheet(context, widget.core, (id) => _report(_start(TargetDto.release(id: id))), onToggle: _toggle);
+      _sheet({'toggle'}, () => showHistorySheet(context, widget.core, (id) => _report(_start(TargetDto.release(id: id))), onToggle: _toggle));
     }
   }
 
-  /// `?`: every key on one page.
+  bool _keysOpen = false;
+
+  /// `?` or Help ▸ Keys: every key on one page; again, it closes.
   void _keys() {
     final context = _settingsContext;
-    if (!_queryFocus.hasFocus && context != null) showKeysSheet(context);
+    if (_keysOpen) {
+      if (context != null) Navigator.of(context).pop();
+    } else if (!_queryFocus.hasFocus && context != null) {
+      _keysOpen = true;
+      _sheet({'keys'}, () => showKeysSheet(context)).whenComplete(() => _keysOpen = false);
+    }
   }
 
-  /// Same tree, or a different one from the history? Stops never change
-  /// target inside a trail, so a clash at any index means another trail.
-  static bool _sameTrail(TrailDto a, TrailDto b) {
-    final targets = {for (final stop in a.stops) stop.index: stop.target};
-    return b.stops.every((stop) => (targets[stop.index] ?? stop.target) == stop.target);
-  }
+  /// Same tree, or a different one from the history?
+  static bool _sameTrail(TrailDto a, TrailDto b) => a.uid == b.uid;
 
   /// Install [trail]; stops that just left the row join the parked set,
   /// newest last, capped at [_parkedCap]. Another trail empties it.
@@ -304,15 +358,27 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       final key = _StopKey(_tree, stop.index, stop.target);
       _parked..remove(key)..add(key);
     }
-    _parked.removeWhere((key) => onRow.contains(key.index) || targets[key.index] != key.target);
+    _parked.removeWhere((key) {
+      final target = targets[key.index];
+      return onRow.contains(key.index) || target == null || _StopKey(_tree, key.index, target) != key;
+    });
     if (_parked.length > _parkedCap) _parked.removeRange(0, _parked.length - _parkedCap);
   }
 
-  /// Panes move themselves: the row animates whatever changed in it.
-  Future<void> _navigate(Future<TrailDto?> Function() call, {bool frontOnNull = false, int swap = 0, bool closeTree = true}) async {
+  /// The search stop's filters changed: the trail's search takes them, in
+  /// place, so the pane stays and the heading and trail name follow.
+  Future<void> _refine(String query) async {
+    final trail = await widget.core.refineSearch(query);
+    if (!mounted) return;
+    setState(() => _trail = trail);
+  }
+
+  /// Panes move themselves: the row animates whatever changed in it. False
+  /// when the core had nowhere to go.
+  Future<bool> _navigate(Future<TrailDto?> Function() call, {int swap = 0, bool closeTree = true}) async {
     final version = ++_navigationVersion;
     final trail = await call();
-    if (!mounted || version != _navigationVersion) return;
+    if (!mounted || version != _navigationVersion) return true;
     setState(() {
       _navigationError = null;
       _homeOver = false;
@@ -323,11 +389,10 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         _setTrail(trail);
         _swap = swap;
         _frontOnly = false;
-      } else if (frontOnNull) {
-        _frontOnly = true;
       }
     });
     _reclaimFocusAfterFrame();
+    return trail != null;
   }
 
   Future<void> _report(Future<void> call) async {
@@ -369,18 +434,16 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     }
   }
 
+  /// `[` and `]` move along the open trail, one stop. They never leave it:
+  /// at the first stop `[` only flashes the chip. Over Today, Home, the tree
+  /// or the narrow Now panel they just take that away, as Esc does.
   Future<void> _move(int by) async {
-    if (_editing) return;
-    if (by > 0 && _homeOver) {
-      _closeHome();
-      return;
+    if (_editing || _dismiss()) return;
+    if (by > 0) {
+      await _navigate(widget.core.trailForward);
+    } else if (!await _navigate(widget.core.trailBack) && _trail != null && mounted) {
+      _chipCue.value++;
     }
-    if (by > 0 && _frontOnly) {
-      // `]` from Today over an open trail returns to it where it was.
-      if (_trail != null) _showTrail();
-      return;
-    }
-    await _navigate(by < 0 ? widget.core.trailBack : widget.core.trailForward, frontOnNull: by < 0);
   }
 
   /// The Go, Controls and Help menus run what their keys run.
@@ -433,6 +496,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   void _showToday() {
     _navigationVersion++;
+    _queryReset.value++;
     setState(() {
       _frontOnly = true;
       _treeOnly = false;
@@ -450,10 +514,10 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     _homeReturnFocus = null;
   }
 
-  Future<void> _allTrails() async {
+  Future<void> _allTrails({bool kept = false}) async {
     final context = _settingsContext;
     if (context == null) return;
-    final uid = await showTrailBrowser(context, widget.core);
+    final uid = await showTrailBrowser(context, widget.core, kept: kept);
     if (mounted && uid != null) await _navigate(() => widget.core.openTrail(uid));
   }
 
@@ -462,10 +526,13 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     switch (door.kind) {
       case DoorKind.today: _showToday();
       case DoorKind.pickUp: _report(_pickUpLatest());
+      case DoorKind.history: _history();
       case DoorKind.playSomething: _report(_playSomething());
       case DoorKind.query: _report(_start(TargetDto.search(query: door.query!)));
       case DoorKind.trail: _report(_navigate(() => widget.core.openTrail(door.uid!)));
       case DoorKind.allTrails: _report(_allTrails());
+      case DoorKind.keptTrails: _report(_allTrails(kept: true));
+      case DoorKind.missing: showMissingFiles(context, widget.core, onCheckFolders: _openSettings);
       case DoorKind.later: break;
     }
   }
@@ -507,9 +574,14 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
     }
   }
 
-  /// Escape closes the narrow Now overlay, Home column, or tree view.
-  void _closeTree() {
-    if (_editing) return;
+  /// Something lies over the trail: the narrow Now overlay, Home, the tree,
+  /// or Today above an open trail.
+  bool get _overlaid => _nowOverlay || _homeOver || _treeOnly || (_frontOnly && _trail != null);
+
+  /// Takes away whatever is laid over the trail and says whether it did.
+  /// Esc, `[` and `]` all start here, so none of them also steps.
+  bool _dismiss() {
+    if (_editing) return false;
     if (_nowOverlay) {
       _toggleNow();
     } else if (_homeOver) {
@@ -518,10 +590,18 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       setState(() => _treeOnly = false);
       _restoreFocusAfterFrame(_treeReturnFocus);
       _treeReturnFocus = null;
+    } else if (_frontOnly && _trail != null) {
+      _showTrail();
+    } else {
+      return false;
     }
+    return true;
   }
 
-  Future<void> _start(TargetDto to) => _navigate(() => widget.core.startTrail(to));
+  Future<void> _start(TargetDto to) {
+    _queryReset.value++;
+    return _navigate(() => widget.core.startTrail(to));
+  }
 
   Future<void> _submit(QueryDto query) async {
     if (query.kind == QueryKind.command) {
@@ -575,6 +655,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         libraryVersion: _status?.libraryVersion,
         tracks: _status?.tracks,
         scanning: scanning,
+        onQuery: (query) => _report(_refine(query)),
         onFollow: (to) => follow(to, ThreadKind.matched, 'library'),
         onHit: (hit) => _report(follow(_hitTarget(hit), ThreadKind.matched, 'library')),
       ),
@@ -600,7 +681,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       via: stop.via,
       source: stop.viaSource,
       current: stop.index == _trail!.current,
-      forks: _trail!.branches.where((branch) => branch.fork == stop.index).length,
+      fork: ForkControl.has(_trail!, stop) ? ForkControl(
+        trail: _trail!, stop: stop,
+        onGo: (leaf) => _report(_navigate(() => widget.core.trailGo(leaf))),
+        onPrune: (leaf) => _report(_prune(leaf)),
+      ) : null,
       anchors: _anchors,
       stop: stop.index,
       body: TrailPaneScope(
@@ -635,7 +720,10 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
         setState(() => _settings = settings);
         _settingsChanges.value++;
       },
-      child: LightScope(light: light, child: FocusTraversalGroup(child: Shortcuts(
+      child: LightScope(light: light, child: FocusTraversalGroup(
+      // Tab runs top line, Home, the page, then Now, however their rects sit.
+      policy: OrderedTraversalPolicy(),
+      child: Shortcuts(
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.slash): _Focus(),
         SingleActivator(LogicalKeyboardKey.space, includeRepeats: false): _Toggle(),
@@ -674,7 +762,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
           _Keys: CallbackAction<_Keys>(onInvoke: (_) => _keys()),
           _NowPanel: CallbackAction<_NowPanel>(onInvoke: (_) => _toggleNow()),
           _Tree: CallbackAction<_Tree>(onInvoke: (_) => _toggleTree()),
-          _CloseTree: CallbackAction<_CloseTree>(onInvoke: (_) => _closeTree()),
+          _CloseTree: CallbackAction<_CloseTree>(onInvoke: (_) => _dismiss()),
           _Move: CallbackAction<_Move>(onInvoke: (i) => _report(_move(i.by))),
           _Sibling: CallbackAction<_Sibling>(onInvoke: (i) => _report(_sibling(i.step))),
           _Prune: CallbackAction<_Prune>(onInvoke: (_) => _report(_pruneNewest())),
@@ -701,14 +789,14 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               final hasMusic = (_status?.tracks ?? BigInt.zero) > BigInt.zero;
               WindowChrome.instance.setMenuAvailability({
                 'home': true, 'table': true, 'search': true,
-                'back': trail != null && !_frontOnly,
-                'forward': trail != null && (_frontOnly || _homeOver || along.length > path.length),
-                'previousBranch': trail != null && trail.branches.length > 1,
-                'nextBranch': trail != null && trail.branches.length > 1,
+                'back': trail != null && (_overlaid || path.length > 1),
+                'forward': trail != null && (_overlaid || along.length > path.length),
+                'previousBranch': path.any((stop) => stop.isFork),
+                'nextBranch': path.any((stop) => stop.isFork),
                 'tree': trail != null, 'keep': trail != null,
                 'prune': trail?.branches.any((branch) => !branch.current && branch.prunable) ?? false,
                 'toggle': _now?.anchor != null || hasMusic,
-                'playSomething': hasMusic,
+                'playSomething': hasMusic && _nothingToPlay == null,
                 'fromStart': _now?.anchor != null,
                 'playBranch': trail != null && hasMusic,
                 'playTree': trail != null && hasMusic,
@@ -722,7 +810,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                 duration: kMotion,
                 transitionBuilder: _fadeThrough,
                 layoutBuilder: _stacked,
-                child: ThreadLines(key: ValueKey(('row', _tree)), anchors: _anchors, stops: [for (final stop in along) stop.index], path: path.length, child: PaneRow(
+                child: ThreadLines(key: ValueKey(('row', _tree)), anchors: _anchors, stops: [for (final stop in along) stop.index], child: PaneRow(
                 focus: path.length - 1,
                 swap: _swap,
                 maxVisible: wc.panes,
@@ -735,6 +823,10 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               final phone = wc == WidthClass.phone;
               _phone = phone;
               _doors.load(widget.core, libraryVersion: _status?.libraryVersion, memoryVersion: _memoryVersion);
+              if ((_nothingFor ?? (null, -1)) != (_status?.libraryVersion, _memoryVersion)) {
+                _nothingFor = (_status?.libraryVersion, _memoryVersion);
+                _readNothingToPlay();
+              }
               final today = Today(
                 key: const ValueKey('today'),
                 core: widget.core,
@@ -757,6 +849,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                           onGo: (stop) => _report(_navigate(() => widget.core.trailGo(stop))),
                           onPrune: (leaf) => _report(_prune(leaf)),
                           onKeep: () => _report(_keep()),
+                          onClose: _dismiss,
                           onPlay: (whole) => _report(_playTrail(whole)),
                         )
                       : null;
@@ -765,12 +858,14 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
               final nowWidth = wc.nowWidth ?? WidthClass.panel;
               // Plate 06: the column beside Today, the rail inside a trail, and
               // the column over the rail on ⌘1. The panes never move for Home.
-              final homeWidth = phone ? 0.0 : showToday ? Home.column : Home.rail;
-              final homeOpen = showToday || _homeOver;
+              // Narrow windows keep the rail beside Today too, so the page keeps its room.
+              final railOnly = !phone && box.maxWidth < Home.railBelow;
+              final homeWidth = phone ? 0.0 : showToday && !railOnly ? Home.column : Home.rail;
+              final homeOpen = (showToday && !railOnly) || _homeOver;
               final covered = page != null || _homeOver;
               return Column(children: [
-                TopLine(
-                  query: QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search),
+                FocusTraversalOrder(order: const NumericFocusOrder(0), child: TopLine(
+                  query: QueryLine(core: widget.core, focus: _queryFocus, onSubmit: _submit, onSearch: _search, clearOn: _queryReset),
                   queryFocus: _queryFocus,
                   // An open Now panel keeps the LCD, so the mouse can close it again.
                   showLcd: _now?.anchor != null || _nowShown,
@@ -779,11 +874,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                     open: _nowShown, onOpen: phone ? null : _toggleNow, folded: folded,
                   ),
                   activity: ({quiet = false}) => Activity(core: widget.core, status: _status, quiet: quiet),
-                  onBack: trail == null ? null : () => _report(_move(-1)),
-                  onForward: trail == null || (!_frontOnly && along.length == path.length) ? null : () => _report(_move(1)),
+                  onBack: trail == null || !(_overlaid || path.length > 1) ? null : () => _report(_move(-1)),
+                  onForward: trail == null || !(_overlaid || along.length > path.length) ? null : () => _report(_move(1)),
                   // Under Home or Today the "] back to" line names the trail, so the chip waits.
-                  chip: trail == null || !_decided || (!phone && (_homeOver || showToday)) ? null : ({compact = false, star = false}) => TrailChip(trail: trail, onTree: _toggleTree, compact: compact, star: star),
-                ),
+                  chip: trail == null || !_decided || (!phone && (_homeOver || showToday)) ? null : ({compact = false, star = false}) => TrailChip(trail: trail, onTree: _toggleTree, compact: compact, star: star, cue: _chipCue),
+                )),
                 Expanded(child: Stack(fit: StackFit.expand, children: [
                   Positioned.fill(
                     right: _nowShown && !_nowOverlay ? nowWidth : 0,
@@ -791,9 +886,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                       child: ExcludeSemantics(excluding: _nowOverlay,
                         child: IgnorePointer(ignoring: _nowOverlay,
                           child: Stack(fit: StackFit.expand, children: [
-                    Padding(padding: EdgeInsets.only(left: homeWidth), child: Column(children: [
+                    FocusTraversalOrder(order: const NumericFocusOrder(2), child: FocusTraversalGroup(child: Padding(padding: EdgeInsets.only(left: homeWidth), child: Column(children: [
                       if (_navigationError != null)
                         Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
+                      if (_fileError != null)
+                        Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: FolderError(message: _fileError!, actionKey: const ValueKey('surface-check-folders'), padding: const EdgeInsets.symmetric(vertical: 4))),
                       Expanded(child: !_decided ? const SizedBox.expand() : Stack(fit: StackFit.expand, clipBehavior: Clip.none, children: [
                         // The row keeps the rail's inset under any page, so Today
                         // beside the column never makes it reflow.
@@ -810,12 +907,12 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                           child: page ?? const SizedBox.shrink(key: ValueKey('panes')),
                         ),
                       ])),
-                    ])),
+                    ])))),
                     // A click on the dimmed panes closes the column over them.
-                    if (_homeOver && page == null)
+                    if (_homeOver && (page == null || showToday))
                       Positioned.fill(left: Home.rail, child: GestureDetector(key: const ValueKey('home-scrim'), behavior: HitTestBehavior.opaque, onTap: _closeHome)),
                     if (!phone && _decided)
-                      Positioned(left: 0, top: 0, bottom: 0, child: AnimatedContainer(
+                      Positioned(left: 0, top: 0, bottom: 0, child: FocusTraversalOrder(order: const NumericFocusOrder(1), child: FocusTraversalGroup(child: AnimatedContainer(
                         duration: kMotion,
                         curve: Curves.easeOut,
                         width: homeOpen ? Home.column : Home.rail,
@@ -823,9 +920,10 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                           doors: _doors, open: homeOpen, onDoor: _door,
                           onOpen: _openHome,
                           litQuery: showToday ? null : trail.rootQuery,
+                          currentTrail: showToday ? null : trail.uid,
                           todayLit: showToday,
                         ),
-                      )),
+                      )))),
                   ]))))),
                   if (_nowOverlay)
                     Positioned.fill(child: GestureDetector(
@@ -837,19 +935,19 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                   // Retain loaded details: async remounts clamp a restored scroll offset.
                   Positioned(key: const ValueKey('now-panel-position'), top: 0, bottom: 0, right: 0, child: Visibility(
                     visible: _nowShown, maintainState: true, maintainAnimation: false, maintainSize: false,
-                    child: SizedBox(width: nowWidth, child: NowPane(
+                    child: SizedBox(width: nowWidth, child: FocusTraversalOrder(order: const NumericFocusOrder(3), child: FocusTraversalGroup(child: NowPane(
                       core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
                       settingsChanges: _settingsChanges,
                       onRelease: (id) => _report(_start(TargetDto.release(id: id))),
-                    )),
+                    )))),
                   )),
                 ])),
                 // Phones keep a player bar under the thumb; desktops have the LCD.
-                if (phone) NowBar(
+                if (phone) FocusTraversalOrder(order: const NumericFocusOrder(3), child: FocusTraversalGroup(child: NowBar(
                   core: widget.core, now: _now, clock: _clock, onToggle: _toggle, nothingToPlay: _nothingToPlay,
                   settingsChanges: _settingsChanges,
                   onRelease: (id) => _report(_start(TargetDto.release(id: id))),
-                ),
+                ))),
               ]);
             }),
           ),

@@ -6,13 +6,14 @@ import '../core/bridge.dart';
 import '../core/when.dart';
 import '../draw/constellation.dart';
 import '../shell/width_class.dart';
+import '../theme/action_target.dart';
 import '../theme/tokens.dart';
 import 'pane.dart';
 
 class TreePane extends StatefulWidget {
   const TreePane({
     super.key, required this.trail, required this.onGo, required this.onPrune,
-    required this.onKeep, required this.onPlay,
+    required this.onKeep, required this.onPlay, required this.onClose,
   });
 
   final TrailDto trail;
@@ -20,6 +21,9 @@ class TreePane extends StatefulWidget {
   final ValueChanged<int> onPrune;
   final VoidCallback onKeep;
   final ValueChanged<bool> onPlay;
+
+  /// Leaves the tree for the trail; Esc, `T` and `[` `]` do the same.
+  final VoidCallback onClose;
 
   @override
   State<TreePane> createState() => _TreePaneState();
@@ -36,13 +40,11 @@ class _TreePaneState extends State<TreePane> {
 
   @override
   Widget build(BuildContext context) {
-    final TreePane(:trail, :onGo, :onPrune, :onKeep, :onPlay) = widget;
+    final TreePane(:trail, :onGo, :onPrune, :onKeep, :onPlay, :onClose) = widget;
     final stops = {for (final stop in trail.stops) stop.index: stop};
     final root = trail.stops.firstWhere((stop) => stop.parent == null);
     final current = stops[trail.current]!;
-    final opened = trail.stops.map((stop) => stop.openedMs.toInt());
-    final start = opened.reduce(math.min);
-    final end = opened.reduce(math.max);
+    final visited = trail.whenMs.toInt();
     final title = trail.name ?? (root.title == current.title ? root.title : '${root.title} → ${current.title}');
     return LayoutBuilder(builder: (context, box) {
       final narrow = WidthClass.of(box.maxWidth) == WidthClass.phone;
@@ -58,7 +60,14 @@ class _TreePaneState extends State<TreePane> {
             hitTestBehavior: HitTestBehavior.opaque,
             padding: EdgeInsets.all(narrow ? 12 : 20),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text('Trail · a tree · ${dayDate(start)}, ${clockTime(start)}–${clockTime(end)}', style: Tok.label),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('Trail · a tree · last visited ${dayWord(visited)} ${clockTime(visited)}', style: Tok.label),
+                )),
+                const SizedBox(width: 12),
+                _CloseTree(onClose: onClose),
+              ]),
               const SizedBox(height: 4),
               Text(title, style: Tok.title),
               const SizedBox(height: 12),
@@ -98,11 +107,40 @@ class _TreePaneState extends State<TreePane> {
   }
 }
 
+/// The tree covers the panes, so it says how to leave: a Close button that
+/// names its keys.
+class _CloseTree extends StatelessWidget {
+  const _CloseTree({required this.onClose});
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => Door(
+    builder: (context, hover) => ActionTarget(
+      key: const ValueKey('tree-close'),
+      onTap: onClose,
+      semanticLabel: 'Close the tree',
+      excludeChildSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(color: hover ? Tok.panel2 : Colors.transparent, border: Border.all(color: Tok.rule)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('✕', style: Tok.body.copyWith(fontSize: 12.5, color: Tok.muted)),
+          const SizedBox(width: 8),
+          Text('Close', style: Tok.body.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500)),
+          const SizedBox(width: 8),
+          Text('T · Esc', style: Tok.label.copyWith(letterSpacing: 0)),
+        ]),
+      ),
+    ),
+  );
+}
+
 class TreePaneFacts extends StatelessWidget {
   const TreePaneFacts({super.key, required this.trail});
   final TrailDto trail;
 
-  int get stops => trail.stops.length;
+  /// One definition of "stops" everywhere: the ones you stayed on, not the peeks.
+  int get stops => trail.stops.where((stop) => !stop.isPeek).length;
   int get branches => trail.branches.length;
   int get peeks => trail.stops.where((stop) => stop.isPeek).length;
   int _actions(String action) => trail.stops.fold(0, (count, stop) => count + stop.actions.where((item) => item == action).length);

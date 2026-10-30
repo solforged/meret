@@ -11,7 +11,7 @@ pub use meret_api::LightDto;
 pub use meret_api::{BodyDto, LevelDto};
 pub use meret_api::{FacetColumnDto, FacetDto, FacetsDto, GroupDto, ItemDto, SortKeyDto, ViewDto};
 pub use meret_api::{FolderKindDto, FolderSuggestionDto, LightLevelDto, LookupStatusDto, LookupsDto, OutputDeviceDto, SettingsDto};
-pub use meret_api::{UpNextDto, UpNextItemDto, VolumeDto};
+pub use meret_api::{MissingFileDto, NothingToPlayDto, NothingToPlayKind, UpNextDto, UpNextItemDto, VolumeDto};
 pub use meret_api::TrailSummaryDto;
 
 #[frb(mirror(TrailSummaryDto))]
@@ -25,6 +25,7 @@ pub struct _TrailSummaryDto {
     pub name: Option<String>,
     pub played: u32,
     pub wanted: u32,
+    pub route: String,
 }
 pub use meret_api::{DormantDto, ListenDto, ListeningWindowDto, PlayedDto};
 pub use meret_api::ResumeDto;
@@ -334,7 +335,7 @@ pub struct _RowsDto {
 #[frb(mirror(ItemDto))]
 pub enum _ItemDto {
     Group(GroupDto),
-    Track { ordinal: u32, row: TrackRowDto },
+    Track { ordinal: u32, row: TrackRowDto, discs: u32 },
 }
 
 #[frb(mirror(GroupDto))]
@@ -400,6 +401,7 @@ pub struct _FrontLineDto {
     pub count: u64,
     pub note: String,
     pub query: Option<String>,
+    pub missing_files: bool,
 }
 
 #[frb(mirror(RecentDto))]
@@ -419,6 +421,32 @@ pub struct _RootDto {
     pub path: String,
     pub online: bool,
     pub tracks: u64,
+    pub label: String,
+    pub duplicates: u64,
+    pub missing: u64,
+}
+
+#[frb(mirror(MissingFileDto))]
+pub struct _MissingFileDto {
+    pub track_id: i64,
+    pub release_id: i64,
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: String,
+    pub file: String,
+    pub folder: String,
+}
+
+#[frb(mirror(NothingToPlayKind))]
+pub enum _NothingToPlayKind {
+    NoMusic,
+    FoldersOffline,
+    PlayedAll,
+}
+
+#[frb(mirror(NothingToPlayDto))]
+pub struct _NothingToPlayDto {
+    pub kind: NothingToPlayKind,
     pub label: String,
 }
 
@@ -451,6 +479,7 @@ pub struct _BranchDto {
 
 #[frb(mirror(TrailDto))]
 pub struct _TrailDto {
+    pub uid: String,
     pub root_query: Option<String>,
     pub current: u32,
     pub stops: Vec<StopDto>,
@@ -458,6 +487,7 @@ pub struct _TrailDto {
     pub branches: Vec<BranchDto>,
     pub kept: bool,
     pub name: Option<String>,
+    pub when_ms: i64,
 }
 
 #[frb(mirror(TargetDto))]

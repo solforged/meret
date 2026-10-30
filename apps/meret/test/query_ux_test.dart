@@ -164,7 +164,7 @@ void main() {
       core: core, query: query, onQuery: (value) => setState(() => query = value),
     )))));
     await tester.pumpAndSettle();
-    final trigger = find.byTooltip('Set lufs filter');
+    final trigger = find.byTooltip('Set LUFS filter');
     await tester.tap(trigger);
     await tester.pumpAndSettle();
     final minimum = find.byKey(const ValueKey('filter-minimum'));

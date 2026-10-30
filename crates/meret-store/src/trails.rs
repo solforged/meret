@@ -8,43 +8,27 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{Result, Store};
 
-#[derive(Clone, Debug)]
-pub struct TrailSummary {
-    pub uid: TrailUid,
-    pub name: Option<String>,
-    pub root: EntityRef,
-    pub leaf: EntityRef,
-    pub root_query: Option<String>,
-    pub stops: u32,
-    pub branches: u32,
-    pub created_at: i64,
-    pub kept: bool,
-    pub played: u32,
-    pub wanted: u32,
-}
-
 impl Store {
     /// Saves a snapshot through the writer, with stops remaining append-only.
     /// Existing actions retain their first recorded timestamp.
-    pub fn save_trail(&self, trail: &Trail, position: usize, departure: usize) -> Result<()> {
-        self.save_trail_snapshot(trail.clone(), position, departure)
+    pub fn save_trail(&self, trail: &Trail, position: usize) -> Result<()> {
+        self.save_trail_snapshot(trail.clone(), position)
     }
 
     /// Owned snapshots let the core release its lock without copying twice.
-    pub fn save_trail_snapshot(&self, trail: Trail, position: usize, departure: usize) -> Result<()> {
+    pub fn save_trail_snapshot(&self, trail: Trail, position: usize) -> Result<()> {
         let device = self.device_id()?;
         let now = now_ms();
         let trail_uid = trail.uid.to_string();
         self.writer.write(move |tx| {
             tx.execute(
-                "INSERT INTO trail(uid,name,root_query,kept,created_at,current_stop,device,position,departure_stop,updated_at)
-                 VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+                "INSERT INTO trail(uid,name,root_query,kept,created_at,current_stop,device,position,updated_at)
+                 VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)
                  ON CONFLICT(uid) DO UPDATE SET name=excluded.name,root_query=excluded.root_query,
                     kept=excluded.kept,current_stop=excluded.current_stop,position=excluded.position,
-                    departure_stop=excluded.departure_stop,updated_at=excluded.updated_at",
+                    updated_at=excluded.updated_at",
                 params![trail_uid, trail.name, trail.root_query, trail.kept, trail.stop(0).opened_at,
-                    trail.stop(trail.current()).uid.to_string(), device, position as i64,
-                    trail.stop(departure).uid.to_string(), now],
+                    trail.stop(trail.current()).uid.to_string(), device, position as i64, now],
             )?;
             let mut stop_stmt = tx.prepare_cached(
                 "INSERT INTO stop(uid,trail_uid,parent_uid,entity_kind,entity_id,via_kind,via_source,opened_at,dwell_ms,device,pruned)
@@ -70,9 +54,9 @@ impl Store {
 
     /// History order is independent of stop visit times. SQLite rowid preserves
     /// stop insertion order even when revisiting a stop changes `opened_at`.
-    pub fn load_trails(&self) -> Result<Vec<(Trail, usize)>> {
+    pub fn load_trails(&self) -> Result<Vec<Trail>> {
         self.read(|c| {
-            let mut stmt = c.prepare("SELECT uid,name,root_query,kept,current_stop,departure_stop FROM trail ORDER BY position,rowid")?;
+            let mut stmt = c.prepare("SELECT uid,name,root_query,kept,current_stop FROM trail ORDER BY position,rowid")?;
             let mut rows = stmt.query([])?;
             let mut out = Vec::new();
             while let Some(row) = rows.next()? {
@@ -82,36 +66,11 @@ impl Store {
                     continue; // Older schema allowed an empty trail row.
                 }
                 let current_uid: Option<String> = row.get(4)?;
-                let departure_uid: Option<String> = row.get(5)?;
                 let current_uid = current_uid.as_deref().map(parse).transpose()?.map(StopUid);
-                let departure_uid = departure_uid.as_deref().map(parse).transpose()?.map(StopUid);
                 let current = stops.iter().position(|s| Some(s.uid) == current_uid).unwrap_or(0);
-                let departure = stops.iter().position(|s| Some(s.uid) == departure_uid).unwrap_or(current);
-                let trail = Trail::restore(TrailUid(parse(&uid)?), row.get(1)?, row.get(2)?, row.get(3)?, stops, current, now_ms());
-                out.push((trail, departure));
+                out.push(Trail::restore(TrailUid(parse(&uid)?), row.get(1)?, row.get(2)?, row.get(3)?, stops, current, now_ms()));
             }
             Ok(out)
-        })
-    }
-
-    pub fn trail_summaries(&self, limit: u32) -> Result<Vec<TrailSummary>> {
-        self.read(|c| {
-            let mut stmt = c.prepare(
-                "SELECT t.uid,t.name,t.root_query,t.created_at,t.kept,
-                    r.entity_kind,r.entity_id,l.entity_kind,l.entity_id,
-                    (SELECT COUNT(*) FROM stop s WHERE s.trail_uid=t.uid AND s.pruned=0),
-                    (SELECT COUNT(*) FROM stop s WHERE s.trail_uid=t.uid AND s.pruned=0
-                        AND NOT EXISTS(SELECT 1 FROM stop child WHERE child.parent_uid=s.uid AND child.pruned=0)),
-                    (SELECT COUNT(*) FROM stop_action a JOIN stop s ON s.uid=a.stop_uid WHERE s.trail_uid=t.uid AND a.action='played'),
-                    (SELECT COUNT(*) FROM stop_action a JOIN stop s ON s.uid=a.stop_uid WHERE s.trail_uid=t.uid AND a.action='wanted')
-                 FROM trail t JOIN stop r ON r.rowid=(SELECT MIN(s.rowid) FROM stop s WHERE s.trail_uid=t.uid)
-                 JOIN stop l ON l.uid=t.current_stop ORDER BY t.position DESC,t.rowid DESC LIMIT ?1",
-            )?;
-            stmt.query_map([limit], |r| Ok(TrailSummary {
-                uid: TrailUid(parse(&r.get::<_, String>(0)?)?), name: r.get(1)?, root_query: r.get(2)?,
-                created_at: r.get(3)?, kept: r.get(4)?, root: entity(r, 5, 6)?, leaf: entity(r, 7, 8)?,
-                stops: r.get(9)?, branches: r.get(10)?, played: r.get(11)?, wanted: r.get(12)?,
-            }))?.collect()
         })
     }
 }
@@ -206,23 +165,20 @@ mod tests {
         trail.act(fork, Action::Noted);
         trail.kept = true;
         trail.name = Some("Saved fork".into());
-        store.save_trail(&trail, 1, first).unwrap();
-        store.save_trail(&trail, 1, first).unwrap();
+        store.save_trail(&trail, 1).unwrap();
+        store.save_trail(&trail, 1).unwrap();
         let newer = Trail::start(EntityRef::Search, Some("other".into()), 50_000);
-        store.save_trail(&newer, 0, 0).unwrap(); // History order, not creation time.
+        store.save_trail(&newer, 0).unwrap(); // History order, not creation time.
         drop(store);
         let store = Store::open(&path).unwrap();
         let entries = store.load_trails().unwrap();
         assert_eq!(entries.len(), 2);
-        let (restored, departure) = &entries[1];
-        assert_eq!(*departure, first);
+        let restored = &entries[1];
+        assert_eq!(restored.uid, trail.uid);
         assert_eq!(restored.current(), fork);
         assert_eq!(restored.name, trail.name);
         assert!(restored.kept);
         assert_eq!(serde_json::to_value(restored.stops()).unwrap(), serde_json::to_value(trail.stops()).unwrap());
-        let summaries = store.trail_summaries(1).unwrap();
-        assert_eq!(summaries[0].uid, trail.uid);
-        assert_eq!((summaries[0].stops, summaries[0].branches, summaries[0].played, summaries[0].wanted), (3, 2, 1, 1));
         assert_eq!(store.read(|c| c.query_row("SELECT COUNT(*) FROM stop_action", [], |r| r.get::<_, i64>(0))).unwrap(), 3);
         let device = store.device_id().unwrap();
         assert_eq!(store.read(|c| c.query_row("SELECT COUNT(*) FROM stop WHERE device != ?1", [&device], |r| r.get::<_, i64>(0))).unwrap(), 0);

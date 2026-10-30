@@ -159,6 +159,10 @@ Future<void> playRelease({
 Future<TrailDto> startTrail({required TargetDto to}) =>
     RustLib.instance.api.crateApiCoreStartTrail(to: to);
 
+/// Rewrites the current trail's search with the filters applied to its stop.
+Future<TrailDto> refineSearch({required String query}) =>
+    RustLib.instance.api.crateApiCoreRefineSearch(query: query);
+
 /// Follows a thread from stop `from_stop`, the pane it was picked in; from
 /// a pane before the last, this starts a branch. `provider` is the thread's.
 Future<TrailDto> follow({
@@ -254,6 +258,18 @@ Future<PickDto?> playSomething() =>
 /// A pick clicked in Now: plays that release from the top with its why.
 Future<PickDto> playPick({required PlatformInt64 releaseId}) =>
     RustLib.instance.api.crateApiCorePlayPick(releaseId: releaseId);
+
+/// `None` while Play something has a pick; otherwise why it hasn't.
+Future<NothingToPlayDto?> nothingToPlay() =>
+    RustLib.instance.api.crateApiCoreNothingToPlay();
+
+/// The tracks whose files have gone, which the Front's "Missing files" counts.
+Future<List<MissingFileDto>> missingFiles() =>
+    RustLib.instance.api.crateApiCoreMissingFiles();
+
+/// Walks every folder again in the background; the status line's library
+/// version moves when it finishes.
+Future<void> rescan() => RustLib.instance.api.crateApiCoreRescan();
 
 /// Play on: every zone and what it does to the sound.
 Future<List<ZoneDto>> zones() => RustLib.instance.api.crateApiCoreZones();

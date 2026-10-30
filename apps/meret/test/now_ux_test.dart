@@ -90,27 +90,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the bar plays something when nothing is loaded and answers when there is nothing', (tester) async {
+  testWidgets('the bar plays something when nothing is loaded, and says why and dims play when there is nothing', (tester) async {
     final core = FakeCore.empty();
     final clock = PlayheadClock(tester);
     addTearDown(clock.dispose);
     var toggles = 0;
-    Future<void> bar({required bool nothingToPlay}) => tester.pumpWidget(MaterialApp(home: Scaffold(
+    Future<void> bar({NothingToPlayDto? nothingToPlay}) => tester.pumpWidget(MaterialApp(home: Scaffold(
       body: Align(alignment: Alignment.bottomCenter, child: NowBar(
         core: core, now: const NowDto(title: '', subtitle: '', path: []), clock: clock,
         onToggle: () => toggles++, nothingToPlay: nothingToPlay,
       )),
     )));
-    await bar(nothingToPlay: false);
-    final toggle = find.byKey(const ValueKey('now-toggle'));
-    expect(tester.widget<IconButton>(find.descendant(of: toggle, matching: find.byType(IconButton))).onPressed, isNotNull);
-    expect(tester.widget<IconButton>(find.descendant(of: find.byKey(const ValueKey('now-next')), matching: find.byType(IconButton))).onPressed, isNull);
-    await tester.tap(toggle);
+    IconButton button(String key) => tester.widget<IconButton>(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(IconButton)));
+    await bar();
+    expect(button('now-toggle').onPressed, isNotNull);
+    expect(button('now-next').onPressed, isNull);
+    await tester.tap(find.byKey(const ValueKey('now-toggle')));
     expect(toggles, 1);
     expect(find.text('Nothing playing'), findsOneWidget);
-    await bar(nothingToPlay: true);
-    expect(find.text('Nothing to play yet'), findsOneWidget);
+    await bar(nothingToPlay: const NothingToPlayDto(kind: NothingToPlayKind.foldersOffline, label: 'Folders offline'));
+    expect(find.text('Folders offline'), findsOneWidget);
     expect(find.text('Nothing playing'), findsNothing);
+    expect(button('now-toggle').onPressed, isNull, reason: 'play would find nothing');
+  });
+
+  testWidgets('the history sheet says the loaded track is playing, not skipped at 0:00', (tester) async {
+    final core = _NowListenCore();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => TextButton(
+      onPressed: () => showHistorySheet(context, core, (_) async {}),
+      child: const Text('open'),
+    )))));
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.textContaining('skipped at'), findsNothing);
+    expect(find.textContaining('playing at'), findsOneWidget);
   });
 
   testWidgets('the pinned pane reserves the why slot so the seek bar never moves', (tester) async {
@@ -197,6 +211,22 @@ void main() {
     expect(tester.widget<NowSection>(section).title, 'Up next');
     expect(tester.widget<NowSection>(section).meta, '${upNext.remaining} tracks');
   });
+}
+
+/// The loaded track's own listen, still going: nothing played yet, not counted.
+class _NowListenCore extends FakeCore {
+  @override
+  Future<List<ListenDto>> history(int limit) async {
+    final now = await this.now().first;
+    final first = (await super.history(1)).single;
+    return [
+      ListenDto(
+        uid: 'live', trackId: now.trackId, recordingId: first.recordingId, releaseId: first.releaseId,
+        title: first.title, credit: first.credit, releaseTitle: first.releaseTitle,
+        startedAtMs: first.startedAtMs, playedMs: BigInt.zero, lengthMs: first.lengthMs, counted: false,
+      ),
+    ];
+  }
 }
 
 Future<void> _app(WidgetTester tester, CoreBridge core, {Size size = const Size(2560, 1440)}) async {

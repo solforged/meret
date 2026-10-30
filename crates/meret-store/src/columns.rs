@@ -176,6 +176,11 @@ impl HotColumns {
         self.track.is_empty()
     }
 
+    /// This track's row, if it's in the columns.
+    pub fn row_of(&self, track: TrackId) -> Option<usize> {
+        self.track_rows.get(&track).copied()
+    }
+
     /// Every person credited on this track, once even when both roles apply.
     pub fn people(&self, row: usize) -> &[u32] {
         let start = self.people_offsets[row];

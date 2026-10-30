@@ -13,11 +13,13 @@ import 'now_pane.dart';
 /// title, the subtitle under it, and a scrubber across with the time at
 /// either end — and the DR mark in the corner. Beside a search it folds to a pill: the transport,
 /// the time and the scrubber. A click anywhere past the transport opens the
-/// Now panel, and the gold border says it's open.
+/// Now panel, and the gold border says it's open. Space is play or pause
+/// here as everywhere (the scrubber takes the arrows); a click outside lets
+/// the keyboard focus go.
 class Lcd extends StatelessWidget {
   const Lcd({
     super.key, required this.core, required this.now, required this.clock, required this.onToggle,
-    this.onOpen, this.nothingToPlay = false, this.open = false, this.folded = false,
+    this.onOpen, this.nothingToPlay, this.open = false, this.folded = false,
   });
   final CoreBridge core;
   final NowDto? now;
@@ -27,7 +29,7 @@ class Lcd extends StatelessWidget {
   /// Opens or closes the Now panel; [open] says which it is now.
   final VoidCallback? onOpen;
   final bool open;
-  final bool nothingToPlay;
+  final NothingToPlayDto? nothingToPlay;
 
   /// Beside a search: the pill, whatever the width on the way there.
   final bool folded;
@@ -36,7 +38,11 @@ class Lcd extends StatelessWidget {
   Widget build(BuildContext context) {
     final n = now;
     final dr = n?.dr;
-    return Container(
+    return Focus(canRequestFocus: false, skipTraversal: true, child: Builder(builder: (context) => TapRegion(
+      onTapOutside: (_) {
+        if (Focus.of(context).hasFocus) FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: Container(
       key: const ValueKey('lcd'),
       padding: const EdgeInsets.only(left: 4, right: 12),
       decoration: BoxDecoration(
@@ -89,17 +95,18 @@ class Lcd extends StatelessWidget {
           ]),
         ]);
         return Row(children: [
-          Transport(core: core, now: n, clock: clock, onToggle: onToggle, compact: true, id: 'lcd'),
+          Transport(core: core, now: n, clock: clock, onToggle: onToggle, compact: true, id: 'lcd', nothingToPlay: nothingToPlay),
           SizedBox(width: pill ? 6 : 10),
           Expanded(child: ActionTarget(
             key: const ValueKey('lcd-title'),
             onTap: onOpen,
+            onSpace: onToggle,
             semanticLabel: open ? 'Hide Now' : 'Show Now',
             selected: open,
             child: face,
           )),
         ]);
       }),
-    );
+    ))));
   }
 }

@@ -3,10 +3,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use meret_model::{AgentId, Idiom, RecordingId, ReleaseId, TrackId};
+use meret_model::{AgentId, Idiom, RecordingId, ReleaseId, RootId, TrackId};
 use meret_query::{NameField, Term};
 use roaring::RoaringBitmap;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::columns::{HotColumns, Row};
 use crate::plan::{Plan, format_code};
@@ -282,7 +282,7 @@ impl Store {
                 "SELECT COALESCE(rl.idiom, 0), COUNT(DISTINCT rl.id) FROM release rl
                  JOIN edition e ON e.release_id = rl.id JOIN medium m ON m.edition_id = e.id
                  JOIN track t ON t.medium_id = m.id
-                 WHERE {PREFERRED_SOURCE} IS NOT NULL GROUP BY 1"
+                 WHERE {VISIBLE_SOURCE} IS NOT NULL GROUP BY 1"
             );
             for row in c.prepare(&sql)?.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))? {
                 let (idiom, n) = row?;
@@ -338,7 +338,76 @@ impl Store {
                  AND NOT EXISTS (SELECT 1 FROM credit c WHERE c.subject_kind = 2 AND c.subject_id = t.recording_id AND c.role = 'artist')"
             );
             facts.no_artist = c.query_row(&sql, [], |r| r.get::<_, i64>(0))? as u64;
+
+            // Per folder: present files against the tracks they carry, so a
+            // folder of copies says how many it set aside, and what has gone.
+            let sql = "SELECT r.id,
+                    (SELECT COUNT(DISTINCT f.id) FROM file f JOIN source s ON s.file_id = f.id AND s.kind = 'file'
+                     WHERE f.root_id = r.id AND f.state = 'present'),
+                    (SELECT COUNT(DISTINCT s.track_id) FROM file f JOIN source s ON s.file_id = f.id AND s.kind = 'file'
+                     WHERE f.root_id = r.id AND f.state = 'present'),
+                    (SELECT COUNT(DISTINCT f.id) FROM file f JOIN source s ON s.file_id = f.id AND s.kind = 'file'
+                     WHERE f.root_id = r.id AND f.state = 'missing')
+                 FROM root r WHERE r.state <> 'removed' ORDER BY r.id";
+            facts.roots = c.prepare(sql)?.query_map([], |r| {
+                let (files, tracks) = (r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64);
+                Ok(RootFacts { root: RootId(r.get(0)?), duplicates: files.saturating_sub(tracks), missing: r.get::<_, i64>(3)? as u64 })
+            })?.collect::<rusqlite::Result<_>>()?;
             Ok(facts)
+        })
+    }
+
+    /// The tracks `library_facts` counts as missing, one per track with the
+    /// first of its files that has gone, by folder and path.
+    pub fn missing_tracks(&self) -> Result<Vec<MissingTrack>> {
+        self.read(|c| {
+            let sql = format!(
+                "SELECT t.id, rl.id, COALESCE(t.title, r.title, ''),
+                        COALESCE(r.artist_credit, (SELECT a.name FROM credit c JOIN agent a ON a.id = c.agent_id
+                         WHERE c.subject_kind = 2 AND c.subject_id = r.id AND c.role = 'artist' ORDER BY c.sort LIMIT 1),
+                         rl.album_artist_credit),
+                        rl.title, f.rel_path, ro.label
+                 FROM track t
+                 JOIN recording r ON r.id = t.recording_id
+                 JOIN medium m ON m.id = t.medium_id
+                 JOIN edition e ON e.id = m.edition_id
+                 JOIN release rl ON rl.id = e.release_id
+                 JOIN file f ON f.id = (SELECT f3.id FROM source s3 JOIN file f3 ON f3.id = s3.file_id
+                                        JOIN root r3 ON r3.id = f3.root_id
+                                        WHERE s3.track_id = t.id AND s3.kind = 'file' AND f3.state = 'missing'
+                                          AND r3.state <> 'removed' ORDER BY f3.id LIMIT 1)
+                 JOIN root ro ON ro.id = f.root_id
+                 WHERE {PREFERRED_SOURCE} IS NULL
+                 ORDER BY ro.path, f.rel_path"
+            );
+            c.prepare(&sql)?.query_map([], |r| Ok(MissingTrack {
+                track: TrackId(r.get(0)?), release: ReleaseId(r.get(1)?), title: r.get(2)?, artist: r.get(3)?,
+                album: r.get(4)?, file: r.get(5)?, folder: r.get(6)?,
+            }))?.collect()
+        })
+    }
+
+    /// Why a recording has no copy to play; None when a copy is ready or no
+    /// file of it is known.
+    pub fn unplayable(&self, recording: RecordingId) -> Result<Option<Unplayable>> {
+        self.read(|c| {
+            let ready: bool = c.query_row(
+                "SELECT EXISTS (SELECT 1 FROM source s JOIN file f ON f.id = s.file_id JOIN root r ON r.id = f.root_id
+                 WHERE s.recording_id = ?1 AND s.kind = 'file' AND f.state = 'present' AND r.state = 'online')",
+                [recording.0], |r| r.get(0))?;
+            if ready {
+                return Ok(None);
+            }
+            let worst = c.query_row(
+                "SELECT f.state, f.rel_path, r.label FROM source s JOIN file f ON f.id = s.file_id JOIN root r ON r.id = f.root_id
+                 WHERE s.recording_id = ?1 AND s.kind = 'file' AND r.state <> 'removed' AND f.state IN ('missing', 'present')
+                 ORDER BY (f.state = 'missing') DESC, f.id LIMIT 1",
+                [recording.0], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))).optional()?;
+            Ok(worst.map(|(state, path, folder)| if state == "missing" {
+                Unplayable::Missing { file: path.rsplit('/').next().unwrap_or(&path).to_owned() }
+            } else {
+                Unplayable::Offline { folder }
+            }))
         })
     }
 
@@ -398,16 +467,51 @@ impl Store {
 /// See `Store::library_facts`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LibraryFacts {
-    /// Releases with a present track, indexed by `Idiom as u8`; 0 is unknown.
+    /// Releases with a track in an online or offline folder, as the table
+    /// counts its tracks, indexed by `Idiom as u8`; 0 is unknown.
     pub releases_by_idiom: [u64; 8],
     /// Newest first, by when their latest file joined the library.
     pub added_lately: Vec<RecentRelease>,
     /// Files whose tags couldn't be read; retried on every scan.
     pub unreadable: u64,
-    /// Files that were here and have gone.
+    /// Tracks whose files were here and have gone.
     pub missing: u64,
     /// Tracks with no artist tag.
     pub no_artist: u64,
+    /// What each folder holds beyond its tracks, by root id.
+    pub roots: Vec<RootFacts>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RootFacts {
+    pub root: RootId,
+    /// Present files that are another copy of a track the folder already
+    /// holds: they stay out of the table as rows of their own.
+    pub duplicates: u64,
+    /// Files that were in the folder and have gone.
+    pub missing: u64,
+}
+
+/// A track whose file has gone, with the file to look for.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MissingTrack {
+    pub track: TrackId,
+    pub release: ReleaseId,
+    pub title: String,
+    pub artist: Option<String>,
+    pub album: String,
+    /// The file's path inside its folder.
+    pub file: String,
+    /// The folder's label.
+    pub folder: String,
+}
+
+/// Why a recording can't be played: the file that has gone, or the folder
+/// that isn't mounted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Unplayable {
+    Missing { file: String },
+    Offline { folder: String },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -604,6 +708,52 @@ mod tests {
         store.writer.write(|tx| tx.execute_batch("UPDATE file SET state='present'; UPDATE root SET state='offline';")).unwrap();
         assert!(store.track_rows(&[meret_model::TrackId(1)]).unwrap()[0].path.is_none(), "offline sources never reach playback");
         assert_eq!(store.load_columns().unwrap().availability, [3], "offline roots remain in the library");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn missing_tracks_match_the_count_and_roots_report_duplicates_and_losses() {
+        use meret_model::{RecordingId, ReleaseId, RootId, TrackId};
+        let dir = std::env::temp_dir().join(format!("meret-missing-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = crate::Store::open(&dir.join("library.db")).unwrap();
+        store.writer.write(|tx| tx.execute_batch("
+            INSERT INTO release(id,title,rev) VALUES(1,'Suite',1);
+            INSERT INTO edition(id,release_id,rev) VALUES(1,1,1);
+            INSERT INTO medium(id,edition_id,position) VALUES(1,1,1);
+            INSERT INTO recording(id,title,length_ms,rev) VALUES(1,'Copied',1000,1),(2,'Gone',1000,1),(3,'Back',1000,1),(4,'Away',1000,1),(5,'Unknown',1000,1);
+            INSERT INTO track(id,medium_id,position,recording_id,title,rev) VALUES(1,1,1,1,'Copied',1),(2,1,2,2,'Gone',1),(3,1,3,3,'Back',1),(4,1,4,4,'Away',1),(5,1,5,5,'Unknown',1);
+            INSERT INTO root(id,label,path,kind,state) VALUES(1,'Music','/music','local','online'),(2,'Archive','/archive','local','offline');
+            INSERT INTO file(id,root_id,rel_path,size,mtime_ns,state,added_at,rev) VALUES
+                (1,1,'one.flac',1,1,'present',1,1),(2,1,'copy/one.flac',1,1,'present',1,1),
+                (3,1,'disc/two.flac',1,1,'missing',1,1),
+                (4,1,'three.flac',1,1,'present',1,1),(5,1,'three-old.flac',1,1,'missing',1,1),
+                (6,2,'four.flac',1,1,'present',1,1);
+            INSERT INTO source(id,recording_id,track_id,kind,file_id,lossless,rev) VALUES
+                (1,1,1,'file',1,1,1),(2,1,1,'file',2,1,1),(3,2,2,'file',3,1,1),
+                (4,3,3,'file',4,1,1),(5,3,3,'file',5,1,1),(6,4,4,'file',6,1,1);
+        ")).unwrap();
+
+        let facts = store.library_facts(3).unwrap();
+        let missing = store.missing_tracks().unwrap();
+        assert_eq!(facts.missing, missing.len() as u64, "the sidebar count is the table's length");
+        assert_eq!(missing, [super::MissingTrack {
+            track: TrackId(2), release: ReleaseId(1), title: "Gone".into(), artist: None, album: "Suite".into(),
+            file: "disc/two.flac".into(), folder: "Music".into(),
+        }]);
+        assert_eq!(facts.releases_by_idiom.iter().sum::<u64>(), 1, "a release counts once, offline tracks included");
+        let by_root = |root| facts.roots.iter().find(|r| r.root == RootId(root)).unwrap();
+        assert_eq!((by_root(1).duplicates, by_root(1).missing), (1, 2), "one extra copy of Copied; Gone and Back's old file are gone");
+        assert_eq!((by_root(2).duplicates, by_root(2).missing), (0, 0));
+
+        let why = |recording| store.unplayable(RecordingId(recording)).unwrap();
+        assert_eq!(why(2), Some(super::Unplayable::Missing { file: "two.flac".into() }));
+        assert_eq!(why(4), Some(super::Unplayable::Offline { folder: "Archive".into() }));
+        assert_eq!(why(1), None, "a copy is ready");
+        assert_eq!(why(3), None, "a copy is ready beside the one that went");
+        assert_eq!(why(5), None, "no file is known at all");
+        drop(store);
         std::fs::remove_dir_all(dir).ok();
     }
 }

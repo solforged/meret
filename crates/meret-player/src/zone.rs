@@ -76,7 +76,7 @@ pub trait Zone: Send + Sync {
 pub enum ZoneError {
     #[error("the zone is unavailable")]
     Unavailable,
-    #[error("the zone can't play {0}")]
+    #[error("{0}")]
     CannotPlay(String),
     #[error("{0}")]
     Other(String),

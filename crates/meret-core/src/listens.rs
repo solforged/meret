@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn a_final_position_below_the_counting_threshold_refreshes_cached_plays() {
+    fn a_listen_only_moves_forward_so_a_rewind_keeps_its_play_in_the_cached_totals() {
         let dir = std::env::temp_dir().join(format!("meret-listen-correction-{}", ListenUid::new()));
         let (scans, _) = crossbeam_channel::unbounded();
         let core = Core::new(CoreConfig { data_dir: dir.clone(), output: OutputChoice::Null { speed: 1.0 }, contact: "test".into() }, scans).unwrap();
@@ -181,22 +181,25 @@ mod tests {
         let uid = ListenUid::new();
         core.store.start_listen(uid, RecordingId(1), Some(meret_model::SourceId(1)), "local".into(), 2000, None, core.device_id.clone()).unwrap();
         let mut open = Open { uid, item: 1, track: TrackId(1), recording: RecordingId(1), counted: false };
-        for (played_ms, plays) in [(6000, 1), (5687, 0), (7000, 1)] {
+        // Past halfway, then back to the top, then on again: the furthest point stands.
+        for (position_ms, furthest_ms, version_moves) in [(2000, 2000, 0), (6000, 6000, 1), (0, 6000, 0), (5687, 6000, 0), (7000, 7000, 0)] {
             let version = core.status.borrow().library_version;
             core.now.send_modify(|now| now.anchor = Some(meret_engine::Anchor {
-                item: 1, position_frames: played_ms, sample_rate: 1000,
+                item: 1, position_frames: position_ms, sample_rate: 1000,
                 at_ns: meret_engine::clock::now_ns(), rate: 0.0,
             }));
             write(&core, &mut open);
             let history = core.store.history(10).unwrap();
-            assert_eq!(history.len(), 1, "correction keeps the same listen in history");
-            assert_eq!(history[0].played_ms, played_ms);
+            assert_eq!(history.len(), 1, "the same listen throughout");
+            assert_eq!(history[0].played_ms, furthest_ms);
+            let plays = u32::from(furthest_ms >= 6000);
             assert_eq!(history[0].counted, plays != 0);
             assert_eq!(core.columns.read().plays, [plays]);
             assert_eq!(core.columns.read().last_played, [if plays == 0 { 0 } else { 2 }]);
             assert_eq!(core.store.load_columns().unwrap().plays, [plays]);
             assert_eq!(core.store.release_plays(meret_model::ReleaseId(1)).unwrap().0, u64::from(plays));
-            assert_eq!(core.status.borrow().library_version, version + 1, "both threshold directions refresh visible panes");
+            assert_eq!(core.store.most_played(0, 5).unwrap().len(), plays as usize);
+            assert_eq!(core.status.borrow().library_version, version + version_moves, "panes refresh once, when the listen starts to count");
         }
         drop(core);
         std::fs::remove_dir_all(dir).unwrap();

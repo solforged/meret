@@ -129,6 +129,38 @@ impl Trail {
         self.current
     }
 
+    /// When you last moved in this trail: the stop you're on was entered
+    /// then. Every list of trails shows this time and orders by it.
+    pub fn last_visited(&self) -> i64 {
+        self.stops[self.current].opened_at
+    }
+
+    /// The stops that count: not pruned, and not a folded peek. One
+    /// definition for the chip, the tree and every list, in the order they
+    /// were first opened.
+    pub fn visible(&self, now: i64) -> Vec<usize> {
+        (0..self.stops.len()).filter(|&i| !self.stops[i].pruned && !self.is_peek(i, now)).collect()
+    }
+
+    /// Whether `other`, a trail just rooted, only repeats this one: a trail
+    /// that nothing was done on, with nothing on it but the same root.
+    fn is_bare_visit(&self, other: &Trail, now: i64) -> bool {
+        !self.kept
+            && self.name.is_none()
+            && self.root_query == other.root_query
+            && self.stops[0].entity == other.stops[0].entity
+            && self.stops[0].actions.is_empty()
+            && self.current == 0
+            && (1..self.stops.len()).all(|i| self.stops[i].pruned || self.is_peek(i, now))
+    }
+
+    /// Returns to stop `i` as the open stop, starting a new dwell interval.
+    fn resume_at(&mut self, i: usize, now: i64) {
+        self.current = i;
+        self.entered_at = now;
+        self.stops[i].opened_at = now;
+    }
+
     fn children(&self, i: usize) -> impl Iterator<Item = usize> + '_ {
         self.stops.iter().enumerate().filter(move |(_, s)| s.parent == Some(i) && !s.pruned).map(|(j, _)| j)
     }
@@ -210,7 +242,7 @@ impl Trail {
 
     /// `]`: forward to the most recently entered child, excluding folded peeks.
     pub fn forward(&mut self, now: i64) -> bool {
-        match self.children(self.current).filter(|&c| !self.is_peek(c, now)).max_by_key(|&c| self.stops[c].opened_at) {
+        match self.forward_child(self.current, now) {
             Some(c) => {
                 self.enter(c, now);
                 true
@@ -219,10 +251,12 @@ impl Trail {
         }
     }
 
-    /// Clicking a star: stop `i` becomes current, and the panes become its
-    /// path. False for a stop that doesn't exist, was pruned, or folded away.
+    /// Clicking a star or a branch row: stop `i` becomes current, and the
+    /// panes become its path. A folded peek can be re-entered this way; it
+    /// stops being a peek while you're on it. False for a stop that doesn't
+    /// exist or was pruned.
     pub fn go(&mut self, i: usize, now: i64) -> bool {
-        if self.stops.get(i).is_none_or(|s| s.pruned) || self.is_peek(i, now) {
+        if self.stops.get(i).is_none_or(|s| s.pruned) {
             return false;
         }
         self.enter(i, now);
@@ -230,14 +264,16 @@ impl Trail {
     }
 
     /// `⌥]` (`step` 1) and `⌥[` (`step` -1): the next or previous branch at
-    /// the nearest fork above the current stop, in the order they were
+    /// the nearest fork at or above the current stop, in the order they were
     /// started, wrapping round. It lands where you last were on that branch.
-    /// False with no fork above.
+    /// At the fork itself, the branch you're on is the one `]` would walk
+    /// into. False with no fork there.
     pub fn sibling(&mut self, step: isize, now: i64) -> bool {
         let forks = self.forks(now);
         let path = self.path();
-        let Some(at) = path[..path.len() - 1].iter().rposition(|s| forks.contains(s)) else { return false };
-        let (fork, on) = (path[at], path[at + 1]);
+        let Some(at) = path.iter().rposition(|s| forks.contains(s)) else { return false };
+        let fork = path[at];
+        let Some(on) = path.get(at + 1).copied().or_else(|| self.forward_child(fork, now)) else { return false };
         let kids: Vec<usize> = self.children(fork).filter(|&c| !self.is_peek(c, now)).collect();
         let Some(here) = kids.iter().position(|&c| c == on) else { return false };
         let next = kids[(here as isize + step).rem_euclid(kids.len() as isize) as usize];
@@ -247,6 +283,11 @@ impl Trail {
             .unwrap_or(next);
         self.enter(last, now);
         true
+    }
+
+    /// The child `]` walks into: the most recently entered, peeks excluded.
+    fn forward_child(&self, i: usize, now: i64) -> Option<usize> {
+        self.children(i).filter(|&c| !self.is_peek(c, now)).max_by_key(|&c| self.stops[c].opened_at)
     }
 
     pub fn is_peek(&self, i: usize, now: i64) -> bool {
@@ -345,109 +386,97 @@ impl Trail {
     }
 }
 
-/// Persistent trail history, oldest first. Navigation never discards a tree.
+/// Persistent trail history, oldest first. The trail you started, returned
+/// to or opened last is at the end, so history order is the order you last
+/// visited them in, and while a trail is open it is the last one. Navigation
+/// never discards a tree, and `[` `]` never leave the open one.
 #[derive(Default)]
 pub struct TrailHistory {
-    trails: Vec<HistoryEntry>,
+    trails: Vec<Trail>,
     active: Option<usize>,
 }
 
-struct HistoryEntry {
-    trail: Trail,
-    /// The stop from which the next trail was started.
-    departure: usize,
-}
-
 impl TrailHistory {
-    /// Reopens on the Front. `[` enters the newest trail where it was left.
-    pub fn restore(entries: Vec<(Trail, usize)>) -> Self {
-        Self {
-            trails: entries.into_iter().map(|(trail, departure)| HistoryEntry { trail, departure }).collect(),
-            active: None,
-        }
+    /// Reopens on Today. `[` enters the newest trail where it was left.
+    pub fn restore(trails: Vec<Trail>) -> Self {
+        Self { trails, active: None }
     }
 
     pub fn active_index(&self) -> Option<usize> {
         self.active
     }
 
-    pub fn entries(&self) -> impl DoubleEndedIterator<Item = (&Trail, usize)> {
-        self.trails.iter().map(|entry| (&entry.trail, entry.departure))
+    pub fn entries(&self) -> impl DoubleEndedIterator<Item = &Trail> {
+        self.trails.iter()
     }
 
     pub fn current(&self) -> Option<&Trail> {
-        self.active.map(|i| &self.trails[i].trail)
+        self.active.map(|i| &self.trails[i])
     }
 
     pub fn current_mut(&mut self) -> Option<&mut Trail> {
-        self.active.map(|i| &mut self.trails[i].trail)
+        self.active.map(|i| &mut self.trails[i])
     }
 
-    pub fn start(&mut self, trail: Trail, now: i64) -> &Trail {
+    /// Ends the open trail's stay on its current stop.
+    fn leave(&mut self, now: i64) {
         if let Some(i) = self.active {
-            let mut previous = self.trails.remove(i);
-            previous.trail.leave_current(now);
-            previous.departure = previous.trail.current();
-            // Starting from older history keeps that tree immediately before
-            // the new one, without throwing away the newer trees we revisited.
-            self.trails.push(previous);
+            self.trails[i].leave_current(now);
         }
-        self.trails.push(HistoryEntry { departure: trail.current(), trail });
+    }
+
+    /// Roots `trail` as the newest. A door visit (a Home door, `⌘L`, an item
+    /// opened from Today, a search) that only repeats a trail with nothing
+    /// but that root on it brings the existing trail back instead, so
+    /// history doesn't fill with copies.
+    pub fn start(&mut self, trail: Trail, now: i64) -> &Trail {
+        self.leave(now);
+        match self.trails.iter().rposition(|old| old.is_bare_visit(&trail, now)) {
+            Some(i) => {
+                let mut old = self.trails.remove(i);
+                old.resume_at(0, now);
+                self.trails.push(old);
+            }
+            None => self.trails.push(trail),
+        }
         self.active = Some(self.trails.len() - 1);
         self.current().expect("the trail just started")
     }
 
+    /// `[`: one stop back along the open trail, and never out of it: at its
+    /// first stop this is false. With no trail open, it enters the newest one
+    /// where it was left.
     pub fn back(&mut self, now: i64) -> bool {
-        let Some(i) = self.active else {
-            let Some(i) = self.trails.len().checked_sub(1) else { return false };
-            self.active = Some(i);
-            self.trails[i].trail.entered_at = now;
-            return true;
-        };
-        if self.trails[i].trail.back(now) {
-            return true;
+        match self.active {
+            Some(i) => self.trails[i].back(now),
+            None => {
+                let Some(i) = self.trails.len().checked_sub(1) else { return false };
+                self.active = Some(i);
+                self.trails[i].entered_at = now;
+                true
+            }
         }
-        if i == 0 {
-            return false;
-        }
-        self.trails[i].trail.leave_current(now);
-        self.active = Some(i - 1);
-        let previous = &mut self.trails[i - 1];
-        previous.trail.current = previous.departure;
-        previous.trail.entered_at = now;
-        previous.trail.stops[previous.departure].opened_at = now;
-        true
     }
 
-    /// At a previous trail's departure stop, `]` returns to the next trail's
-    /// root. Everywhere else it walks visible children within this trail.
+    /// `]`: walks to the newest visible child, including into a dimmed pane
+    /// ahead, and never into another trail.
     pub fn forward(&mut self, now: i64) -> bool {
-        let Some(i) = self.active else { return false };
-        if i + 1 < self.trails.len() && self.trails[i].trail.current() == self.trails[i].departure {
-            self.trails[i].trail.leave_current(now);
-            self.active = Some(i + 1);
-            let next = &mut self.trails[i + 1].trail;
-            next.current = 0;
-            next.entered_at = now;
-            next.stops[0].opened_at = now;
-            return true;
+        match self.active {
+            Some(i) => self.trails[i].forward(now),
+            None => false,
         }
-        self.trails[i].trail.forward(now)
     }
 
-    /// A kept trail picked on the Front: it becomes active at the stop it
-    /// was left on, where it sits in history, so `[` and `]` go on from there.
+    /// A trail picked from Home's lists or the tree: it becomes the newest,
+    /// open at the stop it was left on.
     pub fn open(&mut self, uid: &TrailUid, now: i64) -> bool {
-        let Some(i) = self.trails.iter().position(|entry| entry.trail.uid == *uid) else { return false };
-        if let Some(active) = self.active
-            && active != i
-        {
-            self.trails[active].trail.leave_current(now);
-        }
-        self.active = Some(i);
-        let trail = &mut self.trails[i].trail;
-        trail.entered_at = now;
-        trail.stops[trail.current].opened_at = now;
+        let Some(i) = self.trails.iter().position(|trail| trail.uid == *uid) else { return false };
+        self.leave(now);
+        let mut trail = self.trails.remove(i);
+        let at = trail.current;
+        trail.resume_at(at, now);
+        self.trails.push(trail);
+        self.active = Some(self.trails.len() - 1);
         true
     }
 }
@@ -594,74 +623,180 @@ mod tests {
     }
 
     #[test]
-    fn forward_and_star_picks_skip_folded_peeks() {
+    fn forward_skips_folded_peeks_but_a_list_can_reenter_one() {
         let mut t = Trail::start(EntityRef::Release(ReleaseId(1)), None, 0);
         let kept = t.follow(0, EntityRef::Agent(AgentId(2)), via(ThreadKind::By), MIN);
         t.back(2 * MIN);
         let peek = t.follow(0, EntityRef::Agent(AgentId(3)), via(ThreadKind::By), 3 * MIN);
         t.back(3 * MIN + 1);
         assert!(t.is_peek(peek, 4 * MIN));
-        assert!(!t.go(peek, 4 * MIN));
+        assert_eq!(t.visible(4 * MIN), vec![0, kept], "a folded peek isn't a stop that counts");
         assert!(t.forward(4 * MIN));
         assert_eq!(t.current(), kept);
         t.back(5 * MIN);
+        assert!(t.go(peek, 5 * MIN + 1), "the branch row for a peek takes you back to it");
+        assert_eq!(t.current(), peek);
+        assert!(!t.is_peek(peek, 5 * MIN + 2), "the stop you're on isn't folded");
+        t.back(6 * MIN);
         t.stops[kept].pruned = true;
-        assert!(!t.forward(6 * MIN));
+        t.stops[peek].pruned = true;
+        assert!(!t.forward(7 * MIN));
+        assert!(!t.go(peek, 7 * MIN), "a pruned stop stays hidden");
     }
 
     #[test]
-    fn root_back_restores_the_previous_trail_and_forward_returns_to_the_new_root() {
+    fn back_never_leaves_the_trail_and_stops_at_its_first_stop() {
         let mut history = TrailHistory::default();
         assert!(!history.back(0));
         assert!(!history.forward(0));
         history.start(Trail::start(EntityRef::Release(ReleaseId(1)), None, 0), 0);
         let person = history.current_mut().unwrap().follow(0, EntityRef::Agent(AgentId(2)), via(ThreadKind::By), MIN);
         history.start(Trail::start(EntityRef::Release(ReleaseId(3)), None, 2 * MIN), 2 * MIN);
-        assert!(history.back(3 * MIN));
-        assert_eq!(history.current().unwrap().current(), person);
-        assert_eq!(history.current().unwrap().stop(person).dwell_ms, MIN, "time in another trail isn't dwell");
-        assert!(history.back(4 * MIN));
-        assert_eq!(history.current().unwrap().current(), 0);
-        assert!(history.forward(5 * MIN));
-        assert_eq!(history.current().unwrap().current(), person);
-        assert!(history.forward(6 * MIN));
+        // The first stop of the newest trail: nothing earlier on it, so `[` does nothing.
+        assert!(!history.back(3 * MIN));
+        assert_eq!(history.active_index(), Some(1));
         assert_eq!(history.current().unwrap().stop(0).entity, EntityRef::Release(ReleaseId(3)));
         assert_eq!(history.current().unwrap().current(), 0);
+        // The older trail is reached by opening it, where it was left, and keeps its own time.
+        let older = history.entries().next().unwrap().uid;
+        assert!(history.open(&older, 4 * MIN));
+        assert_eq!(history.current().unwrap().current(), person);
+        assert_eq!(history.current().unwrap().stop(person).dwell_ms, MIN, "time in another trail isn't dwell");
+        assert!(history.back(5 * MIN));
+        assert!(!history.back(6 * MIN), "the root of an older trail is still the end of it");
+        assert_eq!(history.current().unwrap().stop(0).entity, EntityRef::Release(ReleaseId(1)));
     }
 
     #[test]
-    fn starting_from_older_history_keeps_all_trees_and_returns_to_that_trail() {
+    fn forward_goes_into_the_dimmed_pane_ahead_and_never_into_another_trail() {
         let mut history = TrailHistory::default();
-        for id in 1..=2 {
+        history.start(Trail::start(EntityRef::Release(ReleaseId(1)), None, 0), 0);
+        let person = history.current_mut().unwrap().follow(0, EntityRef::Agent(AgentId(2)), via(ThreadKind::By), MIN);
+        history.start(Trail::start(EntityRef::Release(ReleaseId(3)), None, 2 * MIN), 2 * MIN);
+        let older = history.entries().next().unwrap().uid;
+        assert!(history.open(&older, 3 * MIN));
+        assert!(history.back(4 * MIN));
+        assert_eq!(history.current().unwrap().current(), 0);
+        assert!(history.forward(5 * MIN), "the pane ahead, dimmed, is the next stop");
+        assert_eq!(history.current().unwrap().current(), person);
+        assert!(!history.forward(6 * MIN), "the end of this trail is the end of `]`");
+        assert_eq!(history.current().unwrap().uid, older);
+    }
+
+    #[test]
+    fn opening_a_trail_makes_it_the_newest_and_its_last_visit_the_time_to_show() {
+        let mut history = TrailHistory::default();
+        for id in 1..=3 {
             history.start(Trail::start(EntityRef::Release(ReleaseId(id)), None, id * MIN), id * MIN);
         }
-        assert!(history.back(3 * MIN));
-        history.start(Trail::start(EntityRef::Release(ReleaseId(3)), None, 4 * MIN), 4 * MIN);
-        assert_eq!(history.trails.len(), 3);
-        assert!(history.back(5 * MIN));
-        assert_eq!(history.current().unwrap().stop(0).entity, EntityRef::Release(ReleaseId(1)));
-        assert!(history.back(6 * MIN));
-        assert_eq!(history.current().unwrap().stop(0).entity, EntityRef::Release(ReleaseId(2)));
-        assert!(!history.back(7 * MIN));
+        let first = history.entries().next().unwrap().uid;
+        assert!(history.open(&first, 10 * MIN));
+        assert_eq!(history.active_index(), Some(2));
+        let times: Vec<i64> = history.entries().map(Trail::last_visited).collect();
+        assert_eq!(times, vec![2 * MIN, 3 * MIN, 10 * MIN], "history order is last-visited order");
+        assert_eq!(history.entries().map(|t| t.stop(0).entity).next_back(), Some(EntityRef::Release(ReleaseId(1))));
+        assert!(!history.open(&TrailUid::new(), 11 * MIN));
     }
 
     #[test]
-    fn restored_history_opens_on_front_and_back_enters_newest_saved_stop() {
+    fn a_door_visit_reuses_a_trail_that_only_has_that_root_and_moves_it_to_the_top() {
+        let door = |query: &str, at: i64| Trail::start(EntityRef::Search, Some(query.into()), at);
+        let mut history = TrailHistory::default();
+        history.start(door("idiom:score", 0), 0);
+        let scores = history.current().unwrap().uid;
+        history.start(door("", MIN), MIN);
+        let tracks = history.current().unwrap().uid;
+        history.start(door("idiom:score", 2 * MIN), 2 * MIN);
+        assert_eq!(history.entries().count(), 2, "Scores again is the same trail, not a copy");
+        assert_eq!(history.current().unwrap().uid, scores);
+        assert_eq!(history.active_index(), Some(1));
+        assert_eq!(history.entries().next().unwrap().uid, tracks);
+        assert_eq!(history.current().unwrap().last_visited(), 2 * MIN);
+        // A peek on it, left within the peek window, is still a bare visit.
+        let trail = history.current_mut().unwrap();
+        let peek = trail.follow(0, EntityRef::Release(ReleaseId(1)), via(ThreadKind::Matched), 3 * MIN);
+        trail.back(3 * MIN + 1);
+        history.start(door("", 4 * MIN), 4 * MIN);
+        history.start(door("idiom:score", 5 * MIN), 5 * MIN);
+        assert_eq!(history.entries().count(), 2);
+        assert!(history.current().unwrap().is_peek(peek, 5 * MIN));
+        // Anything done there, a followed stop, a name or a keep makes it a trail of its own.
+        let trail = history.current_mut().unwrap();
+        trail.follow(0, EntityRef::Release(ReleaseId(2)), via(ThreadKind::Matched), 6 * MIN);
+        trail.back(7 * MIN);
+        history.start(door("idiom:score", 8 * MIN), 8 * MIN);
+        assert_eq!(history.entries().count(), 3);
+        history.current_mut().unwrap().act(0, Action::Played);
+        history.start(door("idiom:score", 9 * MIN), 9 * MIN);
+        assert_eq!(history.entries().count(), 4);
+        history.current_mut().unwrap().kept = true;
+        history.start(door("idiom:score", 10 * MIN), 10 * MIN);
+        assert_eq!(history.entries().count(), 5);
+        history.current_mut().unwrap().name = Some("Scores I like".into());
+        history.current_mut().unwrap().kept = false;
+        history.start(door("idiom:score", 11 * MIN), 11 * MIN);
+        assert_eq!(history.entries().count(), 6);
+    }
+
+    #[test]
+    fn a_reused_door_trail_doesnt_count_time_away_as_dwell() {
+        let mut history = TrailHistory::default();
+        history.start(Trail::start(EntityRef::Search, Some("a".into()), 0), 0);
+        history.start(Trail::start(EntityRef::Search, Some("b".into()), MIN), MIN);
+        history.start(Trail::start(EntityRef::Search, Some("a".into()), 10 * MIN), 10 * MIN);
+        assert_eq!(history.current().unwrap().snapshot(11 * MIN).stop(0).dwell_ms, MIN + MIN);
+    }
+
+    #[test]
+    fn alt_brackets_at_the_fork_itself_swap_to_the_other_branch() {
+        let (mut t, [mitsuda, xeno, _, _, _, troy, uematsu, ..]) = tuesday();
+        // Xenogears forks into Hogg's branch (last left at Troy) and Creid's,
+        // which is the one ahead of it, so either way round is Hogg's.
+        assert!(t.go(xeno, 40 * MIN));
+        assert!(t.sibling(1, 41 * MIN));
+        assert_eq!(t.current(), troy);
+        assert!(t.go(xeno, 42 * MIN));
+        assert!(t.sibling(-1, 43 * MIN));
+        assert_eq!(t.current(), troy);
+        // At Mitsuda, Xenogears' branch is ahead, so the other is Uematsu's.
+        assert!(t.go(mitsuda, 44 * MIN));
+        assert!(t.sibling(1, 45 * MIN));
+        assert_eq!(t.current(), uematsu);
+        // And with Uematsu ahead now, the swap goes back to where Xenogears' branch was last.
+        assert!(t.go(mitsuda, 46 * MIN));
+        assert!(t.sibling(1, 47 * MIN));
+        assert_eq!(t.current(), troy);
+        let mut single = Trail::start(EntityRef::Recording(RecordingId(1)), None, 0);
+        single.follow(0, EntityRef::Agent(AgentId(10)), via(ThreadKind::ComposedBy), MIN);
+        assert!(single.go(0, 2 * MIN));
+        assert!(!single.sibling(1, 3 * MIN), "a stop with one branch leaving it isn't a fork");
+    }
+
+    #[test]
+    fn restored_history_opens_on_today_and_back_enters_newest_saved_stop() {
         let mut first = Trail::start(EntityRef::Search, Some("first".into()), 0);
         first.follow(0, EntityRef::Release(ReleaseId(1)), via(ThreadKind::Matched), MIN);
         let mut newest = Trail::start(EntityRef::Search, Some("newest".into()), 2 * MIN);
         newest.follow(0, EntityRef::Release(ReleaseId(2)), via(ThreadKind::Matched), 3 * MIN);
         let mut history = TrailHistory::restore(vec![
-            (Trail::restore(first.uid, first.name, first.root_query, first.kept, first.stops, first.current, 10 * MIN), 1),
-            (Trail::restore(newest.uid, newest.name, newest.root_query, newest.kept, newest.stops, newest.current, 10 * MIN), 0),
+            Trail::restore(first.uid, first.name, first.root_query, first.kept, first.stops, first.current, 10 * MIN),
+            Trail::restore(newest.uid, newest.name, newest.root_query, newest.kept, newest.stops, newest.current, 10 * MIN),
         ]);
         assert!(history.current().is_none());
         assert!(!history.forward(10 * MIN));
         assert!(history.back(20 * MIN));
         let trail = history.current().unwrap();
         assert_eq!(trail.root_query.as_deref(), Some("newest"));
-        assert_eq!(trail.current(), 1, "Front back uses current, not departure");
+        assert_eq!(trail.current(), 1, "Today's back enters the trail where it was left");
+        assert_eq!(trail.last_visited(), 3 * MIN, "entering it again isn't a move in it");
         assert_eq!(trail.snapshot(21 * MIN).stop(1).dwell_ms, MIN, "closed time isn't dwell");
+    }
+
+    #[test]
+    fn stops_that_count_leave_out_peeks_and_the_time_is_the_current_stops() {
+        let (t, [.., creid, _]) = tuesday();
+        assert_eq!(t.visible(40 * MIN).len(), t.len() - 1, "the one peek doesn't count");
+        assert_eq!(t.last_visited(), t.stop(creid).opened_at);
     }
 
     #[test]

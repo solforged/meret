@@ -294,9 +294,30 @@ class _TablePaneState extends State<TablePane> {
 
   static String _count(int n, String noun) => '$n ${n == 1 ? noun : '${noun}s'}';
 
+  /// The range a single filter on [field] applies, else the span the bins cover.
+  String _span(String field, double lo, double hi) {
+    final (from, to) = queryNumberBounds(widget.query, field, lo, hi) ?? (lo, hi);
+    return '${_signed(from)}–${_signed(to)}';
+  }
+
+  static String _signed(double number) => _filterNumber(number).replaceFirst('-', '−');
+
+  String _recentSpan() {
+    final days = queryRecentDays(widget.query);
+    return days == null || days == 365 ? '1 year ago–now' : '${_count(days, 'day')} ago–now';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final emptyLibrary = widget.tracks == BigInt.zero && !widget.scanning;
+    // A library with no music has no results to wait for: the one thing to do is add some.
+    if (widget.tracks == BigInt.zero && !widget.scanning) {
+      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('Library is empty', style: Tok.body),
+        const SizedBox(height: 12),
+        PaneActions(primary: 'Add folder', onPrimary: _adding ? null : _addFolder, primaryKey: const ValueKey('table-add-folder')),
+        if (_actionError != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_actionError!, style: Tok.label.copyWith(color: Tok.warn))),
+      ]));
+    }
     final light = Light.of(context);
     final clauses = queryClauses(widget.query);
     final filters = clauses.indexed.where((entry) => entry.$2.field != null).toList();
@@ -331,13 +352,13 @@ class _TablePaneState extends State<TablePane> {
         FacetBrowser(facets: _facets, onQuery: widget.onQuery),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(child: HistogramHeader(label: 'Year', range: '1950–2026', selection: queryNumberRange(widget.query, 'year', 1950, 2026), bins: _year?.bins ?? Uint32List(0), onBrush: (r) => _brush('year', r, 1950, 2026), onSetRange: () => _editRange('year', 'Year', 1950, 2026))),
+          Expanded(child: HistogramHeader(label: 'Year', range: _span('year', 1950, 2026), selection: queryNumberRange(widget.query, 'year', 1950, 2026), bins: _year?.bins ?? Uint32List(0), onBrush: (r) => _brush('year', r, 1950, 2026), onSetRange: () => _editRange('year', 'Year', 1950, 2026))),
           const SizedBox(width: 16),
-          Expanded(child: HistogramHeader(label: 'Last played', range: 'year ago–now', selection: queryRecentRange(widget.query), bins: _last?.bins ?? Uint32List(0), onBrush: _brushRecent, onSetRange: () => _editRange('last', 'Last played', 0, 365))),
+          Expanded(child: HistogramHeader(label: 'Last played', range: _recentSpan(), selection: queryRecentRange(widget.query), bins: _last?.bins ?? Uint32List(0), onBrush: _brushRecent, onSetRange: () => _editRange('last', 'Last played', 0, 365))),
           const SizedBox(width: 16),
-          Expanded(child: HistogramHeader(key: const ValueKey('table-dr-histogram'), label: 'DR', range: '0–30', selection: queryNumberRange(widget.query, 'dr', 0, 30), bins: _dr?.bins ?? Uint32List(0), onBrush: (r) => _brush('dr', r, 0, 30), onSetRange: () => _editRange('dr', 'DR', 0, 30))),
+          Expanded(child: HistogramHeader(key: const ValueKey('table-dr-histogram'), label: 'DR', range: _span('dr', 0, 30), selection: queryNumberRange(widget.query, 'dr', 0, 30), bins: _dr?.bins ?? Uint32List(0), onBrush: (r) => _brush('dr', r, 0, 30), onSetRange: () => _editRange('dr', 'DR', 0, 30))),
           const SizedBox(width: 16),
-          Expanded(child: HistogramHeader(key: const ValueKey('table-lufs-histogram'), label: 'LUFS', range: '−60–0', selection: queryNumberRange(widget.query, 'lufs', -60, 0), bins: _loudness?.bins ?? Uint32List(0), onBrush: (r) => _brush('lufs', r, -60, 0), onSetRange: () => _editRange('lufs', 'LUFS', -60, 0))),
+          Expanded(child: HistogramHeader(key: const ValueKey('table-lufs-histogram'), label: 'LUFS', range: _span('lufs', -60, 0), selection: queryNumberRange(widget.query, 'lufs', -60, 0), bins: _loudness?.bins ?? Uint32List(0), onBrush: (r) => _brush('lufs', r, -60, 0), onSetRange: () => _editRange('lufs', 'LUFS', -60, 0))),
         ]),
         ],
         const Divider(color: Tok.line, height: 16),
@@ -355,9 +376,7 @@ class _TablePaneState extends State<TablePane> {
         Expanded(
           child: _rowsError != null
               ? Align(alignment: Alignment.topLeft, child: Text(_rowsError!, style: Tok.body.copyWith(color: Tok.warn)))
-              : emptyLibrary
-                  ? Center(child: TextButton(onPressed: _adding ? null : _addFolder, child: const Text('Add a music folder', style: Tok.body)))
-                  : _total == 0
+              : _total == 0
                       ? Center(child: Text(widget.scanning ? 'Scanning…' : 'No matching tracks', style: Tok.label))
                       : LayoutBuilder(builder: (context, box) {
                           final shown = _shownColumns(box.maxWidth);
@@ -464,6 +483,12 @@ class _TablePaneState extends State<TablePane> {
 
   String _length(BigInt? ms) => ms == null ? '' : clockLength(ms.toInt());
 
+  /// As the release page numbers its tracks: `2-01` on a release with several discs, `01` on one.
+  static String _trackNumber(TrackRowDto row, int discs) {
+    final number = row.number.toString().padLeft(2, '0');
+    return discs > 1 ? '${row.disc}-$number' : number;
+  }
+
   Widget _columns(ItemDto item, Set<_Col> shown, {required bool playing, required Light light}) {
     final group = item is ItemDto_Group ? item.field0 : null;
     final row = item is ItemDto_Track ? item.row : null;
@@ -478,10 +503,11 @@ class _TablePaneState extends State<TablePane> {
             const SizedBox(width: 10),
             Expanded(child: TrailRow(target: TargetDto.release(id: group.releaseId), child: _cell(group.title, Tok.body.copyWith(fontWeight: FontWeight.w600),
               key: ValueKey('table-release-${group.releaseId}'), onTap: widget.onFollow == null ? null : () => _follow(item)))),
-            Flexible(child: _cell(_count(group.tracks, 'track'), Tok.label)),
+            // The count takes what it needs, up to a cap, and the title the rest.
+            ConstrainedBox(constraints: const BoxConstraints(maxWidth: 80), child: _cell(_count(group.tracks, 'track'), Tok.label)),
           ]);
     return Row(children: [
-      SizedBox(width: _Col.number.width, child: _cell(group != null || row!.number == 0 ? '' : row.disc > 1 ? '${row.disc}-${row.number}' : '${row.number}', Tok.monoSmall)),
+      SizedBox(width: _Col.number.width, child: _cell(group != null || row!.number == 0 ? '' : _trackNumber(row, (item as ItemDto_Track).discs), Tok.monoSmall)),
       Expanded(flex: 4, child: title),
       Expanded(flex: 3, child: _went(person == null || artist.isEmpty ? null : TargetDto.person(id: person), _cell(artist, Tok.body.copyWith(color: Tok.muted),
         key: group != null ? ValueKey('table-group-artist-${group.releaseId}') : ValueKey('table-artist-${row!.trackId}'),
@@ -538,20 +564,31 @@ class _FilterRangeDialog extends StatefulWidget {
 class _FilterRangeDialogState extends State<_FilterRangeDialog> {
   late final _minimum = TextEditingController(text: widget.minimum);
   late final _maximum = TextEditingController(text: widget.maximum);
+  final _minimumFocus = FocusNode();
+  final _maximumFocus = FocusNode();
   String? _error;
 
   @override
   void dispose() {
     _minimum.dispose();
     _maximum.dispose();
+    _minimumFocus.dispose();
+    _maximumFocus.dispose();
     super.dispose();
+  }
+
+  /// Shows what's wrong and keeps the cursor in the field to fix; Enter and the
+  /// button both leave focus elsewhere first.
+  void _fail(String message, FocusNode field) {
+    setState(() => _error = message);
+    field.requestFocus();
   }
 
   void _apply() {
     if (widget.field == 'last') {
       final days = int.tryParse(_minimum.text.trim());
       if (days == null || days < 1 || days > 4294967295) {
-        setState(() => _error = 'Enter a whole number of days greater than zero.');
+        _fail('Enter a whole number of days greater than zero.', _minimumFocus);
         return;
       }
       Navigator.pop(context, 'last:${days}d');
@@ -560,11 +597,11 @@ class _FilterRangeDialogState extends State<_FilterRangeDialog> {
     final minimum = double.tryParse(_minimum.text.trim());
     final maximum = double.tryParse(_maximum.text.trim());
     if (minimum == null || maximum == null || !minimum.isFinite || !maximum.isFinite) {
-      setState(() => _error = 'Enter a number for both ends of the range.');
+      _fail('Enter a number for both ends of the range.', minimum == null || !minimum.isFinite ? _minimumFocus : _maximumFocus);
       return;
     }
     if (minimum > maximum) {
-      setState(() => _error = 'The minimum must be less than or equal to the maximum.');
+      _fail('The minimum must be less than or equal to the maximum.', _minimumFocus);
       return;
     }
     Navigator.pop(context, '${widget.field}:${_filterNumber(minimum)}..${_filterNumber(maximum)}');
@@ -578,6 +615,7 @@ class _FilterRangeDialogState extends State<_FilterRangeDialog> {
       TextField(
         key: const ValueKey('filter-minimum'),
         controller: _minimum,
+        focusNode: _minimumFocus,
         autofocus: true,
         keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
         decoration: InputDecoration(labelText: widget.field == 'last' ? 'Played within this many days' : 'Minimum'),
@@ -588,6 +626,7 @@ class _FilterRangeDialogState extends State<_FilterRangeDialog> {
         TextField(
           key: const ValueKey('filter-maximum'),
           controller: _maximum,
+          focusNode: _maximumFocus,
           keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
           decoration: const InputDecoration(labelText: 'Maximum'),
           onSubmitted: (_) => _apply(),

@@ -20,12 +20,16 @@ class ResumeHeader extends StatelessWidget {
   final List<ResumeDto> points;
 
   /// "Paused yesterday 21:57 at 2:42 of 3:27 · on This Mac"; while
-  /// playing, "Playing at 0:14 of 3:27 · on This Mac".
+  /// playing, "Playing at 0:14 of 3:27 · on This Mac". Narrow, the device
+  /// drops to its own line.
   Widget _where(int? updatedAt) {
-    Widget line(String? when) => ListenableBuilder(listenable: clock, builder: (_, _) => Text(
-      '${clock.playing ? 'Playing' : when == null ? 'Paused' : 'Paused $when'} at ${positionOf(clock.positionMs.round(), now.lengthMs?.toInt())} · on This Mac',
-      key: const ValueKey('resume-where'), style: Tok.monoSmall, maxLines: 1, overflow: TextOverflow.ellipsis,
-    ));
+    Widget line(String? when) => ListenableBuilder(listenable: clock, builder: (_, _) => _Parts(parts: [
+      Text(
+        '${clock.playing ? 'Playing' : when == null ? 'Paused' : 'Paused $when'} at ${positionOf(clock.positionMs.round(), now.lengthMs?.toInt())}',
+        key: const ValueKey('resume-where'), style: Tok.monoSmall,
+      ),
+      const Text('on This Mac', style: Tok.monoSmall),
+    ]));
     return updatedAt == null ? line(null) : Moment(ms: updatedAt, builder: (_, when) => line(when));
   }
 
@@ -75,11 +79,8 @@ class ResumeHeader extends StatelessWidget {
         _where(point?.updatedAt.toInt()),
         const SizedBox(height: 4),
         // Narrow, the way to the start drops under the rule.
-        Wrap(runSpacing: 4, children: [
-          if (point != null) ...[
-            Text(resumeRule(point.idiom), key: const ValueKey('resume-rule'), style: Tok.label),
-            const Text('  ·  ', style: Tok.label),
-          ],
+        _Parts(parts: [
+          if (point != null) Text(resumeRule(point.idiom), key: const ValueKey('resume-rule'), style: Tok.label),
           const Text('or from the start · ⌥Space', style: Tok.label),
         ]),
         if (now.why case final why?) Padding(
@@ -93,4 +94,37 @@ class ResumeHeader extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Lines of text joined by " · " on one line when they fit and stacked, with
+/// no separator, when they don't: a line never breaks mid-phrase.
+class _Parts extends StatelessWidget {
+  const _Parts({required this.parts});
+  final List<Text> parts;
+
+  static const _separator = ' · ';
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final inherited = DefaultTextStyle.of(context).style;
+    double width(String text, TextStyle? style) => (TextPainter(
+      text: TextSpan(text: text, style: inherited.merge(style)), textDirection: TextDirection.ltr, textScaler: scaler, maxLines: 1,
+    )..layout()).width;
+    final style = parts.first.style;
+    // Each piece lays out to a whole pixel, so leave a pixel or two apiece.
+    final total = [for (final part in parts) width(part.data!, part.style)].fold(0.0, (sum, w) => sum + w)
+      + (parts.length - 1) * width(_separator, style) + 2.0 * (2 * parts.length - 1);
+    if (parts.length == 1 || total <= box.maxWidth) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [
+        for (final (i, part) in parts.indexed) ...[
+          if (i > 0) Text(_separator, style: style),
+          part,
+        ],
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      for (final part in parts) Text(part.data!, key: part.key, style: part.style, maxLines: 2, overflow: TextOverflow.ellipsis),
+    ]);
+  });
 }

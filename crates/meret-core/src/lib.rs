@@ -35,7 +35,7 @@ use meret_engine::output::null::NullBackend;
 use meret_engine::{Engine, EngineEvent};
 use meret_graph::TrailHistory;
 use meret_jobs::Scheduler;
-use meret_model::{AgentId, GameId, Idiom, ReleaseId, RootId, TrackId, WorkId};
+use meret_model::{AgentId, GameId, Idiom, RecordingId, ReleaseId, RootId, TrackId, WorkId};
 use meret_player::{Player, QueueItem, Zone, ZoneCommand, ZoneError, ZoneFidelity, ZoneInfo};
 use meret_provider::Registry;
 use meret_query::{Input, Term, parse};
@@ -47,7 +47,7 @@ use tokio::sync::{broadcast, watch};
 pub use facets::{Facet, FacetColumn, Facets};
 pub use local_zone::{LocalZone, file_uri};
 pub use now::NowState;
-pub use picks::{Pick, Why};
+pub use picks::{NothingToPlay, Pick, Why};
 pub use trails::search_title;
 pub use status::{SourceStatus, StatusState};
 pub use meret_store::{JobCounts, Level, LightLevel, Lookups, Settings};
@@ -543,10 +543,27 @@ impl Core {
         }
         people.splice(0..0, words.iter().cloned());
         releases.splice(0..0, words.iter().cloned());
-        let (people_total, people) =
-            if people.is_empty() { (0, vec![]) } else { self.store.people_hits(&people, names)? };
-        let (releases_total, releases) =
-            if releases.is_empty() { (0, vec![]) } else { self.store.release_hits(&releases, names)? };
+        // A filter narrows the result, so a person or release only counts
+        // when it still has a track in it. Plain words keep every name hit.
+        let narrowed = q.clauses.iter().any(|c| c.negated || !matches!(c.term, Term::Text { .. } | Term::Person { .. } | Term::Named { field: meret_query::NameField::Release, .. }));
+        let fetch = if narrowed { usize::MAX } else { names };
+        let (mut people_total, mut people) =
+            if people.is_empty() { (0, vec![]) } else { self.store.people_hits(&people, fetch)? };
+        let (mut releases_total, mut releases) =
+            if releases.is_empty() { (0, vec![]) } else { self.store.release_hits(&releases, fetch)? };
+        if narrowed {
+            let cols = self.columns.read();
+            let rows: Vec<usize> = list.tracks.iter().filter_map(|&t| cols.row_of(t)).collect();
+            let in_people: std::collections::HashSet<i64> = rows.iter().flat_map(|&r| cols.people(r).iter().map(|&p| i64::from(p))).collect();
+            let in_releases: std::collections::HashSet<i64> = rows.iter().map(|&r| i64::from(cols.release[r])).collect();
+            people.retain(|p| in_people.contains(&p.agent.0));
+            releases.retain(|r| in_releases.contains(&r.release.0));
+            // Counted among the ranked candidates, which the store caps.
+            people_total = people.len() as u64;
+            releases_total = releases.len() as u64;
+            people.truncate(names);
+            releases.truncate(names);
+        }
 
         let titled = if words.is_empty() { None } else { Some(self.store.tracks_titled(&words)?) };
         let mut track_hits_total = 0;
@@ -765,12 +782,24 @@ impl Core {
         let (recording, saved_ms) = self.store.resume_for(release)?
             .ok_or_else(|| CoreError::Query("that release has no resume point".into()))?;
         let page = self.store.release_page(release)?.ok_or_else(|| CoreError::Query("that release is gone".into()))?;
-        let at = page.tracks.iter().position(|row| row.recording == recording)
-            .ok_or_else(|| CoreError::Query("the saved recording is unavailable".into()))?;
+        let Some(at) = page.tracks.iter().position(|row| row.recording == recording) else {
+            return Err(self.unplayable(recording));
+        };
         let items = queue_items(page.tracks.into_iter().skip(at));
-        let idiom = items.first().ok_or_else(|| CoreError::Query("the saved recording is unavailable".into()))?.idiom;
+        let idiom = items.first().ok_or_else(|| self.unplayable(recording))?.idiom;
         let start_ms = meret_player::resume::resume_point(idiom, saved_ms, &[]).position_ms;
         self.play_at(items, 0, start_ms)
+    }
+
+    /// Why a recording that was saved can't play now, in a sentence that
+    /// names the file or the folder.
+    fn unplayable(&self, recording: RecordingId) -> CoreError {
+        match self.store.unplayable(recording) {
+            Ok(Some(meret_store::Unplayable::Missing { file })) => CoreError::Query(format!("{file} is missing")),
+            Ok(Some(meret_store::Unplayable::Offline { folder })) => CoreError::Query(format!("{folder} is offline")),
+            Ok(None) => CoreError::Query("that recording is no longer in the library".into()),
+            Err(error) => error.into(),
+        }
     }
 
     pub fn seek_ms(&self, ms: u64) {

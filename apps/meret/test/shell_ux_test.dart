@@ -90,7 +90,7 @@ void main() {
     expect(find.byType(TablePane), findsOneWidget);
   });
 
-  testWidgets('ANIM-A6 [ at the root, ], command 1 twice, T and Escape all fade the page through, never slide', (tester) async {
+  testWidgets('ANIM-A6 command 1 twice, [, ], T and Escape fade the page through, never slide; [ at the first stop only cues', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 2);
     await _surface(tester, core);
@@ -131,17 +131,26 @@ void main() {
       expect(tester.state(find.byType(TablePane)), same(table));
     }
 
-    await fadesIn(LogicalKeyboardKey.bracketLeft, 'today');
-    expect(find.text('] back to All tracks'), findsOneWidget);
-    expect(find.byType(TrailChip), findsNothing, reason: 'the back line names the trail under Today');
-    await fadesOut(LogicalKeyboardKey.bracketRight, 'today');
-    expect(find.byType(TrailChip), findsOneWidget);
+    // `[` at the first stop has nowhere to go: no page changes.
+    await _key(tester, LogicalKeyboardKey.bracketLeft);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('today')), findsNothing);
+    expect(_rowCovered(tester), isFalse);
+    expect(_paneXs(tester, offstage: true), xs);
     // The first ⌘1 lays the Home column over the trail; the second shows Today.
     await _key(tester, LogicalKeyboardKey.digit1, meta: true);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('home-column')), findsOneWidget);
     expect(_rowCovered(tester), isTrue);
     expect(_paneXs(tester, offstage: true), xs, reason: 'the panes never move for Home');
+    await fadesIn(LogicalKeyboardKey.digit1, 'today', meta: true);
+    expect(find.text('] back to All tracks'), findsOneWidget);
+    expect(find.byType(TrailChip), findsNothing, reason: 'the back line names the trail under Today');
+    await fadesOut(LogicalKeyboardKey.bracketLeft, 'today');
+    expect(find.byType(TrailChip), findsOneWidget);
+    expect((await core.trail())!.current, 0, reason: '[ over Today only takes Today away');
+    await _key(tester, LogicalKeyboardKey.digit1, meta: true);
+    await tester.pumpAndSettle();
     await fadesIn(LogicalKeyboardKey.digit1, 'today', meta: true);
     await fadesOut(LogicalKeyboardKey.bracketRight, 'today');
     await fadesIn(LogicalKeyboardKey.keyT, 'tree');
@@ -248,10 +257,10 @@ void main() {
     expect(fill('idiom-idiom:album').color, isNull);
     expect(fill('today').color, isNull);
     final tip = tester.widget<Tooltip>(find.ancestor(of: find.byKey(const ValueKey('rail-idiom-idiom:score')), matching: find.byType(Tooltip)).first);
-    expect(tip.message, startsWith('Scores · 212 · ⌘'));
+    expect(tip.message, startsWith('Scores · 1,840 tracks · ⌘'));
   });
 
-  testWidgets('HOME-2 the column over the trail dims the panes and Escape, ] or a click closes it', (tester) async {
+  testWidgets('HOME-2 the column over the trail dims the panes and Escape, [, ] or a click closes it', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 2);
     await _surface(tester, core);
@@ -276,6 +285,9 @@ void main() {
     await closed();
     await open(() => _key(tester, LogicalKeyboardKey.digit1, meta: true));
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await closed();
+    await open(() => _key(tester, LogicalKeyboardKey.digit1, meta: true));
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await closed();
     await open(() => _key(tester, LogicalKeyboardKey.digit1, meta: true));
     await tester.tapAt(tester.getCenter(find.byType(PaneRow)));
@@ -320,8 +332,11 @@ void main() {
 
     await _key(tester, LogicalKeyboardKey.keyL, meta: true);
     await fadesThrough('All tracks');
-    // [ at a root steps back into the previous tree, which fades through too.
-    await _key(tester, LogicalKeyboardKey.bracketLeft);
+    // The previous tree is reached from Home's Trails, and fades through too.
+    final iona = (await core.trailHistory(10)).firstWhere((trail) => trail.title == 'Iona');
+    await _key(tester, LogicalKeyboardKey.digit1, meta: true);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('home-trail-${iona.uid}')));
     await fadesThrough('Iona');
   });
 
@@ -341,24 +356,14 @@ void main() {
     expect(find.descendant(of: panes.at(2), matching: find.byKey(const ValueKey('thread-went'))), findsNothing);
     expect(find.descendant(of: panes.at(2), matching: find.byKey(const ValueKey('arrow-came'))), findsWidgets);
 
-    // A gold thread joins each pane to the star in the next one's header.
-    final threads = <Offset>[];
+    // A thread joins each pane to the next; threads_test.dart holds where.
     final lines = tester.renderObject(find.descendant(of: find.byType(ThreadLines), matching: find.byType(CustomPaint)).first);
-    expect(lines, paints..everything((method, arguments) {
-      if (method == #drawPath && (arguments[1] as Paint).strokeWidth == 1.25) {
-        threads.add((arguments[0] as Path).getBounds().bottomRight);
-      }
-      return true;
-    }));
-    expect(threads, hasLength(2));
-    for (final (i, end) in threads.indexed) {
-      final star = tester.getCenter(find.descendant(of: panes.at(i + 1), matching: find.byKey(const ValueKey('pane-star'))));
-      final origin = tester.getTopLeft(find.byType(ThreadLines));
-      expect(end.dx, closeTo(star.dx - origin.dx, 0.5), reason: 'thread $i ends at the next star');
-    }
+    expect(lines, paints..path()..path());
 
     final chip = find.byKey(const ValueKey('trail-chip-name'));
-    expect(tester.widget<Text>(chip).data, 'All tracks → ${trail.stops.last.title}');
+    expect(tester.widget<Text>(chip).data, endsWith(trail.stops.last.title), reason: 'the stop you are at stays when the line is short');
+    expect(tester.widget<Tooltip>(find.ancestor(of: find.byKey(const ValueKey('trail-chip')), matching: find.byType(Tooltip)).first).message,
+      contains('All tracks → ${trail.stops.last.title}'));
     expect(find.textContaining('3 stops · T'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('trail-chip')));
     await tester.pumpAndSettle();
@@ -425,7 +430,7 @@ void main() {
     expect(find.byType(ReleasePane, skipOffstage: false), findsNothing, reason: 'a new trail parks nothing from the old one');
   });
 
-  testWidgets('TOP-1 the LCD holds the window centre and the query takes it while searching', (tester) async {
+  testWidgets('TOP-1 the LCD holds the window centre; searching, the query grows left from its dock and the LCD folds to a pill at its left', (tester) async {
     final core = FakeCore();
     await _seedTrail(core, stops: 3);
     await _surface(tester, core, width: 1800);
@@ -441,6 +446,8 @@ void main() {
     expect(tester.getTopRight(find.byKey(const ValueKey('lcd-time'))).dx, lessThan(tester.getTopLeft(seek).dx));
     expect(tester.getTopLeft(find.byKey(const ValueKey('lcd-length'))).dx, greaterThan(tester.getTopRight(seek).dx));
     final docked = tester.getSize(query).width;
+    final dockedLeft = tester.getTopLeft(query).dx;
+    final dockedRight = tester.getTopRight(query).dx;
     expect(find.text('Search'), findsOneWidget, reason: 'docked, the hint is one word');
     expect(find.byKey(const ValueKey('activity-words')), findsOneWidget);
 
@@ -449,9 +456,10 @@ void main() {
     expect(find.text('Search or type a command'), findsOneWidget);
     expect(find.byKey(const ValueKey('activity-words')), findsNothing, reason: 'activity quiets to its ring');
     expect(tester.getSize(query).width, greaterThan(docked * 2));
-    expect(tester.getCenter(query).dx, moreOrLessEquals(900, epsilon: 1), reason: 'the query has the centre');
+    expect(tester.getTopRight(query).dx, greaterThanOrEqualTo(dockedRight - 1), reason: 'the field never gives up its right edge (activity quiets, so it may gain)');
+    expect(tester.getTopLeft(query).dx, lessThan(dockedLeft), reason: 'it grows over the centre');
     expect(tester.getSize(lcd).width, lessThan(240), reason: 'the LCD folds to a pill');
-    expect(tester.getTopLeft(lcd).dx, greaterThan(tester.getTopRight(query).dx));
+    expect(tester.getTopRight(lcd).dx, lessThan(tester.getTopLeft(query).dx), reason: 'at its left, never under the pointer that clicked the field');
     expect(find.byKey(const ValueKey('lcd-toggle')), findsOneWidget, reason: 'the pill keeps play and pause');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);

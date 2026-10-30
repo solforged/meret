@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
 import '../panes/add_folder.dart';
+import '../shell/top_line.dart';
 import '../shell/window_chrome.dart';
 import '../theme/action_target.dart';
 import '../theme/tokens.dart';
@@ -220,6 +221,15 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     }
   }
 
+  Future<void> _rescan() async {
+    setState(() => _error = null);
+    try {
+      await widget.core.rescan();
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
+  }
+
   Future<void> _removeFolder(RootDto root) async {
     setState(() { _changingFolders = true; _error = null; });
     try {
@@ -248,7 +258,8 @@ class _SettingsWindowState extends State<_SettingsWindow> {
           key: const ValueKey('settings-window'),
           backgroundColor: Tok.panel,
           surfaceTintColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(24),
+          // Short or narrow windows fill the inset: keep it below the top line so the window buttons stay clear of the dialog.
+          insetPadding: EdgeInsets.fromLTRB(24, WindowChrome.instance.buttonsInset > 0 ? TopLine.height + 8 : 24, 24, 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11), side: const BorderSide(color: Color(0xFF344064))),
           clipBehavior: Clip.antiAlias,
           child: ConstrainedBox(
@@ -343,6 +354,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     const SizedBox(height: 22),
     Wrap(spacing: 16, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
       _button('Add a folder…', _changingFolders ? null : _addFolder, primary: true),
+      if (_front != null && _front!.roots.isNotEmpty) KeyedSubtree(key: const ValueKey('settings-rescan'), child: _button('Rescan', _rescan)),
       if (_front != null) Text('${_count(_front!.tracks)} ${_front!.tracks == BigInt.one ? 'track' : 'tracks'} · ${_count(_front!.releases)} ${_front!.releases == BigInt.one ? 'release' : 'releases'}', style: Tok.monoSmall),
     ]),
   ]);
@@ -360,6 +372,14 @@ class _SettingsWindowState extends State<_SettingsWindow> {
           Text(root.path, style: Tok.monoSmall.copyWith(color: Tok.ink)),
           const SizedBox(height: 6),
           Text(root.online ? 'Online' : 'Offline', style: Tok.body.copyWith(fontSize: 12, color: root.online ? Tok.ok : Tok.warn)),
+          if (root.missing > BigInt.zero) ...[
+            const SizedBox(height: 4),
+            Text('${_count(root.missing)} ${root.missing == BigInt.one ? 'file' : 'files'} missing', key: ValueKey('settings-root-missing-${root.id}'), style: Tok.body.copyWith(fontSize: 12, color: Tok.warn)),
+          ],
+          if (root.duplicates > BigInt.zero) ...[
+            const SizedBox(height: 4),
+            Text('${_count(root.duplicates)} duplicate ${root.duplicates == BigInt.one ? 'file' : 'files'} skipped', key: ValueKey('settings-root-duplicates-${root.id}'), style: Tok.body.copyWith(fontSize: 12, color: Tok.muted)),
+          ],
         ])),
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -528,7 +548,6 @@ class _SettingsWindowState extends State<_SettingsWindow> {
             if (lookups.unidentified > BigInt.zero) '${_count(lookups.unidentified)} without an ID',
           ].join(' · '), style: Tok.monoSmall),
         ),
-    _futureRow('AcoustID', 'Fingerprints made on this Mac'),
   ]);
 
   Widget _upcoming() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -537,10 +556,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     const SizedBox(height: 20),
     _futureRow('File editing', 'Tag writing, move previews and undo'),
     _futureRow('Import listening history', 'Apple Music, Last.fm and ListenBrainz'),
-    const Padding(
-      padding: EdgeInsets.symmetric(vertical: 12),
-      child: Text('To see listening in Meret, choose Controls → History or press H outside a text field.', style: Tok.body),
-    ),
+    _futureRow('AcoustID', 'Fingerprints made on this Mac'),
     _futureRow('Paired devices', 'Pair a phone'),
     const SizedBox(height: 20),
     const Text('Planned integrations', style: Tok.title),
@@ -555,8 +571,8 @@ class _SettingsWindowState extends State<_SettingsWindow> {
       if (_settings == null) const Text('Reading light settings…', style: Tok.monoSmall)
       else LayoutBuilder(builder: (context, constraints) => Wrap(spacing: 12, runSpacing: 12, children: [
         for (final (level, title, description) in const [
-          (LightLevelDto.off, 'Off', 'Gold accent, no cover colour'),
-          (LightLevelDto.accent, 'Accent', 'Cover colour on the body and transport'),
+          (LightLevelDto.off, 'Off', 'Gold accent, no cover color'),
+          (LightLevelDto.accent, 'Accent', 'Cover color on the body and transport'),
           (LightLevelDto.accentAndWash, 'Accent and wash', 'Plus a faint wash behind the music'),
         ]) SizedBox(
           width: constraints.maxWidth >= 550 ? (constraints.maxWidth - 24) / 3 : constraints.maxWidth,

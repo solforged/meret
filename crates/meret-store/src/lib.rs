@@ -35,14 +35,13 @@ pub use art::{Artwork, COVER_SIZES, cover_file};
 pub use columns::{ColumnId, Histogram, HotColumns, Row};
 pub use http_cache::HttpCache;
 pub use jobs::{JobCounts, NewJob, QueuedJob};
-pub use library::{LibraryFacts, RecentRelease, ReleaseHead, TrackRow};
+pub use library::{LibraryFacts, MissingTrack, RecentRelease, ReleaseHead, RootFacts, TrackRow, Unplayable};
 pub use listens::{Dormant, ListenRow, PlayCount};
 pub use pages::{Colleague, GameLink, GamePage, OtherRecording, PersonLink, PersonPage, PersonRelease, PersonWork, ROLES, ReleasePage, RoleCredit, TrackCredit, WorkPage};
 pub use plan::{Plan, format_code, plan};
 pub use search::{PersonHit, ReleaseHit};
 pub use settings::{Level, LightLevel, Lookups, Settings};
 pub use writer::Writer;
-pub use trails::TrailSummary;
 pub use memory::{ResumeRow, SavedQueue};
 
 #[derive(Debug, thiserror::Error)]

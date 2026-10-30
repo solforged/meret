@@ -20,12 +20,12 @@ const keyGroups = <(String, List<(String, String)>)>[
     ('/', 'Search, or a command'),
     ('Tab / ⇧Tab', 'Next or previous control'),
     ('↵ / Space', 'Activate the focused control'),
-    ('Esc', 'Close Home, then the tree'),
+    ('Esc', 'Close Today, Home or the tree'),
   ]),
   ('Trail', [
-    ('[', 'Back along the trail'),
-    (']', 'Forward'),
-    ('⌥[ ⌥]', 'Other branch'),
+    ('[', 'Back a stop; stays on this trail'),
+    (']', 'Forward a stop'),
+    ('⌥[ ⌥]', 'Other branch at a fork'),
     ('T', 'The whole tree'),
     ('⌘S', 'Keep the trail'),
     ('⌘⌫', 'Prune the branch'),
@@ -73,7 +73,8 @@ class _KeysSheet extends StatelessWidget {
             for (final (title, keys) in keyGroups) SizedBox(width: 276, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(title.toUpperCase(), style: Tok.label.copyWith(color: Tok.gold2))),
               for (final (key, does) in keys) Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SizedBox(width: 72, child: Text(key, style: Tok.monoSmall.copyWith(color: Tok.ink))),
+                SizedBox(width: 84, child: Text(key, style: Tok.monoSmall.copyWith(color: Tok.ink))),
+                const SizedBox(width: 12),
                 Expanded(child: Text(does, style: Tok.body.copyWith(fontSize: 12.5, color: Tok.muted))),
               ])),
             ])),

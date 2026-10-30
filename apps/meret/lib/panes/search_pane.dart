@@ -26,6 +26,8 @@ class SearchPane extends StatefulWidget {
 
 class _SearchPaneState extends State<SearchPane> {
   late String _query = widget.query;
+  /// The query this pane opened with: what Reset goes back to.
+  late String _origin = widget.query;
   SearchDto? _search;
   String? _error;
   int _generation = 0;
@@ -41,8 +43,9 @@ class _SearchPaneState extends State<SearchPane> {
   @override
   void didUpdateWidget(SearchPane old) {
     super.didUpdateWidget(old);
-    if (old.query != widget.query || old.core != widget.core) {
-      _query = widget.query;
+    if (old.query != widget.query && widget.query != _query || old.core != widget.core) {
+      // The stop was reopened with another query; a rewrite this pane made itself comes back equal.
+      _query = _origin = widget.query;
       _search = widget.search;
       _load();
     } else if (old.libraryVersion != widget.libraryVersion) {
@@ -102,11 +105,7 @@ class _SearchPaneState extends State<SearchPane> {
           style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 28)),
           child: _went(
             hit,
-            Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(hit.title, style: Tok.body.copyWith(color: Tok.gold)),
-              if (hit.kind == HitKind.person) TrailThreadMark(target: TargetDto.person(id: hit.id)),
-              if (hit.kind == HitKind.release) TrailThreadMark(target: TargetDto.release(id: hit.id)),
-            ]),
+            Text(hit.title, style: Tok.body.copyWith(color: Tok.gold)),
           ),
         ),
       ),
@@ -120,9 +119,9 @@ class _SearchPaneState extends State<SearchPane> {
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(child: Text('Results for: ${_query.isEmpty ? 'All tracks' : _query}',
           key: const ValueKey('search-effective-query'), style: Tok.label)),
-        if (_query != widget.query) TextButton(
+        if (_query != _origin) TextButton(
           key: const ValueKey('search-reset-filters'),
-          onPressed: () => _filter(widget.query),
+          onPressed: () => _filter(_origin),
           child: const Text('Reset'),
         ),
       ]),
@@ -143,10 +142,6 @@ class _SearchPaneState extends State<SearchPane> {
         ),
         const Divider(color: Tok.line, height: 12),
       ],
-      ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 180),
-        child: const SingleChildScrollView(child: ForksHere(sliver: false)),
-      ),
       Expanded(child: TablePane(
         core: widget.core,
         query: _query,

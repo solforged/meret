@@ -14,7 +14,6 @@ class MainFlutterWindow: NSWindow {
   }
   private var channel: FlutterMethodChannel?
   private var settingsVisible = false
-  private var modalVisible = false
   private var outside: Outside?
   private var editMenu: FlutterEditMenu?
   private var menuAvailability: [String: Bool] = [:]
@@ -43,7 +42,9 @@ class MainFlutterWindow: NSWindow {
 
   override func validateMenuItem(_ item: NSMenuItem) -> Bool {
     guard let id = item.representedObject as? String else { return super.validateMenuItem(item) }
-    guard !modalVisible, !settingsVisible, attachedSheet == nil, NSApp.modalWindow == nil else { return false }
+    // A Flutter dialog's menu state arrives already narrowed to what it keeps
+    // (`WindowChrome.menuState`); Settings and AppKit's own sheets turn all off.
+    guard !settingsVisible, attachedSheet == nil, NSApp.modalWindow == nil else { return false }
     if editMenu?.textFocused == true && ["back", "forward", "previousBranch", "nextBranch", "tree", "prune", "fromStart", "playSomething", "history", "keys"].contains(id) {
       return false
     }
@@ -197,9 +198,6 @@ class MainFlutterWindow: NSWindow {
       case "settingsVisible":
         self.settingsVisible = call.arguments as? Bool ?? false
         result(nil)
-      case "modalVisible":
-        self.modalVisible = call.arguments as? Bool ?? false
-        result(nil)
       case "textInputFocused":
         self.editMenu?.textFocused = call.arguments as? Bool ?? false
         result(nil)
@@ -260,6 +258,9 @@ private final class FlutterEditMenu: NSObject, NSMenuItemValidation, NSMenuDeleg
   private var selectors: [NSMenuItem: Selector] = [:]
   private var nativeItems = Set<NSMenuItem>()
   private var nativeTargets: [NSMenuItem: AnyObject] = [:]
+  private var groups = Set<NSMenuItem>()
+  private var groupTargets: [NSMenuItem: AnyObject] = [:]
+  private var groupActions: [NSMenuItem: Selector] = [:]
   private let commands: Set<String> = ["selectAll:", "copy:", "cut:", "paste:", "pasteAsPlainText:", "undo:", "redo:", "delete:"]
   var textFocused = false
 
@@ -282,6 +283,7 @@ private final class FlutterEditMenu: NSObject, NSMenuItemValidation, NSMenuDeleg
     for item in menu.items {
       if let submenu = item.submenu {
         captureActions(submenu)
+        captureGroup(item)
         continue
       }
       guard selectors[item] == nil, let action = item.action,
@@ -300,6 +302,26 @@ private final class FlutterEditMenu: NSObject, NSMenuItemValidation, NSMenuDeleg
       }
     }
   }
+
+  /// A submenu's own item (Find, Spelling and Grammar, Substitutions,
+  /// Transformations, Speech, Writing Tools, AutoFill) stays enabled whatever
+  /// its children are, so over Flutter it takes an action of ours that
+  /// validates to false, and in a panel gets its own action and target back.
+  private func captureGroup(_ item: NSMenuItem) {
+    if groups.insert(item).inserted {
+      if let target = item.target { groupTargets[item] = target }
+      if let action = item.action { groupActions[item] = action }
+    }
+    if flutterSurfaceIsKey {
+      item.target = self
+      item.action = #selector(unsupported(_:))
+    } else {
+      item.target = groupTargets[item]
+      item.action = groupActions[item]
+    }
+  }
+
+  @objc private func unsupported(_ sender: NSMenuItem) {}
 
   func menuNeedsUpdate(_ menu: NSMenu) { captureActions(menu) }
   func menuWillOpen(_ menu: NSMenu) { captureActions(menu) }

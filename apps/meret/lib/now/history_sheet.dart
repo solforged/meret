@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
@@ -29,6 +31,24 @@ class _HistorySheet extends StatefulWidget {
 
 class _HistorySheetState extends State<_HistorySheet> {
   late final Future<List<ListenDto>> _history = widget.core.history(200);
+  StreamSubscription<NowDto>? _nowSub;
+
+  /// The loaded item: its listen is still going, so its row says where it is.
+  NowDto? _now;
+
+  @override
+  void initState() {
+    super.initState();
+    _nowSub = widget.core.now().listen((now) {
+      if (mounted) setState(() => _now = now);
+    });
+  }
+
+  @override
+  void dispose() {
+    _nowSub?.cancel();
+    super.dispose();
+  }
 
   void _space() {
     final context = FocusManager.instance.primaryFocus?.context;
@@ -88,7 +108,7 @@ class _HistorySheetState extends State<_HistorySheet> {
                   Text(listen.title, style: Tok.body),
                   Text([if (listen.credit != null) listen.credit!, if (listen.releaseTitle != null) listen.releaseTitle!].join(' · '), style: Tok.label),
                   const SizedBox(height: 4),
-                  Text(listenOutcome(listen, null), style: Tok.monoSmall),
+                  Text(listenOutcome(listen, index == 0 ? _now : null), style: Tok.monoSmall),
                 ]),
               );
             },

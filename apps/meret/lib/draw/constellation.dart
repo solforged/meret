@@ -39,19 +39,21 @@ class TrailTreeLayout {
   }
 
   final depths = <int, int>{};
-  static const rowSpacing = 88.0;
-  static const topInset = 52.0;
-  static const bottomInset = 44.0;
+  static const rowSpacing = 104.0;
+  static const topInset = 68.0;
+  static const bottomInset = 56.0;
+  static const minHeight = 200.0;
+  static const minColumn = 264.0;
   final lanes = <int, int>{};
   int get maxDepth => depths.values.fold(0, math.max);
   int get topLane => lanes.values.fold(0, math.min);
   int get bottomLane => lanes.values.fold(0, math.max);
-  double get expandedHeight => topInset + (bottomLane - topLane) * rowSpacing + bottomInset;
+  double get expandedHeight => math.max(minHeight, topInset + (bottomLane - topLane) * rowSpacing + bottomInset);
 
-  double columnSpacing(double width) => (width / (maxDepth + 1)).clamp(224.0, 280.0);
+  double columnSpacing(double width) => (width / (maxDepth + 1)).clamp(minColumn, 360.0);
 
   /// Labels take the room between neighbouring stars, less a gutter, up to a reading width.
-  double labelWidth(double width) => (columnSpacing(width) - 24).clamp(190.0, 240.0);
+  double labelWidth(double width) => (columnSpacing(width) - 28).clamp(220.0, 320.0);
 
   Map<int, Offset> positions(TrailDto trail, Size size) {
     final step = columnSpacing(size.width);
@@ -162,7 +164,7 @@ class ConstellationPainter extends CustomPainter {
   double labelWidth(Size size) => _layout.labelWidth(size.width);
   double get contentHeight => _layout.expandedHeight;
 
-  double contentWidth(double viewportWidth) => math.max(viewportWidth, (_layout.maxDepth + 1) * 224.0);
+  double contentWidth(double viewportWidth) => math.max(viewportWidth, (_layout.maxDepth + 1) * TrailTreeLayout.minColumn);
 
   Map<int, Offset> layoutPositions(Size size) => _layout.positions(trail, size);
 
@@ -183,8 +185,8 @@ class ConstellationPainter extends CustomPainter {
         canvas.drawLine(q, p, s.onPath ? gold : grey);
       }
       if (s.via != null && !peek) {
-        final t = _text(s.via!, Tok.label.copyWith(fontSize: 10.5, fontStyle: FontStyle.italic, color: Tok.gold2), width: width);
-        t.paint(canvas, Offset((p.dx + q.dx) / 2 - t.width / 2, (p.dy + q.dy) / 2 - t.height - 8));
+        final t = _text(s.via!, Tok.label.copyWith(fontSize: 12, fontStyle: FontStyle.italic, color: Tok.gold2), width: width);
+        t.paint(canvas, Offset((p.dx + q.dx) / 2 - t.width / 2, (p.dy + q.dy) / 2 - t.height - 10));
       }
     }
     for (final (a, b) in trail.meetings) {
@@ -197,24 +199,24 @@ class ConstellationPainter extends CustomPainter {
       final current = s.index == trail.current;
       final peek = s.isPeek && !s.onPath;
       if (peek) {
-        canvas.drawLine(p + const Offset(-4, 4), p + const Offset(4, -4), grey..strokeWidth = 2);
+        canvas.drawLine(p + const Offset(-5.5, 5.5), p + const Offset(5.5, -5.5), grey..strokeWidth = 2);
       } else {
-        if (current) canvas.drawCircle(p, 12, Paint()..color = Tok.gold3);
-        canvas.drawCircle(p, current ? 4.5 : 3, Paint()..color = s.onPath ? Tok.gold : Tok.faint);
+        if (current) canvas.drawCircle(p, 15, Paint()..color = Tok.gold3);
+        canvas.drawCircle(p, current ? 6 : 4.5, Paint()..color = s.onPath ? Tok.gold : Tok.faint);
         if (s.isFork) {
-          canvas.drawCircle(p, 9, Paint()..color = Tok.gold2..style = PaintingStyle.stroke);
+          canvas.drawCircle(p, 12, Paint()..color = Tok.gold2..style = PaintingStyle.stroke);
         }
       }
       final title = _text(peek ? 'peeked: ${s.title}' : s.title, Tok.body.copyWith(
-        fontSize: peek ? 11 : 13, color: current ? Tok.ink : s.onPath ? Tok.muted : Tok.faint,
+        fontSize: peek ? 12.5 : 15, color: current ? Tok.ink : s.onPath ? Tok.muted : Tok.faint,
       ), width: width);
-      title.paint(canvas, p + Offset(-title.width / 2, -title.height - 28));
+      title.paint(canvas, p + Offset(-title.width / 2, -title.height - 32));
       final note = _text([
         clockTime(s.openedMs.toInt()),
         if (s.actions.isNotEmpty) trailActions(s.actions),
         if (current) 'now',
-      ].join(' · '), Tok.label.copyWith(fontSize: 10, letterSpacing: 0), width: width);
-      note.paint(canvas, p + Offset(-note.width / 2, 15));
+      ].join(' · '), Tok.label.copyWith(fontSize: 11.5, letterSpacing: 0), width: width);
+      note.paint(canvas, p + Offset(-note.width / 2, 19));
     }
   }
 

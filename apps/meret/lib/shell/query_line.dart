@@ -1,21 +1,27 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/bridge.dart';
+import '../panes/add_folder.dart';
 import '../theme/tokens.dart';
 
 /// `/`: searches everything you own, can stream or have found, and takes
 /// commands. Running a search starts a new trail. It sits in the top line,
 /// whose empty space moves the window.
 class QueryLine extends StatefulWidget {
-  const QueryLine({super.key, required this.core, required this.focus, this.onSubmit, this.onSearch});
+  const QueryLine({super.key, required this.core, required this.focus, this.onSubmit, this.onSearch, this.clearOn});
 
   final CoreBridge core;
   final FocusNode focus;
   final Future<void> Function(QueryDto)? onSubmit;
   final Future<void> Function(SearchDto, HitDto?)? onSearch;
+
+  /// The app left the search for a page the draft isn't about: it empties
+  /// the line each time this notifies.
+  final Listenable? clearOn;
 
   @override
   State<QueryLine> createState() => _QueryLineState();
@@ -34,6 +40,10 @@ class _QueryLineState extends State<QueryLine> {
   int _generation = 0;
   bool _dismissed = false;
   bool _submitting = false;
+  bool _emptyLibrary = false;
+  StreamSubscription<StatusDto>? _status;
+  // The line's own width, so the popup under it is exactly as wide.
+  final _fieldWidth = ValueNotifier<double>(0);
 
   List<HitDto> get _items => [...?_hits?.people, ...?_hits?.releases, ...?_hits?.trackHits];
   bool get _showHits => widget.focus.hasFocus && !_dismissed && _hits != null && _parsed?.kind == QueryKind.search;
@@ -46,10 +56,23 @@ class _QueryLineState extends State<QueryLine> {
   }
   bool get _showError => widget.focus.hasFocus && !_dismissed && _error != null;
 
+  /// `help` is no command; when it matches nothing, the panel lists the ones there are.
+  bool get _asksForHelp => _text.text.trim().toLowerCase() == 'help';
+
+  Future<void> _addFolder() async {
+    try {
+      await addMusicFolder(widget.core, isMounted: () => mounted);
+    } catch (error) {
+      if (mounted) setState(() => _submitError = error.toString());
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     widget.focus.addListener(_focusChanged);
+    widget.clearOn?.addListener(_clearDraft);
+    _watchStatus();
   }
 
   @override
@@ -59,15 +82,40 @@ class _QueryLineState extends State<QueryLine> {
       old.focus.removeListener(_focusChanged);
       widget.focus.addListener(_focusChanged);
     }
-    if (old.core != widget.core) _changed(_text.text);
+    if (old.clearOn != widget.clearOn) {
+      old.clearOn?.removeListener(_clearDraft);
+      widget.clearOn?.addListener(_clearDraft);
+    }
+    if (old.core != widget.core) {
+      _watchStatus();
+      _changed(_text.text);
+    }
   }
 
   @override
   void dispose() {
     widget.focus.removeListener(_focusChanged);
+    widget.clearOn?.removeListener(_clearDraft);
+    _status?.cancel();
+    _fieldWidth.dispose();
     _list.dispose();
     _text.dispose();
     super.dispose();
+  }
+
+  /// An empty library has nothing to match: the popup says so and offers a folder.
+  void _watchStatus() {
+    _status?.cancel();
+    _status = widget.core.status().listen((status) {
+      final empty = status.tracks == BigInt.zero && !status.jobs.any((job) => job.isScan);
+      if (mounted && empty != _emptyLibrary) setState(() => _emptyLibrary = empty);
+    });
+  }
+
+  void _clearDraft() {
+    if (_text.text.isEmpty && _submitError == null) return;
+    _text.clear();
+    _changed('');
   }
 
   void _syncOverlay() {
@@ -201,9 +249,25 @@ class _QueryLineState extends State<QueryLine> {
                 key: const ValueKey('query-no-results'),
                 padding: const EdgeInsets.all(12),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('No matches', style: Tok.body),
-                  const SizedBox(height: 4),
-                  const Text('Try fewer words or remove a filter.', style: Tok.label),
+                  if (_emptyLibrary) ...[
+                    const Text('Library is empty', style: Tok.body),
+                    TextButton(key: const ValueKey('query-add-folder'), onPressed: _addFolder, child: const Text('Add a music folder')),
+                  ] else if (_asksForHelp) ...[
+                    const Text('Commands', style: Tok.body),
+                    const SizedBox(height: 4),
+                    for (final (command, note) in const [
+                      ('play <query>', 'Play matches'),
+                      ('queue, want, crate', 'Coming later'),
+                      ('?', 'All keys'),
+                    ]) Padding(padding: const EdgeInsets.only(top: 2), child: Row(children: [
+                      SizedBox(width: 140, child: Text(command, style: Tok.monoSmall)),
+                      Text(note, style: Tok.label),
+                    ])),
+                  ] else ...[
+                    const Text('No matches', style: Tok.body),
+                    const SizedBox(height: 4),
+                    const Text('Try fewer words or remove a filter.', style: Tok.label),
+                  ],
                   TextButton(onPressed: _clear, child: const Text('Clear search')),
                 ]),
               ),
@@ -276,23 +340,27 @@ class _QueryLineState extends State<QueryLine> {
       null => docked ? 'Search' : 'Search or type a command',
       QueryKind.invalid => 'Check query',
       QueryKind.command => '↵ to run',
-      QueryKind.search => _hits?.tracks == BigInt.zero && _items.isEmpty ? 'No matches' : '↵ as a table',
+      QueryKind.search => _hits?.tracks == BigInt.zero && _items.isEmpty
+          ? _emptyLibrary ? 'Library is empty' : _asksForHelp ? 'Commands' : 'No matches'
+          : '↵ as a table',
     };
     final warn = _submitError != null || (widget.focus.hasFocus && p?.kind == QueryKind.invalid);
     final empty = _text.text.isEmpty;
     return OverlayPortal(
       controller: _overlay,
-      // Hung from the line's right edge, so it stays on screen while the
-      // line slides out of its dock, and as wide as the line once it's there.
-      overlayChildBuilder: (context) => Positioned(
-        width: math.min(560, MediaQuery.sizeOf(context).width - 32),
-        child: CompositedTransformFollower(
-          link: _link,
-          showWhenUnlinked: false,
-          targetAnchor: Alignment.bottomRight,
-          followerAnchor: Alignment.topRight,
-          offset: const Offset(0, 4),
-          child: TextFieldTapRegion(child: _showError ? _errorPanel() : _hits == null ? const SizedBox() : _dropdown(_hits!)),
+      // Under the line, left edges together, as wide as the line (but wide enough to read).
+      overlayChildBuilder: (context) => ValueListenableBuilder<double>(
+        valueListenable: _fieldWidth,
+        builder: (context, width, _) => Positioned(
+          width: math.min(math.max(width, 320), MediaQuery.sizeOf(context).width - 32),
+          child: CompositedTransformFollower(
+            link: _link,
+            showWhenUnlinked: false,
+            targetAnchor: Alignment.bottomLeft,
+            followerAnchor: Alignment.topLeft,
+            offset: const Offset(0, 4),
+            child: TextFieldTapRegion(child: _showError ? _errorPanel() : _hits == null ? const SizedBox() : _dropdown(_hits!)),
+          ),
         ),
       ),
       child: CompositedTransformTarget(
@@ -300,6 +368,11 @@ class _QueryLineState extends State<QueryLine> {
         child: LayoutBuilder(builder: (context, box) {
           // Docked beside the LCD the line is short, and says so in a word.
           final hint = hintFor(docked: box.maxWidth < 260);
+          if (box.maxWidth.isFinite && _fieldWidth.value != box.maxWidth) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _fieldWidth.value = box.maxWidth;
+            });
+          }
           return Container(
           height: 30,
           padding: const EdgeInsets.symmetric(horizontal: 10),

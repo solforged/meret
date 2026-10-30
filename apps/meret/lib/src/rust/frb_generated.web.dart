@@ -76,6 +76,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LookupStatusDto dco_decode_box_autoadd_lookup_status_dto(dynamic raw);
 
   @protected
+  NothingToPlayDto dco_decode_box_autoadd_nothing_to_play_dto(dynamic raw);
+
+  @protected
   PickDto dco_decode_box_autoadd_pick_dto(dynamic raw);
 
   @protected
@@ -232,6 +235,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ListenDto> dco_decode_list_listen_dto(dynamic raw);
 
   @protected
+  List<MissingFileDto> dco_decode_list_missing_file_dto(dynamic raw);
+
+  @protected
   List<ThreadDto?> dco_decode_list_opt_box_autoadd_thread_dto(dynamic raw);
 
   @protected
@@ -298,6 +304,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LookupsDto dco_decode_lookups_dto(dynamic raw);
 
   @protected
+  MissingFileDto dco_decode_missing_file_dto(dynamic raw);
+
+  @protected
+  NothingToPlayDto dco_decode_nothing_to_play_dto(dynamic raw);
+
+  @protected
+  NothingToPlayKind dco_decode_nothing_to_play_kind(dynamic raw);
+
+  @protected
   NowDto dco_decode_now_dto(dynamic raw);
 
   @protected
@@ -329,6 +344,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LookupStatusDto? dco_decode_opt_box_autoadd_lookup_status_dto(dynamic raw);
+
+  @protected
+  NothingToPlayDto? dco_decode_opt_box_autoadd_nothing_to_play_dto(dynamic raw);
 
   @protected
   PickDto? dco_decode_opt_box_autoadd_pick_dto(dynamic raw);
@@ -523,6 +541,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NothingToPlayDto sse_decode_box_autoadd_nothing_to_play_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PickDto sse_decode_box_autoadd_pick_dto(SseDeserializer deserializer);
 
   @protected
@@ -693,6 +716,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ListenDto> sse_decode_list_listen_dto(SseDeserializer deserializer);
 
   @protected
+  List<MissingFileDto> sse_decode_list_missing_file_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ThreadDto?> sse_decode_list_opt_box_autoadd_thread_dto(
     SseDeserializer deserializer,
   );
@@ -771,6 +799,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LookupsDto sse_decode_lookups_dto(SseDeserializer deserializer);
 
   @protected
+  MissingFileDto sse_decode_missing_file_dto(SseDeserializer deserializer);
+
+  @protected
+  NothingToPlayDto sse_decode_nothing_to_play_dto(SseDeserializer deserializer);
+
+  @protected
+  NothingToPlayKind sse_decode_nothing_to_play_kind(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NowDto sse_decode_now_dto(SseDeserializer deserializer);
 
   @protected
@@ -806,6 +845,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LookupStatusDto? sse_decode_opt_box_autoadd_lookup_status_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NothingToPlayDto? sse_decode_opt_box_autoadd_nothing_to_play_dto(
     SseDeserializer deserializer,
   );
 
@@ -1027,6 +1071,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_nothing_to_play_dto(
+    NothingToPlayDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_pick_dto(PickDto self, SseSerializer serializer);
 
   @protected
@@ -1234,6 +1284,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_missing_file_dto(
+    List<MissingFileDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_opt_box_autoadd_thread_dto(
     List<ThreadDto?> self,
     SseSerializer serializer,
@@ -1345,6 +1401,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_lookups_dto(LookupsDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_missing_file_dto(
+    MissingFileDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_nothing_to_play_dto(
+    NothingToPlayDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_nothing_to_play_kind(
+    NothingToPlayKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_now_dto(NowDto self, SseSerializer serializer);
 
   @protected
@@ -1392,6 +1466,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_lookup_status_dto(
     LookupStatusDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_nothing_to_play_dto(
+    NothingToPlayDto? self,
     SseSerializer serializer,
   );
 

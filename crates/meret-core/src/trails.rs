@@ -71,35 +71,34 @@ impl Core {
         Ok(())
     }
 
-    /// A search can move an older tree to the end of history, so persist all
-    /// positions then. Ordinary stop mutations only write the active tree.
+    /// Starting, reusing or opening a trail moves it to the end of history,
+    /// so persist all positions then. Ordinary stop mutations only write the active tree.
     pub fn save_trail_history(&self) -> Result<()> {
-        let entries = {
+        let trails = {
             let history = self.trail.lock();
             let active = history.active_index();
-            history.entries().enumerate().map(|(position, (trail, departure))| {
+            history.entries().enumerate().map(|(position, trail)| {
                 let trail = if Some(position) == active { trail.snapshot(now_ms()) } else { trail.clone() };
-                (trail, position, departure)
+                (trail, position)
             }).collect::<Vec<_>>()
         };
-        for (trail, position, departure) in entries {
-            self.store.save_trail_snapshot(trail, position, departure)?;
+        for (trail, position) in trails {
+            self.store.save_trail_snapshot(trail, position)?;
         }
         Ok(())
     }
 
-    /// Cross-trail navigation also checkpoints the tree just left, whose dwell
-    /// interval ended in the graph before its replacement became active.
+    /// Saves the tree at history `position`, with its dwell up to now when it
+    /// is the open one.
     pub fn save_trail_at(&self, position: usize) -> Result<()> {
-        let entry = {
+        let trail = {
             let history = self.trail.lock();
-            history.entries().nth(position).map(|(trail, departure)| {
-                let trail = if history.active_index() == Some(position) { trail.snapshot(now_ms()) } else { trail.clone() };
-                (trail, departure)
+            history.entries().nth(position).map(|trail| {
+                if history.active_index() == Some(position) { trail.snapshot(now_ms()) } else { trail.clone() }
             })
         };
-        if let Some((trail, departure)) = entry {
-            self.store.save_trail_snapshot(trail, position, departure)?;
+        if let Some(trail) = trail {
+            self.store.save_trail_snapshot(trail, position)?;
         }
         Ok(())
     }
@@ -145,7 +144,7 @@ mod tests {
             trail.follow(release, EntityRef::Agent(AgentId(2)), Via { kind: ThreadKind::By, source: "local_tags".into() }, now_ms());
         }
         core.save_trails().unwrap();
-        let expected = core.store.load_trails().unwrap()[0].0.stops().to_vec();
+        let expected = core.store.load_trails().unwrap()[0].stops().to_vec();
         drop(core);
         let (scans, _) = crossbeam_channel::unbounded();
         let core = Core::new(config, scans).unwrap();

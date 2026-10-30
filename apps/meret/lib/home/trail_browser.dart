@@ -9,18 +9,25 @@ String trailSummaryContext(TrailSummaryDto trail) {
   final year = DateTime.fromMillisecondsSinceEpoch(ms).year;
   return '${trail.stops} ${trail.stops == 1 ? 'stop' : 'stops'} · '
       '${trail.branches} ${trail.branches == 1 ? 'branch' : 'branches'} · '
-      'Started ${dayDate(ms)} $year at ${clockTime(ms)}';
+      'Last visited ${dayDate(ms)} $year at ${clockTime(ms)}';
 }
 
-Future<String?> showTrailBrowser(BuildContext context, CoreBridge core) => showDialog<String>(
+/// What Recent keeps: trails visited within this long.
+const _recent = Duration(days: 7);
+
+enum _Show { all, recent, kept }
+
+/// The archive; [kept] opens it on the kept trails.
+Future<String?> showTrailBrowser(BuildContext context, CoreBridge core, {bool kept = false}) => showDialog<String>(
   context: context,
   barrierColor: Colors.black54,
-  builder: (_) => _TrailBrowser(core: core),
+  builder: (_) => _TrailBrowser(core: core, kept: kept),
 );
 
 class _TrailBrowser extends StatefulWidget {
-  const _TrailBrowser({required this.core});
+  const _TrailBrowser({required this.core, this.kept = false});
   final CoreBridge core;
+  final bool kept;
 
   @override
   State<_TrailBrowser> createState() => _TrailBrowserState();
@@ -31,7 +38,7 @@ class _TrailBrowserState extends State<_TrailBrowser> {
   // so a title or kept filter cannot silently miss an older saved trail.
   late Future<List<TrailSummaryDto>> _trails = widget.core.trailHistory(0xffffffff);
   final _search = TextEditingController();
-  bool _kept = false;
+  late _Show _show = widget.kept ? _Show.kept : _Show.all;
 
   @override
   void dispose() {
@@ -51,17 +58,25 @@ class _TrailBrowserState extends State<_TrailBrowser> {
     final all = snapshot.data;
     if (all == null) return const Padding(padding: EdgeInsets.all(20), child: Text('Loading trails…', style: Tok.label));
     final query = _search.text.trim().toLowerCase();
-    final trails = all.where((trail) => (!_kept || trail.kept) &&
-      '${trail.name ?? ''} ${trail.title}'.toLowerCase().contains(query)).toList();
+    final since = DateTime.now().subtract(_recent).millisecondsSinceEpoch;
+    final trails = all.where((trail) => switch (_show) {
+      _Show.all => true,
+      _Show.recent => trail.whenMs.toInt() >= since,
+      _Show.kept => trail.kept,
+    } && '${trail.name ?? ''} ${trail.title} ${trail.route}'.toLowerCase().contains(query)).toList();
     if (trails.isEmpty) {
       return Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(all.isEmpty ? 'No trails yet' : _kept && query.isEmpty ? 'No kept trails yet' : 'No matching trails', style: Tok.body),
+        Text(all.isEmpty ? 'No trails yet' : query.isNotEmpty ? 'No matching trails' : switch (_show) {
+          _Show.kept => 'No kept trails yet',
+          _Show.recent => 'No recent trails',
+          _Show.all => 'No matching trails',
+        }, style: Tok.body),
         const SizedBox(height: 8),
-        Text(all.isEmpty ? 'Search or open a release to start a trail.' : _kept && query.isEmpty
-            ? 'Keep a trail from its star or with ⌘S.' : 'Try a different name or show all recent trails.', style: Tok.label),
-        if (query.isNotEmpty || _kept) TextButton(onPressed: () => setState(() {
+        if (all.isEmpty || query.isNotEmpty || _show == _Show.kept) Text(all.isEmpty ? 'Search or open a release to start a trail.' : query.isNotEmpty
+            ? 'Try a different name.' : 'Keep a trail from its star or with ⌘S.', style: Tok.label),
+        if (query.isNotEmpty || _show != _Show.all) TextButton(onPressed: () => setState(() {
           _search.clear();
-          _kept = false;
+          _show = _Show.all;
         }), child: const Text('Reset filters')),
       ]));
     }
@@ -85,6 +100,7 @@ class _TrailBrowserState extends State<_TrailBrowser> {
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(trail.name ?? trail.title, style: Tok.body.copyWith(color: Tok.ink)),
                 if (trail.name != null && trail.name != trail.title) Text(trail.title, style: Tok.body.copyWith(color: Tok.muted)),
+                if (trail.route != trail.title) Text(trail.route, style: Tok.label.copyWith(color: Tok.muted)),
                 const SizedBox(height: 4),
                 Text(trailSummaryContext(trail), style: Tok.label),
               ])),
@@ -117,8 +133,16 @@ class _TrailBrowserState extends State<_TrailBrowser> {
         onChanged: (_) => setState(() {}),
       )),
       Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), child: Wrap(spacing: 8, children: [
-        ChoiceChip(label: const Text('Recent'), selected: !_kept, onSelected: (_) => setState(() => _kept = false)),
-        ChoiceChip(label: const Text('Kept'), selected: _kept, onSelected: (_) => setState(() => _kept = true)),
+        for (final (show, label) in const [(_Show.all, 'All'), (_Show.recent, 'Recent'), (_Show.kept, 'Kept')])
+          ChoiceChip(
+            label: Text(label, style: Tok.label.copyWith(color: _show == show ? Tok.ink : Tok.muted)),
+            selected: _show == show,
+            showCheckmark: false,
+            selectedColor: Tok.panel2,
+            backgroundColor: Colors.transparent,
+            side: BorderSide(color: _show == show ? Tok.gold : Tok.rule),
+            onSelected: (_) => setState(() => _show = show),
+          ),
       ])),
       const Divider(height: 1, color: Tok.rule),
       Expanded(child: FutureBuilder<List<TrailSummaryDto>>(future: _trails, builder: (_, snapshot) => _results(snapshot))),
