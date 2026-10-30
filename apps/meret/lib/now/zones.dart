@@ -95,8 +95,8 @@ class _PlayOnState extends State<PlayOn> {
             Text(zone.detail, style: Tok.body.copyWith(fontSize: 12, color: Tok.faint)),
           ])),
           const SizedBox(width: 10),
-          Text(zone.verdict, textAlign: TextAlign.right, style: Tok.monoSmall.copyWith(
-            fontSize: 11, fontWeight: FontWeight.w500, color: zone.warn ? Tok.warn : Tok.ok,
+          Text(zone.verdict, textAlign: TextAlign.right, style: Tok.label.copyWith(
+            fontSize: 12, fontWeight: FontWeight.w500, color: zone.warn ? Tok.warn : Tok.ok,
           )),
         ]),
       )),

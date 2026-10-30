@@ -215,7 +215,7 @@ class ConstellationPainter extends CustomPainter {
         clockTime(s.openedMs.toInt()),
         if (s.actions.isNotEmpty) trailActions(s.actions),
         if (current) 'now',
-      ].join(' · '), Tok.label.copyWith(fontSize: 11.5, letterSpacing: 0), width: width);
+      ].join(' · '), Tok.label.copyWith(fontSize: 12), width: width);
       note.paint(canvas, p + Offset(-note.width / 2, 19));
     }
   }

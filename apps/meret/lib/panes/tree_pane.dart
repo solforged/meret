@@ -96,7 +96,7 @@ class _TreePaneState extends State<TreePane> {
                   ]), style: Tok.label),
               ]),
               const SizedBox(height: 24),
-              const Text('Branches', style: Tok.label),
+              const Text('Branches', style: Tok.heading),
               const SizedBox(height: 8),
               _Branches(trail: trail, stops: stops, root: root, onGo: onGo, onPrune: onPrune),
             ]),
@@ -128,7 +128,7 @@ class _CloseTree extends StatelessWidget {
           const SizedBox(width: 8),
           Text('Close', style: Tok.body.copyWith(fontSize: 12.5, fontWeight: FontWeight.w500)),
           const SizedBox(width: 8),
-          Text('T · Esc', style: Tok.label.copyWith(letterSpacing: 0)),
+          Text('T · Esc', style: Tok.data),
         ]),
       ),
     ),
@@ -149,17 +149,17 @@ class TreePaneFacts extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(spacing: 24, runSpacing: 6, children: [
-    Text(_count(stops, 'stop'), style: Tok.monoSmall),
+    Text(_count(stops, 'stop'), style: Tok.labelMuted),
     Text([
       _count(branches, 'branch', 'branches'),
       if (peeks != 0) _count(peeks, 'peek'),
-    ].join(' · '), style: Tok.monoSmall),
+    ].join(' · '), style: Tok.labelMuted),
     if (wants != 0 || played != 0)
       Text([
         if (wants != 0) _count(wants, 'want'),
         if (played != 0) '$played played',
-      ].join(' · '), style: Tok.monoSmall),
-    if (trail.meetings.isNotEmpty) Text(_count(trail.meetings.length, 'meeting point'), style: Tok.monoSmall),
+      ].join(' · '), style: Tok.labelMuted),
+    if (trail.meetings.isNotEmpty) Text(_count(trail.meetings.length, 'meeting point'), style: Tok.labelMuted),
   ]);
 }
 
@@ -259,7 +259,7 @@ class _Branches extends StatelessWidget {
           for (var i = 0; i < cells.length; i++)
             i == 5 && onPrune != null
               ? Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                  Text(cells[i], style: Tok.monoSmall),
+                  Text(cells[i], style: Tok.labelMuted),
                   TextButton(
                     key: pruneKey,
                     onPressed: onPrune,
@@ -271,7 +271,7 @@ class _Branches extends StatelessWidget {
                     child: const Text('prune'),
                   ),
                 ])
-              : Text(cells[i], style: i == 0 ? Tok.body.copyWith(color: current ? Tok.gold : Tok.ink) : Tok.monoSmall),
+              : Text(cells[i], style: i == 0 ? Tok.body.copyWith(color: current ? Tok.gold : Tok.ink) : i == 2 || i == 3 ? Tok.monoSmall : Tok.labelMuted),
         ], fixed),
       ),
     ),

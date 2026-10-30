@@ -53,7 +53,7 @@ void main() {
     expect(tester.getSize(find.byKey(const ValueKey('now-zone-marker-local:speakers'))), const Size(9, 9));
     expect(tester.widget<Text>(find.text('◐ refuses above 96 kHz')).style!.color, Tok.warn);
     expect(tester.widget<Text>(find.text('● bit-perfect')).style!.color, Tok.ok);
-    expect(tester.widget<Text>(find.text('● bit-perfect')).style!.fontSize, 11);
+    expect(tester.widget<Text>(find.text('● bit-perfect')).style!.fontSize, 12);
     expect(tester.getTopLeft(find.byType(PlayOn)).dy, lessThan(tester.getTopLeft(find.byType(UpNext)).dy));
   });
 

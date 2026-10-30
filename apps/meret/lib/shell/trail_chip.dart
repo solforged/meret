@@ -129,7 +129,7 @@ class _TrailChipState extends State<TrailChip> with SingleTickerProviderStateMix
           ),
           // Squeezed by the LCD, the stop count gives way first: it's in the tooltip.
           child: LayoutBuilder(builder: (context, box) {
-            final metaStyle = Tok.label.copyWith(letterSpacing: 0);
+            final metaStyle = Tok.label;
             final painter = TextPainter(text: TextSpan(text: meta, style: metaStyle), textDirection: TextDirection.ltr,
               textScaler: MediaQuery.textScalerOf(context), maxLines: 1)..layout();
             final showMeta = !compact && box.maxWidth - 7 - 8 - 8 - painter.width >= 48;

@@ -108,8 +108,8 @@ class _TodayWeekState extends State<TodayWeek> {
         padding: const EdgeInsets.only(bottom: 6),
         decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Tok.rule))),
         child: Wrap(alignment: WrapAlignment.spaceBetween, spacing: 8, runSpacing: 3, children: [
-          Text(title, style: Tok.label),
-          if (meta != null) Text(meta, style: Tok.label.copyWith(color: Tok.faint)),
+          Text(title, style: Tok.heading),
+          if (meta != null) Text(meta, style: Tok.label),
         ]),
       ),
       ...rows,
@@ -160,7 +160,7 @@ class _TodayWeekState extends State<TodayWeek> {
           Row(children: [
             Expanded(child: Text(played.title, style: Tok.body)),
             const SizedBox(width: 8),
-            Text('${played.plays} ${played.plays == BigInt.one ? 'play' : 'plays'}', style: Tok.monoSmall),
+            Text('${played.plays} ${played.plays == BigInt.one ? 'play' : 'plays'}', style: Tok.labelMuted),
           ]),
           Text(played.releaseTitle, style: Tok.label),
         ]),

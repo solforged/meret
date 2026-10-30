@@ -50,7 +50,7 @@ class _HistogramHeaderState extends State<HistogramHeader> {
       final title = widget.label.toUpperCase();
       final range = widget.range;
       // A narrow header keeps both words, the span under the label.
-      final stacked = range != null && _width(title) + _width(range) + 12 > box.maxWidth;
+      final stacked = range != null && _width(title, Tok.caps) + _width(range, Tok.data) + 12 > box.maxWidth;
       final onSet = widget.onSetRange;
       // "Set DR filter", "Set year filter": acronyms keep their case.
       final tooltip = 'Set ${widget.label == widget.label.toUpperCase() ? widget.label : widget.label.toLowerCase()} filter';
@@ -64,7 +64,7 @@ class _HistogramHeaderState extends State<HistogramHeader> {
         );
         return tip ? Tooltip(message: tooltip, child: button) : button;
       }
-      final rangeStyle = Tok.label.copyWith(color: Tok.faint);
+      final rangeStyle = Tok.data;
       return SizedBox(height: widget.height, child: Stack(children: [
         Positioned.fill(child: GestureDetector(
         onHorizontalDragStart: (d) {
@@ -93,11 +93,11 @@ class _HistogramHeaderState extends State<HistogramHeader> {
           alignment: Alignment.topLeft,
           child: stacked
               ? Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  word(title, Tok.label, tip: true),
+                  word(title, Tok.caps, tip: true),
                   word(range, rangeStyle),
                 ])
               : Row(children: [
-                  Expanded(child: Align(alignment: Alignment.centerLeft, child: word(title, Tok.label, tip: true))),
+                  Expanded(child: Align(alignment: Alignment.centerLeft, child: word(title, Tok.caps, tip: true))),
                   if (range != null) word(range, rangeStyle),
                 ]),
         ),
@@ -105,8 +105,8 @@ class _HistogramHeaderState extends State<HistogramHeader> {
     });
   }
 
-  static double _width(String text) =>
-      (TextPainter(text: TextSpan(text: text, style: Tok.label), textDirection: TextDirection.ltr, maxLines: 1)..layout()).width;
+  static double _width(String text, TextStyle style) =>
+      (TextPainter(text: TextSpan(text: text, style: style), textDirection: TextDirection.ltr, maxLines: 1)..layout()).width;
 }
 
 class _HistogramPainter extends CustomPainter {

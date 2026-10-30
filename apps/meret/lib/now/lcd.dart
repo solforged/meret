@@ -57,7 +57,7 @@ class Lcd extends StatelessWidget {
         Widget clocked(String Function() text, {Key? key}) => ListenableBuilder(
           listenable: clock,
           builder: (_, _) => Text(text(), key: key, maxLines: 1, overflow: TextOverflow.clip, softWrap: false,
-            style: Tok.label.copyWith(color: Tok.muted, height: 1.2)),
+            style: Tok.monoSmall.copyWith(height: 1.2)),
         );
         final seek = SizedBox(height: 10, child: SeekBar(core: core, now: n, clock: clock, hairline: true, id: 'lcd'));
         final times = box.maxWidth >= 300;
@@ -75,10 +75,10 @@ class Lcd extends StatelessWidget {
                   style: Tok.body.copyWith(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.2)),
               ),
               if (dr != null && box.maxWidth >= 500)
-                Positioned(right: 0, child: Text('DR $dr', key: const ValueKey('lcd-dr'), style: Tok.label.copyWith(height: 1.2))),
+                Positioned(right: 0, child: Text('DR $dr', key: const ValueKey('lcd-dr'), style: Tok.data.copyWith(height: 1.2))),
             ]),
             Text(n?.subtitle ?? '', key: const ValueKey('lcd-subtitle'), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: Tok.label.copyWith(height: 1.2)),
+              style: Tok.label.copyWith(fontSize: 12, height: 1.15)),
           ],
           SizedBox(height: pill ? 2 : 1),
           Row(key: const ValueKey('lcd-seek-row'), children: [
@@ -90,7 +90,7 @@ class Lcd extends StatelessWidget {
             if (!pill && times) ...[
               const SizedBox(width: 8),
               Text(n?.lengthMs == null ? '–:––' : clockLength(n!.lengthMs!.toInt()), key: const ValueKey('lcd-length'),
-                maxLines: 1, softWrap: false, style: Tok.label.copyWith(color: Tok.muted, height: 1.2)),
+                maxLines: 1, softWrap: false, style: Tok.monoSmall.copyWith(height: 1.2)),
             ],
           ]),
         ]);
