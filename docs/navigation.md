@@ -149,8 +149,8 @@ Plate 12, opened from "why this?" on a Play something pick.
 - **Fading.** Miss 4 weeks in a row and a habit drops to forming. Miss another 4 and it's gone, without asking.
 - **Saying no.** "Not a habit" removes the habit, not the music, and Meret doesn't suggest it again. You can narrow a habit instead ("only Tuesdays") or pause it.
 - **Phases are separate.** A short obsession (14 plays this week) or a new purchase is a phase. It lifts "this week" picks for about three weeks, then fades, and never becomes a habit by itself.
-- **Shared speakers.** Plays started outside Meret, or on a zone other people use, count only once you say they're yours.
-- **Per device.** Decided 2026-10-13: habits stay on the device that formed them and never sync. The Mac's habits and the phone's (commutes, runs) are different lives.
+- **Shared speakers.** Plays started outside Meret, or on a zone other people use, count only once you say they're yours. Importing your Spotify export says so for its plays (decided 2026-10-30).
+- **Per device.** Decided 2026-10-13: habits stay on the device that formed them and never sync. The Mac's habits and the phone's (commutes, runs) are different lives. Imported Spotify history is the exception: it comes from every device you played on, and counts toward the habits of the Mac that imported it (decided 2026-10-30).
 - **Privacy.** Habits are computed and stored on your machine from time, day, device and zone. Location is never used.
 - **Drawing.** A week dial in the same grammar as the body drawing: rings are days, angle is the hour, brightness is listening, habits are lettered outlines keyed to cards.
 
