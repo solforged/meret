@@ -6,6 +6,7 @@ With the plates checked out locally, serve them with `python3 -m http.server -d 
 
 | Set | Date | What it covers | Doc |
 |---|---|---|---|
+| `2026-10-30-spotify` | 2026-10-30 | Spotify on the Free plan: Settings › Sources › Spotify, importing the data export, hearing a lead in the Spotify app, what ten years of history adds to Explore, the Journal and Today | [architecture.md](architecture.md#order-of-work) (SP0–SP6) |
 | `2026-10-30-discovery` | 2026-10-30 | The shelf and its edge, a lead becoming yours, Explore, the Journal, Today with Pick up, the rebuilt Home column (renders follow once the plates are settled) | [navigation.md](navigation.md#discovery-at-the-shelfs-edge) |
 | `2026-10-23-navigation` | 2026-10-23 | Home, a trail with its threads drawn, motion, the top line, a day of trails | [navigation.md](navigation.md) |
 | `2026-10-14-setup` | 2026-10-14 | First launch, Settings, sources, writing back to files | [stories.md](stories.md) |
