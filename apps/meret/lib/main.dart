@@ -16,7 +16,8 @@ import 'theme/tokens.dart';
 
 /// `flutter run --dart-define=MERET_FAKE=true` runs on mock data, without Rust.
 /// `MERET_DATA=/tmp/copy Contents/MacOS/meret` opens a copy of the library
-/// instead of the real one, for smoke runs beside the app you use.
+/// instead of the real one, for smoke runs beside the app you use;
+/// `MERET_SILENT=1` plays them to the null output, so they make no sound.
 const _fake = bool.fromEnvironment('MERET_FAKE');
 
 Future<void> main() async {
@@ -36,7 +37,7 @@ Future<void> main() async {
     final dir = override == null || override.isEmpty ? await getApplicationSupportDirectory() : Directory(override);
     // CoreAudio on macOS; elsewhere the null output until AAudio, WASAPI
     // and PipeWire land (docs/architecture.md).
-    await rust.startCore(dataDir: dir.path, nullOutput: !Platform.isMacOS);
+    await rust.startCore(dataDir: dir.path, nullOutput: !Platform.isMacOS || Platform.environment['MERET_SILENT'] == '1');
     core = RustCore();
   }
   // ⌘Q, the Dock's Quit and logging out ask first; write where playback got
