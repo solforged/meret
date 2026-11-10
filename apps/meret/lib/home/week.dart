@@ -5,6 +5,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show
 
 import '../core/bridge.dart';
 import '../core/when.dart';
+import '../panes/row_menu.dart';
+import '../panes/track_row.dart';
 import '../theme/tokens.dart';
 
 /// Listening in the last seven local calendar days, oldest first, up to now.
@@ -156,6 +158,8 @@ class _TodayWeekState extends State<TodayWeek> {
       TodayDoor(
         key: ValueKey('today-most-played-${played.trackId}'),
         onTap: widget.onRelease == null ? null : () => _report(widget.onRelease!(played.releaseId)),
+        actions: () => trackActions(context, widget.core, played.trackId,
+          onOpen: widget.onRelease == null ? null : () => _report(widget.onRelease!(played.releaseId))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Expanded(child: Text(played.title, style: Tok.body)),
@@ -172,6 +176,8 @@ class _TodayWeekState extends State<TodayWeek> {
       TodayDoor(
         key: ValueKey('today-dormant-${release.releaseId}'),
         onTap: widget.onRelease == null ? null : () => _report(widget.onRelease!(release.releaseId)),
+        actions: () => releaseActions(context, widget.core, release.releaseId,
+          onOpen: widget.onRelease == null ? null : () => _report(widget.onRelease!(release.releaseId))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Expanded(child: Text(release.title, style: Tok.body)),
@@ -208,9 +214,12 @@ class _TodayWeekState extends State<TodayWeek> {
 
 /// A Today row is a quiet door until you point at it.
 class TodayDoor extends StatefulWidget {
-  const TodayDoor({super.key, required this.child, this.onTap});
+  const TodayDoor({super.key, required this.child, this.onTap, this.actions});
   final Widget child;
   final VoidCallback? onTap;
+
+  /// The row's right-click menu, built when it opens.
+  final List<RowAction?> Function()? actions;
 
   @override
   State<TodayDoor> createState() => _TodayDoorState();
@@ -231,7 +240,10 @@ class _TodayDoorState extends State<TodayDoor> {
     cursor: widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
     onEnter: (_) => setState(() => _hover = true),
     onExit: (_) => setState(() => _hover = false),
-    child: Semantics(
+    child: widget.actions == null ? _door() : RowMenu(actions: widget.actions!, child: _door()),
+  );
+
+  Widget _door() => Semantics(
       button: widget.onTap != null,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -245,6 +257,5 @@ class _TodayDoorState extends State<TodayDoor> {
           child: widget.child,
         ),
       ),
-    ),
   );
 }

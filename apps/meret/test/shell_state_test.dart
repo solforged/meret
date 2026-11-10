@@ -24,6 +24,9 @@ void main() {
     final table = find.byType(TablePane);
     final row = find.descendant(of: table, matching: find.byKey(const ValueKey('table-row-1')));
     await tester.tapAt(tester.getTopLeft(row) + const Offset(80, 13));
+    // The click played the row; pause, so the resizes below can settle.
+    await core.transport(const TransportDto.pause());
+    await tester.pump();
     for (var i = 0; i < 32; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
@@ -33,7 +36,7 @@ void main() {
     )).controller!;
     final offset = scroll.offset;
     expect(offset, greaterThan(0));
-    expect(_rowColour(tester, 33), Tok.panel2);
+    expect(_rowColour(tester, 33), Tok.pick);
 
     await _resize(tester, 400);
     expect(find.byType(PaneSpine), findsOneWidget);
@@ -43,10 +46,10 @@ void main() {
 
     final restored = tester.widget<ListView>(find.byKey(const ValueKey('table-rows'))).controller!;
     expect(restored.offset, offset);
-    expect(_rowColour(tester, 33), Tok.panel2);
+    expect(_rowColour(tester, 33), Tok.pick);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pump();
-    expect(_rowColour(tester, 32), Tok.panel2);
+    expect(_rowColour(tester, 32), Tok.pick);
     expect(_rowColour(tester, 33), Colors.transparent);
   });
 

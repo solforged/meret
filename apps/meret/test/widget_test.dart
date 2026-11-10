@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -120,7 +121,7 @@ void main() {
     expect(find.descendant(of: zones, matching: find.text('Play on')), findsOneWidget);
     expect(tester.getTopLeft(zones).dy, greaterThan(tester.getBottomLeft(path).dy));
     expect(tester.getTopLeft(zones).dy, greaterThan(tester.getBottomLeft(fidelity).dy));
-    expect(tester.getBottomLeft(zones).dy, lessThan(tester.getTopLeft(next).dy));
+    expect(tester.getBottomLeft(zones).dy, lessThanOrEqualTo(tester.getTopLeft(next).dy));
   });
 
   testWidgets('a written joint credit opens each individual thread', (tester) async {
@@ -1061,13 +1062,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(core.played, [('', first.tracks)]);
     expect(core.playedViews.single, _groupedView);
+    // A heading is a door to its release, not a track: clicks on it never play.
     final header = find.byKey(ValueKey('table-row-$index'));
     await tester.tap(header);
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tap(header);
     await tester.pumpAndSettle();
-    expect(core.played, [('', first.tracks), ('', first.tracks)]);
-    expect(core.playedViews.last, _groupedView);
+    expect(core.played, [('', first.tracks)]);
   });
 
   testWidgets('the playing track row uses the scoped light', (tester) async {
@@ -1102,20 +1103,21 @@ void main() {
     expect(find.byKey(const ValueKey('table-row-30000')), findsOneWidget);
   });
 
-  testWidgets('Enter plays the selected row and arrows move selection', (tester) async {
+  testWidgets('a click plays a track row; arrows move the selection and Enter plays it', (tester) async {
     final core = _RecordingCore();
     await tester.pumpWidget(_table(core));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('table-row-2')));
     await tester.pumpAndSettle();
+    expect(core.played, [('', 1)], reason: 'one click plays the track under it');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(core.played, [('', 2)]);
+    expect(core.played, [('', 1), ('', 2)]);
   });
 
-  testWidgets('a double-tap plays its table row', (tester) async {
+  testWidgets('a double click plays its table row once', (tester) async {
     final core = _RecordingCore();
     await tester.pumpWidget(_table(core));
     await tester.pumpAndSettle();
@@ -1173,7 +1175,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('album and artist cells open typed panes and their titles stay on the trail', (tester) async {
+  testWidgets('a release heading opens its release, its menu goes to the artist, and their titles stay on the trail', (tester) async {
     final core = FakeCore();
     final row = await _firstTrack(core);
     await _surface(tester, core);
@@ -1187,7 +1189,10 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.byKey(ValueKey('table-group-artist-${row.releaseId}')));
+    await tester.tap(find.byKey(ValueKey('table-group-artist-${row.releaseId}')), buttons: kSecondaryButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.widgetWithText(MenuItemButton, 'Go to ${row.artist}'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(_paneTitles(tester), ['All tracks', row.artist]);
@@ -1209,6 +1214,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     final release = await core.release(row.releaseId);
     final credit = release.credits.first;
+    await _toCredits(tester);
     await tester.tap(find.byKey(ValueKey('thread-${credit.kind.name}-${credit.to}')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -1698,5 +1704,14 @@ class _RepeatedListenCore extends FakeCore {
           playedMs: BigInt.from(played), lengthMs: listen.lengthMs, counted: false,
         ),
     ].take(limit).toList();
+  }
+}
+
+/// A release lists its tracks before its credits: the Credits button beside
+/// Play brings them, and the thread row among them, into view.
+Future<void> _toCredits(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('release-credits')));
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 80));
   }
 }

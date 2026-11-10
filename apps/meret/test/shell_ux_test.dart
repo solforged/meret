@@ -352,6 +352,7 @@ void main() {
     expect(tester.widget<Pane>(panes.at(1)).via, trail.stops[1].via);
 
     // The release names the person it led to, and the person the release it came from.
+    await _toCredits(tester);
     expect(find.descendant(of: panes.at(1), matching: find.byKey(const ValueKey('thread-went'))), findsWidgets);
     expect(find.descendant(of: panes.at(2), matching: find.byKey(const ValueKey('thread-went'))), findsNothing);
     expect(find.descendant(of: panes.at(2), matching: find.byKey(const ValueKey('arrow-came'))), findsWidgets);
@@ -752,5 +753,14 @@ class _LateNowCore extends FakeCore {
   Stream<NowDto> now() async* {
     await gate.future;
     yield* super.now();
+  }
+}
+
+/// A release lists its tracks before its credits: the Credits button beside
+/// Play brings them, and the thread row among them, into view.
+Future<void> _toCredits(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('release-credits')));
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 80));
   }
 }

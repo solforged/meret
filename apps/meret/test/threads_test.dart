@@ -15,6 +15,7 @@ void main() {
     final core = FakeCore();
     await _trail(core, stops: 3);
     await _surface(tester, core);
+    await _toCredits(tester);
     final spans = _spans(tester);
     expect(spans, hasLength(2));
     final origin = tester.getTopLeft(find.byType(ThreadLines));
@@ -36,6 +37,7 @@ void main() {
     await _surface(tester, core);
     expect(_spans(tester), isEmpty, reason: 'one pane, no thread');
     final release = await core.release(PlatformInt64Util.from(1));
+    await _toCredits(tester);
     await tester.tap(find.byKey(ValueKey('thread-albumArtist-${release.artistLinks.first.to}')));
     await tester.pump();
     var shown = false;
@@ -62,6 +64,7 @@ void main() {
     final core = FakeCore();
     await _trail(core, stops: 3);
     await _surface(tester, core);
+    await _toCredits(tester);
     expect(_spans(tester).map((span) => span.alpha), [1, 1]);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.pump();
@@ -142,4 +145,13 @@ Future<void> _surface(WidgetTester tester, FakeCore core, {double width = 1728})
   await tester.pumpAndSettle();
   await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
   await tester.pumpAndSettle();
+}
+
+/// A release lists its tracks before its credits: the Credits button beside
+/// Play brings them, and the thread row among them, into view.
+Future<void> _toCredits(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('release-credits')));
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 80));
+  }
 }

@@ -18,18 +18,19 @@ String playsFact(BigInt plays, PlatformInt64? lastPlayedMs) {
 
 /// One primary action, with an optional second choice.
 class PaneActions extends StatelessWidget {
-  const PaneActions({super.key, required this.primary, required this.onPrimary, this.primaryKey, this.secondary, this.onSecondary});
+  const PaneActions({super.key, required this.primary, required this.onPrimary, this.primaryKey, this.secondary, this.onSecondary, this.secondaryKey});
   final String primary;
   final VoidCallback? onPrimary;
   final Key? primaryKey;
   final String? secondary;
   final VoidCallback? onSecondary;
+  final Key? secondaryKey;
 
   @override
   Widget build(BuildContext context) => Wrap(spacing: 8, runSpacing: 8, children: [
     PaneActionButton(key: primaryKey, label: primary, primary: true, onTap: onPrimary),
     if (secondary case final label?)
-      PaneActionButton(label: label, onTap: onSecondary),
+      PaneActionButton(key: secondaryKey, label: label, onTap: onSecondary),
   ]);
 }
 
@@ -319,9 +320,12 @@ class PaneSpine extends StatelessWidget {
 
 /// The tree around one pane, shared by its fork rows and thread marks.
 class TrailPaneScope extends InheritedWidget {
-  const TrailPaneScope({super.key, required this.trail, required this.stop, required this.onGo, required this.onPrune, this.ahead = const {}, this.anchors, required super.child});
+  const TrailPaneScope({super.key, required this.trail, required this.stop, required this.onGo, required this.onPrune, this.ahead = const {}, this.anchors, this.core, required super.child});
   final TrailDto trail;
   final StopDto stop;
+
+  /// What a row's menu plays and queues through.
+  final CoreBridge? core;
 
   /// Where the row you followed registers, so its thread can be drawn.
   final ThreadAnchors? anchors;
@@ -403,9 +407,76 @@ class ThreadArrow extends StatelessWidget {
   }
 }
 
-/// A followable row: lit gold when it's the thread that led to the next
-/// pane, and the start of that thread's line. [via] names the row's thread
-/// when the same target is reachable more than one way.
+/// Every list row's box: a 2 px edge that lights for the playing track or the
+/// followed thread, then the same inset whether it is lit or not. Text never
+/// touches the edge, and nothing shifts when a row lights.
+class RowBox extends StatelessWidget {
+  const RowBox({super.key, required this.child, this.edge, this.fill, this.vertical = 6});
+
+  final Widget child;
+
+  /// The edge's colour while the row is lit.
+  final Color? edge;
+  final Color? fill;
+  final double vertical;
+
+  static const edgeWidth = 2.0;
+  static const inset = 6.0;
+
+  /// The followed thread's tint.
+  static const went = Color(0x1AD2A64E);
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: EdgeInsets.fromLTRB(inset, vertical, inset, vertical),
+    decoration: BoxDecoration(
+      color: fill ?? Colors.transparent,
+      border: Border(
+        bottom: const BorderSide(color: Tok.line),
+        left: BorderSide(color: edge ?? Colors.transparent, width: edgeWidth),
+      ),
+    ),
+    child: child,
+  );
+}
+
+/// A [RowBox] for a row that follows a thread: lit gold when it's the thread
+/// that led to the next pane, and the start of that thread's line. [edge] and
+/// [fill] win over the thread's own, for a row that is also playing or selected.
+class ThreadRowBox extends StatelessWidget {
+  const ThreadRowBox({super.key, required this.target, this.via, this.hover = false, this.edge, this.fill, this.vertical = 6, required this.child});
+
+  /// Null for a row with no thread: a plain [RowBox].
+  final TargetDto? target;
+  final String? via;
+  final bool hover;
+  final Color? edge;
+  final Color? fill;
+  final double vertical;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = this.target;
+    final scope = target == null ? null : TrailPaneScope.of(context);
+    final went = scope != null && scope.way(target!, via: via) == ThreadWay.went;
+    final box = RowBox(
+      edge: edge ?? (went ? Tok.gold : null),
+      fill: fill ?? (went ? RowBox.went : hover ? Tok.panel2 : null),
+      vertical: vertical,
+      child: child,
+    );
+    if (!went) return box;
+    final lit = KeyedSubtree(key: const ValueKey('thread-went'), child: box);
+    final anchors = scope.anchors;
+    return anchors == null ? lit : ThreadAnchor(anchors: anchors, end: ThreadEnd.went, stop: scope.stop.index, child: lit);
+  }
+}
+
+/// A followable cell in a table row: lit gold when it's the thread that led
+/// to the next pane, and the start of that thread's line. [via] names the
+/// thread when the same target is reachable more than one way. Whole rows
+/// use [ThreadRowBox].
 class TrailRow extends StatelessWidget {
   const TrailRow({super.key, required this.target, this.via, required this.child});
   final TargetDto target;
@@ -418,7 +489,7 @@ class TrailRow extends StatelessWidget {
     if (scope == null || scope.way(target, via: via) != ThreadWay.went) return child;
     final lit = DecoratedBox(
       key: const ValueKey('thread-went'),
-      decoration: const BoxDecoration(color: Color(0x1AD2A64E), border: Border(left: BorderSide(color: Tok.gold, width: 2))),
+      decoration: const BoxDecoration(color: RowBox.went, border: Border(left: BorderSide(color: Tok.gold, width: RowBox.edgeWidth))),
       child: Padding(padding: const EdgeInsets.only(left: 6), child: child),
     );
     final anchors = scope.anchors;

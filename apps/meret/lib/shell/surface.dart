@@ -689,7 +689,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
       anchors: _anchors,
       stop: stop.index,
       body: TrailPaneScope(
-        trail: _trail!, stop: stop, ahead: aheadStops, anchors: _anchors,
+        trail: _trail!, stop: stop, ahead: aheadStops, anchors: _anchors, core: widget.core,
         onGo: (leaf) => _report(_navigate(() => widget.core.trailGo(leaf))),
         onPrune: (leaf) => _report(_prune(leaf)),
         child: body,

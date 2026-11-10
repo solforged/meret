@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/gestures.dart' show kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,11 +8,14 @@ import '../core/bridge.dart';
 import '../core/query_filters.dart';
 import '../core/when.dart';
 import '../draw/histogram_header.dart';
+import '../theme/action_target.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'add_folder.dart';
 import 'facet_browser.dart';
 import 'pane.dart';
+import 'row_menu.dart';
+import 'track_row.dart';
 
 /// iTunes' one big table as a pane (plate 04). The core orders and groups
 /// rows; the fixed-extent list fetches pages as they scroll into view.
@@ -57,7 +59,10 @@ class _TablePaneState extends State<TablePane> {
   String? _rowsError;
   String? _actionError;
   bool _adding = false;
-  (int, Duration)? _lastDown;
+
+  /// The row the last click played, so a double click plays it once.
+  int? _clicked;
+  final _click = ClickOnce();
   late bool _filtersExpanded = !queryClauses(widget.query).any((clause) => clause.field == null);
 
   @override
@@ -94,6 +99,7 @@ class _TablePaneState extends State<TablePane> {
 
   @override
   void dispose() {
+    _click.dispose();
     _focus.dispose();
     _scroll.dispose();
     super.dispose();
@@ -245,15 +251,65 @@ class _TablePaneState extends State<TablePane> {
     if (mounted && generation == _generation && item != null) await _follow(item);
   }
 
+  /// A click on a row: a track plays from there in the order shown, and a
+  /// release heading opens its release.
+  void _tap(int index, ItemDto? item) {
+    if (item == null) return;
+    _select(index);
+    if (item is ItemDto_Group) {
+      _follow(item);
+      return;
+    }
+    final again = _clicked == index;
+    _clicked = index;
+    if (_click.take() || !again) _play(index);
+  }
+
+  Future<void> _queueAt(int index, {required bool next}) async {
+    final generation = _generation;
+    final item = await _itemAt(index, generation);
+    if (!mounted || generation != _generation || item == null) return;
+    await queueAndSay(context, () => switch (item) {
+      ItemDto_Group(:final field0) => widget.core.queueRelease(field0.releaseId, next: next),
+      ItemDto_Track(:final row) => widget.core.queueTracks([row.trackId], next: next),
+    }, next: next);
+  }
+
+  Future<void> _revealAt(int index) async {
+    final item = await _itemAt(index, _generation);
+    if (item case ItemDto_Track(:final row) when row.path != null) await revealInFinder(row.path!);
+  }
+
+  /// A row's menu: the play verbs, then its release and artist, then its file.
+  List<RowAction?> _actions(int index, ItemDto? item) {
+    if (item == null) return const [];
+    final (release, person, name, path) = switch (item) {
+      ItemDto_Group(:final field0) => (field0.title, field0.albumArtistId, field0.albumArtist, null),
+      ItemDto_Track(:final row) => (row.album, row.artistId, row.artist, row.path),
+    };
+    return musicActions(
+      play: () => _play(index),
+      playNext: () => _queueAt(index, next: true),
+      addToQueue: () => _queueAt(index, next: false),
+      goTo: widget.onFollow == null ? const [] : [
+        RowAction('Go to $release', () => _follow(item), shortcut: RowKeys.open),
+        if (person != null && name != null && name.isNotEmpty) RowAction('Go to $name', () => _follow(item, artist: true)),
+      ],
+      reveal: path == null ? null : () => revealInFinder(path),
+    );
+  }
+
   KeyEventResult _key(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.enter && _selected != null) {
-      if (HardwareKeyboard.instance.isMetaPressed) {
-        _open(_selected!);
-      } else {
-        _play(_selected!);
-      }
-      return KeyEventResult.handled;
+    if (_selected case final selected?) {
+      final handled = RowKeys.handle(event,
+        play: () => _play(selected),
+        playNext: () => _queueAt(selected, next: true),
+        addToQueue: () => _queueAt(selected, next: false),
+        open: () => _open(selected),
+        reveal: () => _revealAt(selected),
+      );
+      if (handled == KeyEventResult.handled) return handled;
     }
     final delta = event.logicalKey == LogicalKeyboardKey.arrowDown ? 1 : event.logicalKey == LogicalKeyboardKey.arrowUp ? -1 : 0;
     if (delta == 0 || (_total ?? 0) == 0) return KeyEventResult.ignored;
@@ -381,27 +437,38 @@ class _TablePaneState extends State<TablePane> {
                       : LayoutBuilder(builder: (context, box) {
                           final shown = _shownColumns(box.maxWidth);
                           return Column(children: [
-                              SizedBox(height: _row, child: _headers(shown)),
+                              // The headers keep the rows' edge and inset, so the columns line up.
+                              Padding(
+                                padding: const EdgeInsets.only(left: RowBox.edgeWidth + RowBox.inset),
+                                child: SizedBox(height: _row, child: _headers(shown)),
+                              ),
                               Expanded(child: ListView.builder(
                                 key: const ValueKey('table-rows'), controller: _scroll,
                                 itemExtent: _row, itemCount: _total ?? 1,
                                 itemBuilder: (_, i) {
                                   final item = _lookup(i);
                                   final playing = item is ItemDto_Track && item.row.trackId.toInt() == light.track;
-                                  // A double click is counted here, not by a gesture
-                                  // recognizer: one would hold every single click on a
-                                  // title or artist for the double-tap timeout.
-                                  return Listener(
-                                    key: ValueKey('table-row-$i'), behavior: HitTestBehavior.opaque,
-                                    onPointerDown: (event) => _down(i, event.timeStamp),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: playing ? light.wash : _selected == i ? Tok.panel2 : Colors.transparent,
-                                        border: Border(left: BorderSide(color: playing ? light.accent : Colors.transparent, width: 2), bottom: const BorderSide(color: Tok.line)),
+                                  final selected = _selected == i;
+                                  return Door(
+                                    key: ValueKey('table-row-$i'),
+                                    enabled: item != null,
+                                    builder: (context, hover) => RowMenu(
+                                      onOpen: () => _select(i),
+                                      actions: () => _actions(i, item),
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () => _tap(i, item),
+                                        child: Container(
+                                          padding: const EdgeInsets.only(left: RowBox.inset),
+                                          decoration: BoxDecoration(
+                                            color: playing ? light.wash : selected ? Tok.pick : hover ? Tok.panel2 : Colors.transparent,
+                                            border: Border(left: BorderSide(color: playing ? light.accent : Colors.transparent, width: RowBox.edgeWidth), bottom: const BorderSide(color: Tok.line)),
+                                          ),
+                                          child: item == null
+                                              ? const Align(alignment: Alignment.centerLeft, child: Text('…', style: Tok.label))
+                                              : _columns(item, shown, playing: playing, hover: hover, light: light),
+                                        ),
                                       ),
-                                      child: item == null
-                                          ? const Align(alignment: Alignment.centerLeft, child: Text('…', style: Tok.label))
-                                          : _columns(item, shown, playing: playing, light: light),
                                     ),
                                   );
                                 },
@@ -428,6 +495,7 @@ class _TablePaneState extends State<TablePane> {
 
   Widget _cell(String text, TextStyle style, {Key? key, VoidCallback? onTap}) {
     final label = Padding(
+      key: onTap == null ? key : null,
       padding: const EdgeInsets.only(right: 8),
       child: Text(text, style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
     );
@@ -438,23 +506,13 @@ class _TablePaneState extends State<TablePane> {
     );
   }
 
-  void _down(int index, Duration at) {
-    final last = _lastDown;
-    _lastDown = (index, at);
-    _select(index);
-    if (last != null && last.$1 == index && at - last.$2 <= kDoubleTapTimeout) {
-      _lastDown = null;
-      _play(index);
-    }
-  }
-
   /// The fixed columns that fit beside a readable title and artist, giving
   /// way from the right: LUFS first, then DR, Format and Year. # and
   /// Length always stay.
   Set<_Col> _shownColumns(double width) {
-    final shown = {..._Col.values};
+    final shown = {..._Col.values}..remove(_Col.go);
     final flex = _view.group ? 300.0 : 460.0;
-    double fixed() => shown.fold(0.0, (sum, col) => sum + col.width);
+    double fixed() => shown.fold(widget.onFollow == null ? 0.0 : _Col.go.width, (sum, col) => sum + col.width);
     for (final col in const [_Col.lufs, _Col.dr, _Col.format, _Col.year]) {
       if (fixed() + flex <= width) break;
       shown.remove(col);
@@ -478,6 +536,7 @@ class _TablePaneState extends State<TablePane> {
       if (shown.contains(_Col.format)) SizedBox(width: _Col.format.width, child: header('Format', SortKeyDto.format)),
       if (shown.contains(_Col.dr)) SizedBox(width: _Col.dr.width, child: _cell('DR', Tok.label)),
       if (shown.contains(_Col.lufs)) SizedBox(width: _Col.lufs.width, child: _cell('LUFS', Tok.label)),
+      if (widget.onFollow != null) SizedBox(width: _Col.go.width),
     ]);
   }
 
@@ -489,11 +548,15 @@ class _TablePaneState extends State<TablePane> {
     return discs > 1 ? '${row.disc}-$number' : number;
   }
 
-  Widget _columns(ItemDto item, Set<_Col> shown, {required bool playing, required Light light}) {
+  /// One row's cells. Nothing in a row takes a click for itself but the
+  /// arrow at its end, which opens the release: a track row plays, a release
+  /// heading opens, and the artist is in the row's menu.
+  Widget _columns(ItemDto item, Set<_Col> shown, {required bool playing, required bool hover, required Light light}) {
     final group = item is ItemDto_Group ? item.field0 : null;
     final row = item is ItemDto_Track ? item.row : null;
     final artist = group?.albumArtist ?? (_view.group && row?.artist == row?.albumArtist ? '' : row?.artist ?? '');
     final person = group?.albumArtistId ?? row?.artistId;
+    final release = TargetDto.release(id: group?.releaseId ?? row!.releaseId);
     final title = group == null
         ? _cell(row!.title, Tok.body.copyWith(color: playing ? light.accent : Tok.ink))
         : Row(children: [
@@ -501,24 +564,35 @@ class _TablePaneState extends State<TablePane> {
                 ? const ColoredBox(color: Tok.rule)
                 : Image.file(File(group.cover!), cacheWidth: (18 * MediaQuery.devicePixelRatioOf(context)).ceil(), fit: BoxFit.cover)),
             const SizedBox(width: 10),
-            Expanded(child: TrailRow(target: TargetDto.release(id: group.releaseId), child: _cell(group.title, Tok.body.copyWith(fontWeight: FontWeight.w600),
-              key: ValueKey('table-release-${group.releaseId}'), onTap: widget.onFollow == null ? null : () => _follow(item)))),
+            Expanded(child: TrailRow(target: release, child: _cell(group.title, Tok.body.copyWith(fontWeight: FontWeight.w600),
+              key: ValueKey('table-release-${group.releaseId}')))),
             // The count takes what it needs, up to a cap, and the title the rest.
             ConstrainedBox(constraints: const BoxConstraints(maxWidth: 80), child: _cell(_count(group.tracks, 'track'), Tok.label)),
           ]);
+    // The number gives way to what a click on a track does.
+    final lead = row != null && (hover || playing)
+        ? Align(alignment: Alignment.centerLeft, child: Icon(Icons.play_arrow, size: 14, color: playing ? light.accent : Tok.ink))
+        : _cell(group != null || row!.number == 0 ? '' : _trackNumber(row, (item as ItemDto_Track).discs), Tok.monoSmall);
     return Row(children: [
-      SizedBox(width: _Col.number.width, child: _cell(group != null || row!.number == 0 ? '' : _trackNumber(row, (item as ItemDto_Track).discs), Tok.monoSmall)),
+      SizedBox(width: _Col.number.width, child: lead),
       Expanded(flex: 4, child: title),
       Expanded(flex: 3, child: _went(person == null || artist.isEmpty ? null : TargetDto.person(id: person), _cell(artist, Tok.body.copyWith(color: Tok.muted),
-        key: group != null ? ValueKey('table-group-artist-${group.releaseId}') : ValueKey('table-artist-${row!.trackId}'),
-        onTap: widget.onFollow == null || person == null || artist.isEmpty ? null : () => _follow(item, artist: true)))),
-      if (!_view.group) Expanded(flex: 4, child: TrailRow(target: TargetDto.release(id: row!.releaseId), child: _cell(row.album, Tok.body.copyWith(color: Tok.muted),
-        key: ValueKey('table-album-${row.trackId}'), onTap: widget.onFollow == null ? null : () => _follow(item)))),
+        key: group != null ? ValueKey('table-group-artist-${group.releaseId}') : ValueKey('table-artist-${row!.trackId}')))),
+      if (!_view.group) Expanded(flex: 4, child: TrailRow(target: release, child: _cell(row!.album, Tok.body.copyWith(color: Tok.muted),
+        key: ValueKey('table-album-${row.trackId}')))),
       if (shown.contains(_Col.year)) SizedBox(width: _Col.year.width, child: _cell(group != null ? '${group.year ?? ''}' : _view.group ? '' : '${row!.year ?? ''}', Tok.monoSmall)),
       SizedBox(width: _Col.length.width, child: _cell(_length(group?.lengthMs ?? row?.lengthMs), Tok.monoSmall)),
       if (shown.contains(_Col.format)) SizedBox(width: _Col.format.width, child: _cell(group?.format ?? row!.format, Tok.monoSmall)),
       if (shown.contains(_Col.dr)) SizedBox(width: _Col.dr.width, child: _cell('${row?.dr ?? ''}', Tok.monoSmall)),
       if (shown.contains(_Col.lufs)) SizedBox(width: _Col.lufs.width, child: _cell(row?.loudness?.toStringAsFixed(1) ?? '', Tok.monoSmall)),
+      if (widget.onFollow != null) SizedBox(
+        width: _Col.go.width,
+        // A heading is a door and says so; a track's way to its release waits for the pointer.
+        child: group != null || hover ? _GoTo(
+          key: group != null ? ValueKey('table-go-release-${group.releaseId}') : ValueKey('table-go-track-${row!.trackId}'),
+          target: release, label: group?.title ?? row!.album, hover: hover, onTap: () => _follow(item),
+        ) : null,
+      ),
     ]);
   }
 
@@ -644,8 +718,30 @@ class _FilterRangeDialogState extends State<_FilterRangeDialog> {
 
 /// The table's fixed-width columns.
 enum _Col {
-  number(40), year(60), length(72), format(120), dr(48), lufs(64);
+  number(40), year(60), length(72), format(120), dr(48), lufs(64), go(28);
 
   const _Col(this.width);
   final double width;
+}
+
+/// The arrow at a table row's end: opens the row's release.
+class _GoTo extends StatelessWidget {
+  const _GoTo({super.key, required this.target, required this.label, required this.hover, required this.onTap});
+  final TargetDto target;
+  final String label;
+  final bool hover;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Go to $label',
+    waitDuration: const Duration(milliseconds: 500),
+    excludeFromSemantics: true,
+    child: ActionTarget(
+      onTap: onTap,
+      semanticLabel: 'Go to $label',
+      excludeChildSemantics: true,
+      child: Center(child: ThreadArrow(target: target, hover: hover)),
+    ),
+  );
 }

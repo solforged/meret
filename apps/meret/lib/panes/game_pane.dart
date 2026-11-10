@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
@@ -9,6 +8,8 @@ import '../theme/light.dart';
 import '../theme/tokens.dart';
 import 'pane.dart';
 import 'release_pane.dart';
+import 'row_menu.dart';
+import 'track_row.dart';
 
 class GamePane extends StatefulWidget {
   const GamePane({super.key, required this.core, required this.id, required this.onFollow, this.title, this.libraryVersion, this.lookupsVersion});
@@ -31,6 +32,7 @@ class _GamePaneState extends State<GamePane> {
   GameDto? _game;
   String? _error;
   int? _selected;
+  final _cursor = RowCursor();
   int _generation = 0;
 
   @override
@@ -45,6 +47,7 @@ class _GamePaneState extends State<GamePane> {
     if (old.id != widget.id || old.core != widget.core) {
       _game = null;
       _selected = null;
+      _cursor.clear();
       _load();
     } else if (old.libraryVersion != widget.libraryVersion || old.lookupsVersion != widget.lookupsVersion) {
       // Facts filled in: refetch in place, keeping what is shown until the new DTO lands.
@@ -94,12 +97,43 @@ class _GamePaneState extends State<GamePane> {
     }
   }
 
+  void _queue(TrackRowDto row, {required bool next}) =>
+      queueAndSay(context, () => widget.core.queueTracks([row.trackId], next: next), next: next);
+
+  /// The soundtrack a row is on, as the thread the game gives it.
+  ThreadDto _album(TrackRowDto row) => ThreadDto(
+    kind: ThreadKind.soundtrack, label: 'soundtrack', source: 'Wikidata', provider: 'wikidata',
+    to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
+  );
+
+  List<RowAction?> _actions(TrackRowDto row, int index) => musicActions(
+    play: () => _play(index),
+    playNext: () => _queue(row, next: true),
+    addToQueue: () => _queue(row, next: false),
+    goTo: [
+      RowAction('Go to ${row.album}', () => _follow(_album(row)), shortcut: RowKeys.open),
+      if (row.artistId != null) RowAction('Go to ${row.artist ?? 'artist'}', () => _follow(artistThread(row))),
+    ],
+    reveal: row.path == null ? null : () => revealInFinder(row.path!),
+  );
+
   KeyEventResult _key(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter && _selected != null) {
-      _play(_selected!);
+    final game = _game;
+    if (game == null) return KeyEventResult.ignored;
+    if (_cursor.move(event, _selected, game.rows.length) case final moved?) {
+      setState(() => _selected = moved);
       return KeyEventResult.handled;
     }
-    return KeyEventResult.ignored;
+    final index = _selected;
+    final row = index == null ? null : game.rows.elementAtOrNull(index);
+    if (index == null || row == null) return KeyEventResult.ignored;
+    return RowKeys.handle(event,
+      play: () => _play(index),
+      playNext: () => _queue(row, next: true),
+      addToQueue: () => _queue(row, next: false),
+      open: () => _follow(_album(row)),
+      reveal: row.path == null ? null : () => revealInFinder(row.path!),
+    );
   }
 
   Widget _heading(String title) => Container(
@@ -119,51 +153,28 @@ class _GamePaneState extends State<GamePane> {
 
   Widget _row(TrackRowDto row, int index) {
     final light = Light.of(context);
-    final lit = light.track == row.trackId.toInt();
     // A soundtrack's artist and album show where they change, not under every track.
     final before = index > 0 ? _game!.rows[index - 1] : null;
     final newAlbum = before == null || before.releaseId != row.releaseId;
     final artist = row.artist != null && (newAlbum || before.artist != row.artist) ? row.artist : null;
+    final album = newAlbum ? _album(row) : null;
     return Semantics(
       key: ValueKey('game-row-$index'),
       button: true,
       selected: _selected == index,
-      child: Door(
-        builder: (context, hover) => GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _play(index),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(
-              color: lit ? light.wash : _selected == index || hover ? Tok.panel2 : Colors.transparent,
-              border: Border(
-                bottom: const BorderSide(color: Tok.line),
-                left: BorderSide(color: lit ? light.accent : Colors.transparent, width: 2),
-              ),
-            ),
-            child: Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(row.title, style: Tok.body.copyWith(color: lit ? light.accent : Tok.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (artist != null) Text(artist, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                if (newAlbum) Semantics(
-                  button: true,
-                  child: GestureDetector(
-                    key: ValueKey('game-album-${row.trackId}'),
-                    onTap: () => _follow(ThreadDto(
-                      kind: ThreadKind.soundtrack, label: 'soundtrack', source: 'Wikidata', provider: 'wikidata',
-                      to: TargetDto.release(id: row.releaseId), title: row.album, detail: '',
-                    )),
-                    child: TrailRow(target: TargetDto.release(id: row.releaseId), child:
-                      Text(row.album, style: Tok.labelMuted, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                  ),
-                ),
-              ])),
-              const SizedBox(width: 8),
-              Text(_time(row.lengthMs), style: Tok.monoSmall),
-            ]),
-          ),
-        ),
+      child: TrackRow(
+        key: _cursor.key(index),
+        title: row.title,
+        under: [?artist],
+        thread: album,
+        onFollow: album == null ? null : () => _follow(album),
+        followKey: ValueKey('game-album-${row.trackId}'),
+        arrowSlot: true,
+        length: _time(row.lengthMs),
+        playing: light.track == row.trackId.toInt(),
+        selected: _selected == index,
+        onPlay: () => _play(index),
+        actions: () => _actions(row, index),
       ),
     );
   }
