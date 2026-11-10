@@ -31,6 +31,7 @@ import 'outside.dart';
 import 'pane_row.dart';
 import 'query_line.dart';
 import 'top_line.dart';
+import 'trail_swipe.dart';
 import 'trail_chip.dart';
 import 'width_class.dart';
 import 'window_chrome.dart';
@@ -437,8 +438,11 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
   /// `[` and `]` move along the open trail, one stop. They never leave it:
   /// at the first stop `[` only flashes the chip. Over Today, Home, the tree
   /// or the narrow Now panel they just take that away, as Esc does.
-  Future<void> _move(int by) async {
-    if (_editing || _dismiss()) return;
+  ///
+  /// [pointer] is a trackpad swipe: it says where it is going whatever holds
+  /// the keyboard, so a draft in the query line doesn't stop it.
+  Future<void> _move(int by, {bool pointer = false}) async {
+    if ((!pointer && _editing) || _dismiss(pointer: pointer)) return;
     if (by > 0) {
       await _navigate(widget.core.trailForward);
     } else if (!await _navigate(widget.core.trailBack) && _trail != null && mounted) {
@@ -580,8 +584,8 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
 
   /// Takes away whatever is laid over the trail and says whether it did.
   /// Esc, `[` and `]` all start here, so none of them also steps.
-  bool _dismiss() {
-    if (_editing) return false;
+  bool _dismiss({bool pointer = false}) {
+    if (!pointer && _editing) return false;
     if (_nowOverlay) {
       _toggleNow();
     } else if (_homeOver) {
@@ -886,7 +890,9 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                       child: ExcludeSemantics(excluding: _nowOverlay,
                         child: IgnorePointer(ignoring: _nowOverlay,
                           child: Stack(fit: StackFit.expand, children: [
-                    FocusTraversalOrder(order: const NumericFocusOrder(2), child: FocusTraversalGroup(child: Padding(padding: EdgeInsets.only(left: homeWidth), child: Column(children: [
+                    FocusTraversalOrder(order: const NumericFocusOrder(2), child: FocusTraversalGroup(child: Padding(padding: EdgeInsets.only(left: homeWidth), child: TrailSwipe(
+                      onStep: (by) => _report(_move(by, pointer: true)),
+                      child: Column(children: [
                       if (_navigationError != null)
                         Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: Text(_navigationError!, style: Tok.label.copyWith(color: Tok.warn))),
                       if (_fileError != null)
@@ -907,7 +913,7 @@ class _SurfaceState extends State<Surface> with TickerProviderStateMixin {
                           child: page ?? const SizedBox.shrink(key: ValueKey('panes')),
                         ),
                       ])),
-                    ])))),
+                    ]))))),
                     // A click on the dimmed panes closes the column over them.
                     if (_homeOver && (page == null || showToday))
                       Positioned.fill(left: Home.rail, child: GestureDetector(key: const ValueKey('home-scrim'), behavior: HitTestBehavior.opaque, onTap: _closeHome)),

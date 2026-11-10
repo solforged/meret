@@ -25,6 +25,7 @@ const keyGroups = <(String, List<(String, String)>)>[
   ('Trail', [
     ('[', 'Back a stop; stays on this trail'),
     (']', 'Forward a stop'),
+    ('Swipe ← →', 'Two fingers: forward or back a stop'),
     ('⌥[ ⌥]', 'Other branch at a fork'),
     ('T', 'The whole tree'),
     ('⌘S', 'Keep the trail'),
