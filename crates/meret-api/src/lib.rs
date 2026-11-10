@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use meret_core::Core;
 use meret_core::{PageItem, View};
-use meret_model::{AgentId, EntityRef, GameId, ReleaseId, WorkId};
+use meret_model::{AgentId, EntityRef, GameId, ReleaseId, TrackId, WorkId};
 use meret_query::{Input, parse};
 use meret_store::{ColumnId, plan};
 
@@ -179,6 +179,18 @@ impl Api {
     /// Replaces the queue from a track ordinal in the view's display order.
     pub fn play_results(&self, query: &str, view: ViewDto, index: u64) -> Result<(), String> {
         self.core.play_results(query, &view.into(), index as usize).map_err(|e| e.to_string())
+    }
+
+    /// Queues tracks after the playing item (`next`) or at the end, without
+    /// interrupting it; returns how many went in.
+    pub fn queue_tracks(&self, ids: Vec<i64>, next: bool) -> Result<u32, String> {
+        let ids: Vec<TrackId> = ids.into_iter().map(TrackId).collect();
+        self.core.enqueue(&ids, next).map(|n| n as u32).map_err(|e| e.to_string())
+    }
+
+    /// Queues a release's tracklist as `queue_tracks` does.
+    pub fn queue_release(&self, id: i64, next: bool) -> Result<u32, String> {
+        self.core.enqueue_release(ReleaseId(id), next).map(|n| n as u32).map_err(|e| e.to_string())
     }
 
     pub fn facets(&self, query: &str) -> Result<FacetsDto, String> {

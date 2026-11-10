@@ -293,6 +293,32 @@ mod tests {
     }
 
     #[test]
+    fn queued_tracks_go_after_the_playing_item_and_into_a_restored_queue_without_playing_it() {
+        let dir = fixture();
+        let running = Running::open(&dir, 1.0);
+        let mut events = running.core.events();
+        running.core.play_release(ReleaseId(1), 0).unwrap();
+        running.until(&mut events, |e| matches!(e, EngineEvent::Anchor(_)));
+        assert_eq!(running.core.enqueue(&[meret_model::TrackId(1)], true).unwrap(), 1);
+        let tracks = |core: &Core| core.queue().iter().map(|i| i.track.unwrap().0).collect::<Vec<_>>();
+        assert_eq!(tracks(&running.core), [1, 1, 2], "Play next goes right after the playing item");
+        assert_eq!(running.core.queue()[0].token, running.core.now.borrow().item.unwrap(), "what plays didn't change");
+        running.stop(&mut events);
+        drop(running);
+
+        let running = Running::open(&dir, 1.0);
+        assert_eq!(running.core.enqueue_release(ReleaseId(1), false).unwrap(), 2);
+        assert_eq!(tracks(&running.core), [1, 1, 2, 1, 2], "a restored queue takes them at the end");
+        let mut tokens = running.core.queue().iter().map(|i| i.token).collect::<Vec<_>>();
+        tokens.sort_unstable();
+        tokens.dedup();
+        assert_eq!(tokens.len(), 5, "every row of a restored queue keeps a token of its own");
+        assert!(!running.core.local.state().playing, "queueing doesn't start a paused queue");
+        drop(running);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn a_release_played_through_does_not_reappear_on_idle() {
         let dir = fixture();
         let running = Running::open(&dir, 30.0);

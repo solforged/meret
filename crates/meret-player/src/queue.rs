@@ -49,6 +49,22 @@ impl Queue {
         self.next_token
     }
 
+    /// Gives `items` this queue's next tokens without queueing them.
+    pub fn number(&mut self, items: &mut [QueueItem]) {
+        for item in items {
+            self.next_token += 1;
+            item.token = self.next_token;
+        }
+    }
+
+    /// Puts `items` right after the cursor (`next`) or at the end, numbering
+    /// them on from the queue's own tokens.
+    pub fn insert(&mut self, mut items: Vec<QueueItem>, next: bool) {
+        self.number(&mut items);
+        let at = if next { (self.cursor + 1).min(self.items.len()) } else { self.items.len() };
+        self.items.splice(at..at, items);
+    }
+
     /// Builds a replacement without changing the current items or cursor.
     /// Reserves its tokens even if the replacement is never played.
     pub fn successor(&mut self, mut items: Vec<QueueItem>) -> Self {

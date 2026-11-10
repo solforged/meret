@@ -110,6 +110,16 @@ Future<void> playResults({
   index: index,
 );
 
+/// Queues tracks right after the playing item (`next`) or at the end,
+/// without interrupting it. With nothing loaded they play. Returns how many
+/// went in.
+Future<int> queueTracks({required Int64List ids, required bool next}) =>
+    RustLib.instance.api.crateApiCoreQueueTracks(ids: ids, next: next);
+
+/// Queues a release's tracklist as `queue_tracks` does.
+Future<int> queueRelease({required PlatformInt64 id, required bool next}) =>
+    RustLib.instance.api.crateApiCoreQueueRelease(id: id, next: next);
+
 /// The cascaded idiom, person and release column browser.
 Future<FacetsDto> facets({required String query}) =>
     RustLib.instance.api.crateApiCoreFacets(query: query);
