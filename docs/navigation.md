@@ -32,7 +32,7 @@ There are no pages to file things into. There is one surface.
 - **Now.** The transport, title, scrubber and quality marks sit in an LCD at the top centre at every desktop width (iTunes' place). The Now panel (the playing body, the signal path and the queue) opens from it or with `N`, and is pinned by default from 1800 pt. Phones keep a player bar under the thumb.
 - **Activity.** One indicator in the top line, replacing the status line on 2026-10-23. It is a dot while every source is fine, a ring while a job runs, and amber when something needs you. Its popover lists sources, folders, jobs and guesses, and opens Settings. There is no bottom row on desktop.
 
-Keyboard: `/` search, `[` `]` move along the trail, `⌘↵` follow, `W` want, `C` crate, `⌘S` keep the trail, `⌘1` Today, `⌘2` Explore, `⌘3` Journal, `N` Now. Key hints live in the menu bar (Go and Controls menus), a `?` sheet and tooltips, not on screen.
+Keyboard: `/` search, `[` `]` move along the trail (or two fingers sideways on a trackpad), `⌘↵` follow, `W` want, `C` crate, `⌘S` keep the trail, `⌘1` Today, `⌘2` Explore, `⌘3` Journal, `N` Now. Key hints live in the menu bar (Go and Controls menus), a `?` sheet and tooltips, not on screen.
 
 ## Home
 
@@ -65,6 +65,17 @@ Decided 2026-10-23 (plates 03, 08, 09). One rule: only the thing that changed mo
 | New tree, previous tree, the tree view | The page fades through, 100 ms out and 100 ms in |
 | `⌘1` | The Home column slides over the rail, 200 ms; panes dim |
 | `N` | Now slides in from the right; a covered pane folds to a spine in the same move |
+
+## Rows
+
+Decided 2026-11-09, after clicks on a tracklist turned out to do three different things depending on where they landed.
+
+- **A track row plays.** A click anywhere on a track, in a release, game, work, table or Up next, plays from it. A second click within the double-click time does nothing, so a double click plays once.
+- **A release row opens.** A release heading in the table is a door to its release.
+- **Going somewhere is the arrow at the row's end**, the same arrow a thread row ends in. On a track it follows the thread named under the title (its work, or the release it is on); in the table it opens the row's release. Nothing else inside a row takes a click.
+- **Everything else is the row's menu**: right-click, two fingers on a trackpad or `⌃`-click. Play now, Play next, Add to queue, Go to the release, artist or work, Show in Finder. `⇧↵` and `⌥↵` queue the selected row, and `↑` `↓` move the selection.
+- **A release lists its tracks before its credits** (credits used to come first): you open a release to play from it. The game it is the soundtrack of stays above, and a long release keeps a Credits button beside Play.
+- **Two fingers sideways** on a trackpad step along the trail as `[` and `]` do: fingers right is back.
 
 ## Discovery primitives
 
