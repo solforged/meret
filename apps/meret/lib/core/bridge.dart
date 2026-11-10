@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show ChangeNotifier, Listenable;
+
+import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' as frb show Int64List;
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64, PlatformInt64Util;
 
 import '../src/rust/api/core.dart' as rust;
@@ -53,9 +56,17 @@ abstract interface class CoreBridge {
   Future<void> transport(TransportDto cmd);
   /// Writes the queue position and the open listen; called as the app quits.
   Future<void> flushMemory();
-  /// The queue after the playing item; ask again when Now's item changes.
+  /// The queue after the playing item; ask again when Now's item changes
+  /// or [queueChanged] ticks.
   Future<UpNextDto> upNext(int limit);
   Future<void> jumpToQueued(BigInt token);
+  /// Queues tracks right after the playing item (`next`) or at the end,
+  /// without interrupting it; with nothing loaded they play. Returns how many went in.
+  Future<int> queueTracks(List<PlatformInt64> ids, {required bool next});
+  /// Queues a release's tracklist as [queueTracks] does.
+  Future<int> queueRelease(PlatformInt64 id, {required bool next});
+  /// Ticks when the queue changes while the same item plays.
+  Listenable get queueChanged;
   Future<int> addRoot(String path);
   Future<void> removeRoot(int id);
   SettingsDto settings();
@@ -156,6 +167,21 @@ class RustCore implements CoreBridge {
   Future<void> flushMemory() => rust.flushMemory();
   @override
   Future<UpNextDto> upNext(int limit) => rust.upNext(limit: limit);
+  final _queueChanged = _Ticker();
+  @override
+  Listenable get queueChanged => _queueChanged;
+  @override
+  Future<int> queueTracks(List<PlatformInt64> ids, {required bool next}) async {
+    final n = await rust.queueTracks(ids: frb.Int64List.fromList([for (final id in ids) id.toInt()]), next: next);
+    _queueChanged.tick();
+    return n;
+  }
+  @override
+  Future<int> queueRelease(PlatformInt64 id, {required bool next}) async {
+    final n = await rust.queueRelease(id: id, next: next);
+    _queueChanged.tick();
+    return n;
+  }
   @override
   Future<void> jumpToQueued(BigInt token) => rust.jumpToQueued(token: token);
   @override
@@ -1504,6 +1530,32 @@ class FakeCore implements CoreBridge {
   /// Why the queue is playing, when Play something chose it; other plays clear it.
   String? _why;
 
+  final _queueChanged = _Ticker();
+  @override
+  Listenable get queueChanged => _queueChanged;
+
+  @override
+  Future<int> queueTracks(List<PlatformInt64> ids, {required bool next}) async {
+    final rows = [for (final id in ids) if (id.toInt() >= 1 && id.toInt() <= _total) _row(id.toInt() - 1)];
+    _enqueue(rows, next: next);
+    return rows.length;
+  }
+
+  @override
+  Future<int> queueRelease(PlatformInt64 id, {required bool next}) async {
+    final rows = _releaseRows(id);
+    _enqueue(rows, next: next);
+    return rows.length;
+  }
+
+  void _enqueue(List<TrackRowDto> rows, {required bool next}) {
+    if (rows.isEmpty) return;
+    if (_queue.isEmpty) return _playQueue(rows);
+    final items = [for (final row in rows) (_nextToken += BigInt.one, row)];
+    _queue.insertAll(next ? _cursor + 1 : _queue.length, items);
+    _queueChanged.tick();
+  }
+
   void _playQueue(List<TrackRowDto> rows, {String? why}) {
     _why = why;
     _queue.clear();
@@ -1814,4 +1866,9 @@ class FakeCore implements CoreBridge {
           plays: BigInt.from(plays), lastPlayedMs: PlatformInt64Util.from(now - days * 86400000)),
     ].take(limit).toList();
   }
+}
+
+/// A notifier that only ticks.
+class _Ticker extends ChangeNotifier {
+  void tick() => notifyListeners();
 }

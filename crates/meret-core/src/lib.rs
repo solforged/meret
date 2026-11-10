@@ -707,18 +707,62 @@ impl Core {
         self.play_at(items, 0, 0)
     }
 
-    fn play_at(&self, items: Vec<QueueItem>, cursor: usize, start_ms: u64) -> Result<()> {
-        self.play_at_mode(items, cursor, start_ms, false)
+    /// Puts tracks right after the playing item (`next`) or at the end of
+    /// the queue without interrupting it. A queue restored from the last run
+    /// takes them too; with nothing loaded they play. Returns how many went in.
+    pub fn enqueue(&self, tracks: &[TrackId], next: bool) -> Result<usize> {
+        self.enqueue_items(queue_items(self.store.track_rows(tracks)?), next)
     }
 
-    fn play_at_mode(&self, mut items: Vec<QueueItem>, cursor: usize, start_ms: u64, exact: bool) -> Result<()> {
+    /// A release's tracklist, queued as `enqueue` does.
+    pub fn enqueue_release(&self, release: ReleaseId, next: bool) -> Result<usize> {
+        let page = self.store.release_page(release)?.ok_or_else(|| CoreError::Query("that release is gone".into()))?;
+        self.enqueue_items(queue_items(page.tracks), next)
+    }
+
+    fn enqueue_items(&self, mut items: Vec<QueueItem>, next: bool) -> Result<usize> {
+        let n = items.len();
+        if n == 0 {
+            return Ok(0);
+        }
+        self.level_items(&mut items)?;
+        // A restored queue isn't the player's yet, so its additions take the
+        // player's next tokens here: Up next addresses every row by token.
+        if self.pending.lock().is_some() {
+            self.player.lock().number(&mut items);
+        }
+        if let Some(saved) = &mut *self.pending.lock() {
+            let at = if next { (saved.cursor + 1).min(saved.items.len()) } else { saved.items.len() };
+            saved.items.splice(at..at, items);
+            return Ok(n);
+        }
+        let mut player = self.player.lock();
+        if player.queue().items.is_empty() {
+            drop(player);
+            self.play(items)?;
+        } else {
+            player.insert(items, next);
+        }
+        Ok(n)
+    }
+
+    fn level_items(&self, items: &mut [QueueItem]) -> Result<()> {
         let level = self.settings().level;
-        for item in &mut items {
+        for item in items {
             item.gain_db = match item.track {
                 Some(track) => level::queue_gain(&self.store, track, level)?,
                 None => 0.0,
             };
         }
+        Ok(())
+    }
+
+    fn play_at(&self, items: Vec<QueueItem>, cursor: usize, start_ms: u64) -> Result<()> {
+        self.play_at_mode(items, cursor, start_ms, false)
+    }
+
+    fn play_at_mode(&self, mut items: Vec<QueueItem>, cursor: usize, start_ms: u64, exact: bool) -> Result<()> {
+        self.level_items(&mut items)?;
         self.memory_state.lock().stopping = false;
         let mut player = self.player.lock();
         let result = if exact { player.play_exact(items, cursor) } else { player.play(items, cursor, start_ms) }.map(|_| ());

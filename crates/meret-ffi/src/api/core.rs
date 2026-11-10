@@ -126,6 +126,18 @@ pub fn play_results(query: String, view: ViewDto, index: u64) -> Result<(), Stri
     api()?.play_results(&query, view, index)
 }
 
+/// Queues tracks right after the playing item (`next`) or at the end,
+/// without interrupting it. With nothing loaded they play. Returns how many
+/// went in.
+pub fn queue_tracks(ids: Vec<i64>, next: bool) -> Result<u32, String> {
+    api()?.queue_tracks(ids, next)
+}
+
+/// Queues a release's tracklist as `queue_tracks` does.
+pub fn queue_release(id: i64, next: bool) -> Result<u32, String> {
+    api()?.queue_release(id, next)
+}
+
 /// The cascaded idiom, person and release column browser.
 pub fn facets(query: String) -> Result<FacetsDto, String> {
     api()?.facets(&query)

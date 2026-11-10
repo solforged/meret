@@ -35,6 +35,11 @@ impl Player {
         self.queue.reserve_through(token);
     }
 
+    /// Numbers items bound for a restored queue that isn't loaded yet.
+    pub fn number(&mut self, items: &mut [QueueItem]) {
+        self.queue.number(items);
+    }
+
     /// Updates queued gains and the preloaded successor. Already buffered
     /// audio keeps its gain until the next item, without interrupting playback.
     pub fn refresh_gains(&mut self, mut gain: impl FnMut(&QueueItem) -> f64) {
@@ -84,6 +89,16 @@ impl Player {
         self.awaiting_start = None;
         self.preload();
         Ok(self.queue.current())
+    }
+
+    /// Queues `items` after the playing item (`next`) or at the end without
+    /// interrupting it, and hands the zone the new next item if it changed.
+    pub fn insert(&mut self, items: Vec<QueueItem>, next: bool) {
+        let before = self.queue.up_next().first().map(|i| i.token);
+        self.queue.insert(items, next);
+        if self.queue.up_next().first().map(|i| i.token) != before {
+            self.preload();
+        }
     }
 
     /// The zone finished `token`. If it was the current item, moves on to
@@ -285,6 +300,20 @@ mod tests {
 
     fn log(z: &Recorder) -> Vec<String> {
         std::mem::take(&mut *z.0.lock())
+    }
+
+    #[test]
+    fn play_next_loads_the_inserted_item_and_add_to_queue_leaves_it() {
+        let (mut p, z) = player();
+        p.play(items(&["a", "b"]), 0, 0).unwrap();
+        log(&z);
+        p.insert(items(&["c"]), true);
+        assert_eq!(log(&z), ["next 3"], "the inserted item is next now");
+        p.insert(items(&["d"]), false);
+        assert!(log(&z).is_empty(), "appending doesn't change what's next");
+        let uris: Vec<_> = p.queue().items.iter().map(|i| i.uri.as_str()).collect();
+        assert_eq!(uris, ["a", "c", "b", "d"]);
+        assert_eq!(p.ended(1).map(|i| i.uri.as_str()), Some("c"));
     }
 
     #[test]
