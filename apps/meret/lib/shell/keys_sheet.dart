@@ -31,9 +31,13 @@ const keyGroups = <(String, List<(String, String)>)>[
     ('⌘⌫', 'Prune the branch'),
   ]),
   ('In a pane', [
-    ('↑ ↓', 'Move through the table'),
+    ('↑ ↓', 'Move through the rows'),
     ('↵', 'Play the chosen row'),
+    ('⇧↵', 'Play it next'),
+    ('⌥↵', 'Add it to the queue'),
     ('⌘↵', 'Follow it'),
+    ('⇧⌘R', 'Show its file in Finder'),
+    ('Right-click', 'Everything a row can do'),
   ]),
   ('Play', [
     ('Space', 'Play or pause'),

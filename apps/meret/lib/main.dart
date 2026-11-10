@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:path_provider/path_provider.dart';
 
 import 'core/bridge.dart';
+import 'panes/row_menu.dart';
 import 'shell/surface.dart';
 import 'shell/window_chrome.dart';
 import 'src/rust/api/core.dart' as rust;
@@ -71,7 +72,7 @@ class MeretApp extends StatelessWidget {
             ? const BorderSide(color: Tok.gold, width: 2) : null),
         )),
       ),
-      home: Scaffold(body: Surface(core: core)),
+      home: Scaffold(body: RowMenuHost(child: Surface(core: core))),
     );
   }
 }

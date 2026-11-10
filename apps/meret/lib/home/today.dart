@@ -8,6 +8,7 @@ import '../now/now_pane.dart';
 import '../now/picks.dart';
 import '../panes/add_folder.dart';
 import '../panes/pane.dart';
+import '../panes/track_row.dart';
 import '../theme/tokens.dart';
 import 'resume.dart';
 import 'week.dart';
@@ -145,15 +146,20 @@ class _TodayState extends State<Today> {
     ...lines,
   ]);
 
+  Future<void> _open(PlatformInt64 release) async {
+    try {
+      await widget.onRelease!(release);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
+  }
+
   Widget _recent(FrontDto front) => _section('Added lately', [
     for (final recent in front.addedLately)
-      TodayDoor(onTap: widget.onRelease == null ? null : () async {
-        try {
-          await widget.onRelease!(recent.releaseId);
-        } catch (error) {
-          if (mounted) setState(() => _error = error.toString());
-        }
-      }, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      TodayDoor(onTap: widget.onRelease == null ? null : () => _open(recent.releaseId),
+        actions: () => releaseActions(context, widget.core, recent.releaseId,
+          onOpen: widget.onRelease == null ? null : () => _open(recent.releaseId)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text([recent.title, if (recent.artist?.isNotEmpty ?? false) recent.artist!].join(' · '), style: Tok.body),
         Text([if (recent.year != null) '${recent.year}', '${recent.tracks} ${recent.tracks == 1 ? 'track' : 'tracks'}', _age(recent)].join(' · '), style: Tok.label),
       ])),

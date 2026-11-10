@@ -9,6 +9,9 @@ abstract final class Tok {
   static const sky = Color(0xFF070B1A);
   static const panel = Color(0xFF0A1024);
   static const panel2 = Color(0xFF0D1430);
+
+  /// The selected row: a step past [panel2], which hover uses.
+  static const pick = Color(0xFF18234F);
   static const line = Color(0xFF18203C);
   static const rule = Color(0xFF263056);
 
