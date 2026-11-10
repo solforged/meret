@@ -34,14 +34,14 @@ void main() {
     await core.playResults('', const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), 0);
     await _app(tester, core);
     final item = (await core.upNext(8)).items.first;
-    await tester.ensureVisible(find.byKey(ValueKey('up-next-play-${item.token}')));
-    await tester.tap(find.byKey(ValueKey('up-next-play-${item.token}')));
+    await tester.ensureVisible(find.byKey(ValueKey('up-next-${item.token}')));
+    await tester.tap(find.byKey(ValueKey('up-next-${item.token}')));
     await _settle(tester);
     expect(find.text('08.flac is missing'), findsOneWidget);
     expect(find.byKey(const ValueKey('up-next-check-folders')), findsOneWidget);
   });
 
-  testWidgets('Up next opens the release with the clicked track marked', (tester) async {
+  testWidgets('an Up next row’s arrow opens the release with that track marked', (tester) async {
     final handle = tester.ensureSemantics();
     final core = FakeCore();
     await core.playResults('', const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), 0);
@@ -49,8 +49,8 @@ void main() {
     final item = (await core.upNext(8)).items.last;
     final rows = (await core.release(item.releaseId!)).rows;
     final at = rows.indexWhere((row) => row.trackId == item.trackId);
-    await tester.ensureVisible(find.byKey(ValueKey('up-next-${item.token}')));
-    await tester.tap(find.byKey(ValueKey('up-next-${item.token}')));
+    await tester.ensureVisible(find.byKey(ValueKey('up-next-open-${item.token}')));
+    await tester.tap(find.byKey(ValueKey('up-next-open-${item.token}')));
     await _settle(tester);
     expect(find.byType(ReleasePane), findsOneWidget);
     final marked = tester.getSemantics(find.byKey(ValueKey('release-row-$at')));

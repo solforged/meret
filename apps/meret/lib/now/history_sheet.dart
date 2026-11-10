@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
+import '../panes/track_row.dart';
 import '../theme/tokens.dart';
 import 'now_pane.dart';
 
@@ -99,6 +100,10 @@ class _HistorySheetState extends State<_HistorySheet> {
                   Navigator.of(context).pop();
                   widget.onRelease(listen.releaseId!);
                 },
+                actions: () => trackActions(context, widget.core, listen.trackId, onOpen: listen.releaseId == null ? null : () {
+                  Navigator.of(context).pop();
+                  widget.onRelease(listen.releaseId!);
+                }),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Row(children: [
                     Expanded(child: Moment(ms: listen.startedAtMs.toInt(), builder: (_, when) => Text(when, style: Tok.data))),

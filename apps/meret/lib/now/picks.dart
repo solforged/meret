@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart' show PlatformInt64;
 
 import '../core/bridge.dart';
+import '../panes/row_menu.dart';
+import '../panes/track_row.dart';
 import '../theme/tokens.dart';
 import 'folder_error.dart';
 import 'now_pane.dart';
@@ -109,6 +111,12 @@ class _PlaySomethingState extends State<PlaySomething> {
     key: ValueKey('now-pick-${pick.releaseId}'),
     onTap: widget.onRelease == null ? null : () => _open(pick),
     semanticLabel: 'Open release: ${pick.title}',
+    actions: () => [
+      RowAction('Play now', _playing == null ? () => _play(pick) : null),
+      RowAction('Play next', () => queueAndSay(context, () => widget.core.queueRelease(pick.releaseId, next: true), next: true)),
+      RowAction('Add to queue', () => queueAndSay(context, () => widget.core.queueRelease(pick.releaseId, next: false), next: false)),
+      if (widget.onRelease != null) ...[null, RowAction('Go to release', () => _open(pick))],
+    ],
     child: Container(
       key: ValueKey('now-pick-cell-${pick.releaseId}'),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),

@@ -72,8 +72,12 @@ class _PlayOnState extends State<PlayOn> {
     }
   }
 
+  /// One zone is no choice, and the signal path already names it: the
+  /// section waits for a second output, or for something to say.
+  bool get _quiet => _zones.length < 2 && _error == null;
+
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+  Widget build(BuildContext context) => _quiet ? const SizedBox.shrink() : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
     const NowSection(title: 'Play on'),
     for (final zone in _zones)
       Semantics(selected: zone.current, child: NowDoor(
@@ -104,5 +108,6 @@ class _PlayOnState extends State<PlayOn> {
       padding: const EdgeInsets.only(top: 8),
       child: Text(_error!, style: Tok.label.copyWith(color: Tok.warn)),
     ),
+    const SizedBox(height: 14),
   ]);
 }
