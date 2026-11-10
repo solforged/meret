@@ -11,6 +11,8 @@ import '../core/playhead.dart';
 import '../core/when.dart';
 import '../draw/body_painter.dart';
 import '../panes/release_mark.dart';
+import '../panes/row_menu.dart';
+import '../panes/track_row.dart';
 import '../theme/action_target.dart';
 import '../theme/light.dart';
 import '../theme/tokens.dart';
@@ -76,28 +78,30 @@ class NowPane extends StatelessWidget {
         Expanded(flex: 5, child: SingleChildScrollView(
           key: const PageStorageKey('now-pane'),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            // Paused or stopped there is no path to draw, so no heading either.
+            // The output's own block: the path to it, what the path does to
+            // the sound, and its volume. Paused or stopped there is no path
+            // to draw, so no heading either.
             if (n != null && (n.path.isNotEmpty || n.fidelity != null)) ...[
               const Text('SIGNAL PATH', style: Tok.caps),
               const SizedBox(height: 6),
-              Wrap(spacing: 6, runSpacing: 6, children: [
-                for (final s in n.path) _Stage(s),
-              ]),
-              const SizedBox(height: 8),
-              if (n.fidelity != null) NowFidelity(now: n, exclusive: core.settings().exclusive),
-              const SizedBox(height: 12),
+              SignalStages(n.path),
+              if (n.fidelity != null) Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: NowFidelity(now: n, exclusive: core.settings().exclusive),
+              ),
+              const SizedBox(height: 2),
             ],
+            DeviceVolume(core: core, now: now),
+            const SizedBox(height: 14),
             PlayOn(core: core, now: n, settingsChanges: settingsChanges),
             if (loaded) ...[
-              const SizedBox(height: 12),
               UpNext(core: core, now: n, onRelease: onRelease),
+              const SizedBox(height: 14),
             ],
-            const SizedBox(height: 12),
             PlaySomething(core: core, now: n, onRelease: onRelease, actions: loaded || nothingToPlay == null),
             const SizedBox(height: 12),
             NowMemory(core: core, now: n, resumeLimit: 3, historyLimit: 3, onRelease: onRelease),
             const SizedBox(height: 12),
-            DeviceVolume(core: core, now: now),
           ]),
         )),
       ]),
@@ -317,6 +321,13 @@ class _NowMemoryState extends State<NowMemory> {
         NowDoor(
           key: ValueKey('now-pick-up-${point.releaseId}'),
           onTap: () => _pickUp(point),
+          actions: () => [
+            RowAction('Pick up', () => _pickUp(point)),
+            RowAction('From the start', () => widget.core.playRelease(id: point.releaseId, index: 0).catchError((Object error) {
+              if (mounted) setState(() => _pickUpError = error.toString());
+            })),
+            if (widget.onRelease != null) ...[null, RowAction('Go to release', () => widget.onRelease!(point.releaseId))],
+          ],
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Text(point.recordingTitle, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis),
             Text([point.title, if (point.credit != null) point.credit!].join(' · '), style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -343,6 +354,8 @@ class _NowMemoryState extends State<NowMemory> {
         NowDoor(
           key: ValueKey('now-listen-${listen.uid}'),
           onTap: widget.onRelease == null || listen.releaseId == null ? null : () => widget.onRelease!(listen.releaseId!),
+          actions: () => trackActions(context, widget.core, listen.trackId,
+            onOpen: widget.onRelease == null || listen.releaseId == null ? null : () => widget.onRelease!(listen.releaseId!)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: Text(listen.title, style: Tok.body, maxLines: 2, overflow: TextOverflow.ellipsis)),
@@ -410,10 +423,13 @@ class NowSection extends StatelessWidget {
 }
 
 class NowDoor extends StatefulWidget {
-  const NowDoor({super.key, required this.child, this.onTap, this.semanticLabel});
+  const NowDoor({super.key, required this.child, this.onTap, this.semanticLabel, this.actions});
   final Widget child;
   final VoidCallback? onTap;
   final String? semanticLabel;
+
+  /// The row's right-click menu, built when it opens.
+  final List<RowAction?> Function()? actions;
 
   @override
   State<NowDoor> createState() => _NowDoorState();
@@ -424,7 +440,7 @@ class _NowDoorState extends State<NowDoor> {
 
   @override
   Widget build(BuildContext context) {
-    final content = Container(
+    final box = Container(
       padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
       decoration: BoxDecoration(
         color: _hover && widget.onTap != null ? Tok.panel2 : Colors.transparent,
@@ -432,6 +448,7 @@ class _NowDoorState extends State<NowDoor> {
       ),
       child: widget.child,
     );
+    final content = widget.actions == null ? box : RowMenu(actions: widget.actions!, child: box);
     return MouseRegion(
     cursor: widget.onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
     onEnter: (_) => setState(() => _hover = true),
@@ -718,16 +735,27 @@ class _UpNextState extends State<UpNext> {
   @override
   void initState() {
     super.initState();
+    widget.core.queueChanged.addListener(_load);
     _load();
   }
 
   @override
   void didUpdateWidget(UpNext old) {
     super.didUpdateWidget(old);
+    if (old.core != widget.core) {
+      old.core.queueChanged.removeListener(_load);
+      widget.core.queueChanged.addListener(_load);
+    }
     if (old.core != widget.core || old.limit != widget.limit) {
       _limit = widget.limit;
     }
     if (old.core != widget.core || old.now?.anchor?.item != widget.now?.anchor?.item || old.limit != widget.limit) _load();
+  }
+
+  @override
+  void dispose() {
+    widget.core.queueChanged.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -762,6 +790,12 @@ class _UpNextState extends State<UpNext> {
       if (mounted) setState(() => _playing = null);
     }
   }
+
+  /// The way from a queued track to its release, when it has one to open.
+  ThreadDto? _release(UpNextItemDto item) => item.releaseId == null || widget.onRelease == null ? null : ThreadDto(
+    kind: ThreadKind.appearsOn, label: 'appears on', source: 'queue', provider: 'local',
+    to: TargetDto.release(id: item.releaseId!), title: 'the release of ${item.title}', detail: '',
+  );
 
   Future<void> _inspect(UpNextItemDto item) async {
     if (item.releaseId != null && widget.onRelease != null) {
@@ -808,25 +842,29 @@ class _UpNextState extends State<UpNext> {
       if (upNext == null && _loading) const Text('Reading the queue…', style: Tok.label),
       if (upNext == null && _error != null)
         TextButton(onPressed: _loading ? null : _load, child: const Text('Try again')),
-      for (final item in upNext?.items ?? const <UpNextItemDto>[])
-        NowDoor(
+      // A queued track is a track row: a click plays from it, the arrow goes to its release.
+      for (final (index, item) in (upNext?.items ?? const <UpNextItemDto>[]).indexed)
+        Semantics(
           key: ValueKey('up-next-${item.token}'),
-          onTap: () => _inspect(item),
-          semanticLabel: item.releaseId != null && widget.onRelease != null ? 'Open release for ${item.title}' : 'Inspect ${item.title}',
-          child: Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Tooltip(message: item.title, excludeFromSemantics: true, child:
-                Text(item.title, style: Tok.body.copyWith(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
-              Text(item.why ?? item.subtitle, style: Tok.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-              if (item.lengthMs != null) Text(clockLength(item.lengthMs!.toInt()), style: Tok.monoSmall),
-            ])),
-            TextButton(
-              key: ValueKey('up-next-play-${item.token}'),
-              onPressed: _playing == null ? () => _play(item) : null,
-              child: Semantics(label: 'Play ${item.title}', excludeSemantics: true,
-                child: Text(_playing == item.token ? 'Starting…' : 'Play')),
-            ),
-          ]),
+          button: true,
+          label: 'Play ${item.title}',
+          child: TrackRow(
+            title: item.title,
+            // How many tracks away it is.
+            position: '${index + 1}',
+            under: [_playing == item.token ? 'Starting…' : item.why ?? item.subtitle],
+            length: item.lengthMs == null ? '' : clockLength(item.lengthMs!.toInt()),
+            thread: _release(item),
+            threadLine: false,
+            onFollow: () => _inspect(item),
+            followKey: ValueKey('up-next-open-${item.token}'),
+            arrowSlot: true,
+            onPlay: () => _play(item),
+            actions: () => [
+              RowAction('Play now', _playing == null ? () => _play(item) : null, shortcut: RowKeys.play),
+              if (_release(item) != null) ...[null, RowAction('Go to release', () => _inspect(item))],
+            ],
+          ),
         ),
       if (more > 0) Align(alignment: Alignment.centerLeft, child: TextButton(
         key: const ValueKey('up-next-more'),
@@ -1090,13 +1128,35 @@ class _DeviceVolumeState extends State<DeviceVolume> {
         ])),
       );
     }
+    // One line under the signal path: the last stage's own control.
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        const Expanded(child: Text('DEVICE VOLUME', style: Tok.caps)),
-        Text(volume?.scalar == null ? '—' : level, style: Tok.monoSmall),
+        const Tooltip(message: 'Device volume', child: Text('VOLUME', style: Tok.caps)),
+        Expanded(child: slider),
+        SizedBox(width: 44, child: Text(volume?.scalar == null ? '—' : level, style: Tok.monoSmall, textAlign: TextAlign.right)),
       ]),
-      slider,
       if (reason != null) Text(reason, style: Tok.labelMuted),
+    ]);
+  }
+}
+
+/// The signal path's stages on one line: the last one, the output, gives
+/// way when the pane is narrow. A long chain wraps instead.
+class SignalStages extends StatelessWidget {
+  const SignalStages(this.path, {super.key});
+  final List<StageDto> path;
+
+  @override
+  Widget build(BuildContext context) {
+    if (path.length > 3) return Wrap(spacing: 6, runSpacing: 6, children: [for (final s in path) _Stage(s)]);
+    return Row(children: [
+      for (final (i, s) in path.indexed) ...[
+        if (i > 0) const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Text('→', style: Tok.label),
+        ),
+        if (i == path.length - 1) Flexible(child: _Stage(s)) else _Stage(s),
+      ],
     ]);
   }
 }
@@ -1110,8 +1170,8 @@ class _Stage extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(border: Border.all(color: s.alters ? Tok.warn : Tok.rule), borderRadius: BorderRadius.circular(3)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(s.name, style: Tok.label.copyWith(fontSize: 11)),
-          Text(s.detail, style: Tok.monoSmall.copyWith(color: Tok.ink)),
+          Text(s.name, style: Tok.label.copyWith(fontSize: 11), maxLines: 1),
+          Text(s.detail, style: Tok.monoSmall.copyWith(color: Tok.ink), maxLines: 1, overflow: TextOverflow.ellipsis),
         ]),
       );
 }

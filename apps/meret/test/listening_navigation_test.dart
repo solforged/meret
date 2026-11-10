@@ -54,15 +54,14 @@ void main() {
     clock.dispose();
   });
 
-  testWidgets('queue rows open releases, expand beyond the preview, and jump directly to the selected item', (tester) async {
+  testWidgets('a queue row’s arrow opens its release, the queue expands beyond the preview, and a click on a row jumps directly to it', (tester) async {
     final core = _Core();
     await core.playResults('', const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), 0);
     final before = await core.upNext(50);
     final opened = <PlatformInt64>[];
     await _page(tester, UpNext(core: core, now: await core.now().first, limit: 2, onRelease: (id) async => opened.add(id)));
     final first = before.items.first;
-    final row = find.byKey(ValueKey('up-next-${first.token}'));
-    await tester.tap(find.descendant(of: row, matching: find.text(first.title)));
+    await tester.tap(find.byKey(ValueKey('up-next-open-${first.token}')));
     await tester.pumpAndSettle();
     expect(opened, [first.releaseId]);
     expect(core.jumps, isEmpty);
@@ -71,9 +70,9 @@ void main() {
     expect(find.byKey(ValueKey('up-next-${third.token}')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('up-next-more')));
     await tester.pumpAndSettle();
-    final play = find.byKey(ValueKey('up-next-play-${third.token}'));
+    final play = find.byKey(ValueKey('up-next-${third.token}'));
     await tester.ensureVisible(play);
-    await tester.tap(play);
+    await tester.tap(find.descendant(of: play, matching: find.text(third.title)));
     await tester.pumpAndSettle();
     expect(core.jumps, [third.token]);
     expect((await core.now().first).anchor!.item, third.token);
@@ -88,7 +87,7 @@ void main() {
     await _page(tester, UpNext(core: core, now: await core.now().first, limit: 2));
     await core.playResults('', const ViewDto(sort: SortKeyDto.library_, descending: false, group: false), 20);
     final current = (await core.now().first).anchor!.item;
-    await tester.tap(find.byKey(ValueKey('up-next-play-${stale.token}')));
+    await tester.tap(find.byKey(ValueKey('up-next-${stale.token}')));
     await tester.pumpAndSettle();
     expect((await core.now().first).anchor!.item, current);
     expect(find.textContaining('queue'), findsWidgets);
