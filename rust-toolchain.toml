@@ -2,4 +2,6 @@
 # channels. crates/meret-ffi/rust-toolchain.toml is a symlink to this file.
 [toolchain]
 channel = "1.99.0"
+# Clippy and FRB codegen need these; rustup installs them with the channel.
+components = ["rustfmt", "clippy"]
 targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"]
