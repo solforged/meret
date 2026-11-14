@@ -2,9 +2,9 @@
 
 The Flutter UI over the Rust core. Architecture, rules and how to work on it are in [`docs/architecture.md`](../../docs/architecture.md).
 
-Run `mise install` and `mise run app:setup` from the repo root to install the pinned Flutter SDK and resolve packages. Use `mise exec -- flutter` for direct Flutter commands.
+Run `direnv allow` in the repo for the pinned Flutter SDK, then `meret-setup` to resolve packages. Run direct Flutter commands from that shell.
 
-`mise run install` builds the release app, quits any running Meret, replaces `/Applications/Meret.app` and opens it. It uses your library in `~/Library/Application Support/io.sowilo.meret`, the same as a debug build.
+`meret-install` builds the release app, quits any running Meret, replaces `/Applications/Meret.app` and opens it. It uses your library in `~/Library/Application Support/io.sowilo.meret`, the same as a debug build.
 
 - `lib/core/bridge.dart` is the only way the UI talks to the core. `RustCore` is the real one: the table pages the core's grouped or flat views, sorts by column, browses Idiom → People → Releases facets, and plays track ordinals from that same view. `FakeCore` serves the plates' Tuesday evening plus a 48,210-track fake library, for tests and design work (`--dart-define=MERET_FAKE=true`).
 - Settings live in `library.db` through the core's single writer. The bridge exposes light level, output devices and exclusive mode, the output device's own volume (`volume`, `setVolume`), budgeted folder suggestions, and root removal without deleting files or stored history. Output changes apply at once when idle, on resume when paused, and otherwise from the next track opened. Suggestions never count inside macOS-protected folders before access, and omit the boot volume and mounts hidden from Finder.
@@ -12,5 +12,5 @@ Run `mise install` and `mise run app:setup` from the repo root to install the pi
 - `lib/src/rust/` is generated. Change `crates/meret-ffi/src/api/`, then run `flutter_rust_bridge_codegen generate` here.
 - `hook/build.dart` builds `crates/meret-ffi` with Flutter native assets (`flutter_rust_bridge_hooks`), using the pinned toolchain in `rust-toolchain.toml`. Plugins come through Swift Package Manager. Neither cargokit nor CocoaPods is used.
 - The macOS app isn't sandboxed, so it reads music folders anywhere. The window has no native title bar: the query line stands in for it, and `meret/window` (`MainFlutterWindow.swift`, `lib/shell/window_chrome.dart`) moves and zooms the window and reports full screen.
-- `mise run app:test` rebuilds `target/debug/libmeret_ffi.dylib` before running the Flutter suite, including the real-core bridge tests.
-- `mise run app:install` refreshes the project's ad-hoc app signature after the Flutter build, then verifies both the build and installed bundle. Incremental Dart builds can otherwise leave the outer app seal pointing at an older `App.framework`.
+- `meret-test` rebuilds `target/debug/libmeret_ffi.dylib` before running the Flutter suite, including the real-core bridge tests.
+- `meret-install` refreshes the project's ad-hoc app signature after the Flutter build, then verifies both the build and installed bundle. Incremental Dart builds can otherwise leave the outer app seal pointing at an older `App.framework`.

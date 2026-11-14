@@ -4,3 +4,7 @@
 *.db-wal
 *.db-shm
 /design
+/.devenv*
+/.direnv/
+/devenv.local.nix
+/devenv.local.yaml
